@@ -10,6 +10,8 @@ use obkv::{serde_obkv::value::Value, Builder, ClientConfig, ObTableClient, Runni
 const TEST_FULL_USER_NAME: &str = "test";
 const TEST_URL: &str = "127.0.0.1";
 const TEST_PASSWORD: &str = "";
+const TEST_SYS_USER_NAME: &str = "";
+const TEST_SYS_PASSWORD: &str = "";
 
 fn build_client(mode: RunningMode) -> ObTableClient {
     let mut config = ClientConfig::default();
@@ -23,7 +25,9 @@ fn build_client(mode: RunningMode) -> ObTableClient {
         .full_user_name(TEST_FULL_USER_NAME)
         .param_url(TEST_URL)
         .running_mode(mode)
-        .password(TEST_PASSWORD);
+        .password(TEST_PASSWORD)
+        .sys_user_name(TEST_SYS_USER_NAME)
+        .sys_password(TEST_SYS_PASSWORD);
 
     let client = builder.build();
 

@@ -2235,6 +2235,16 @@ impl Builder {
         self
     }
 
+    pub fn sys_user_name(mut self, name: &str) -> Self {
+        self.config.sys_user_name = name.to_owned();
+        self
+    }
+
+    pub fn sys_password(mut self, pwd: &str) -> Self {
+        self.config.sys_password = pwd.to_owned();
+        self
+    }
+
     pub fn build(self) -> Result<ObTableClient> {
         assert_not_empty(&self.param_url, "Blank param url");
         assert_not_empty(&self.full_user_name, "Blank full user name");
