@@ -83,6 +83,9 @@ pub trait Table {
 /// ObTable client config
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ClientConfig {
+    pub sys_user_name: String,
+    pub sys_password: String,
+
     pub metadata_mysql_conn_pool_min_size: usize,
     pub metadata_mysql_conn_pool_max_size: usize,
     pub metadata_refresh_interval: Duration,
@@ -126,6 +129,8 @@ pub struct ClientConfig {
 impl Default for ClientConfig {
     fn default() -> ClientConfig {
         ClientConfig {
+            sys_user_name: "".to_owned(),
+            sys_password: "".to_owned(),
             metadata_mysql_conn_pool_min_size: 1,
             metadata_mysql_conn_pool_max_size: 3,
             metadata_refresh_interval: Duration::from_secs(60),

@@ -785,12 +785,9 @@ impl ObTableLocation {
         connect_timeout: Duration,
         sock_timeout: Duration,
     ) -> Result<TableEntry> {
-        let username = PROXY_SYS_USER_NAME;
-        let password = PROXY_SYS_USER_PASSWORD;
-
         let pool = self.get_or_create_mysql_pool(
-            username,
-            password,
+            &self.config.sys_user_name,
+            &self.config.sys_password,
             "oceanbase",
             server_addr,
             Some(connect_timeout),
@@ -816,13 +813,9 @@ impl ObTableLocation {
         connect_timeout: Duration,
         sock_timeout: Duration,
     ) -> Result<TableEntry> {
-        //TODO encoding?
-        let username = PROXY_SYS_USER_NAME;
-        let password = PROXY_SYS_USER_PASSWORD;
-
         let pool = self.get_or_create_mysql_pool(
-            username,
-            password,
+            &self.config.sys_user_name,
+            &self.config.sys_password,
             "oceanbase",
             server_addr,
             Some(connect_timeout),
