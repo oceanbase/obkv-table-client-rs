@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use fasthash::murmur2;
+use murmur2;
 
 use super::{ob_part_constants, part_func_type::PartFuncType};
 use crate::{
@@ -723,7 +723,7 @@ impl ObKeyPartDesc {
 
     // TODO: check if murmur2 hash value is correct(java sdk)
     pub fn long_hash(value: i64, hash_code: i64) -> Result<i64> {
-        Ok(murmur2::hash64_with_seed(&value.to_string(), hash_code as u64) as i64)
+        Ok(murmur2::murmur64a(value.to_string().as_bytes(), hash_code as u64) as i64)
     }
 
     // TODO: support value Time
