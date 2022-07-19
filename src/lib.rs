@@ -19,7 +19,6 @@ extern crate serde_json;
 #[macro_use]
 extern crate log;
 extern crate crypto;
-extern crate fasthash;
 extern crate futures_cpupool;
 #[macro_use]
 extern crate lazy_static;
