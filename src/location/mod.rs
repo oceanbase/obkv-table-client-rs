@@ -827,7 +827,7 @@ impl ObTableLocation {
         let mut conn = pool.try_get_conn(u::duration_to_millis(&connect_timeout) as u32)?;
         let sql = match key.table_name.as_ref() {
         ALL_DUMMY_TABLE => format!("SELECT /*+READ_CONSISTENCY(WEAK)*/ A.partition_id as partition_id, A.svr_ip as svr_ip, A.sql_port as sql_port,
-                                    A.table_id as table_id, A.role as role, A.replica_num as replica_num, A.part_num as part_num, B.svr_port as svr_port,
+                                    A.table_id as table_id, A.role as role, A.part_num as part_num, B.svr_port as svr_port,
                                     B.status as status, B.stop_time as stop_time FROM oceanbase.__all_virtual_proxy_schema A inner join oceanbase.__all_server
                                     B on A.svr_ip = B.svr_ip and A.sql_port = B.inner_port WHERE tenant_name = '{}' and database_name='{}'
                                     and table_name ='{}'",
