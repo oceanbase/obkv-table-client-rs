@@ -11,4 +11,3 @@ reorder_impl_items = true
 # Discard existing import groups, and create three groups for std, external crates, crates
 group_imports = "StdExternalCrate"
 
-license_template_path = "etc/license.template"
