@@ -23,34 +23,14 @@ const TEST_PASSWORD: &str = "test";
 const TEST_SYS_USER_NAME: &str = "";
 const TEST_SYS_PASSWORD: &str = "";
 
-const TEST_FULL_USER_NAME_V2: &str = "test";
-const TEST_URL_V2: &str = "127.0.0.1";
-const TEST_PASSWORD_V2: &str = "test";
-const TEST_SYS_USER_NAME_V2: &str = "";
-const TEST_SYS_PASSWORD_V2: &str = "";
-
-pub const OB_VERSIONS: [u8; 2] = [1, 2];
-
-pub fn build_client(mode: RunningMode, version: u8) -> ObTableClient {
-    let builder = if version == 1 {
-        Builder::new()
-            .full_user_name(TEST_FULL_USER_NAME)
-            .param_url(TEST_URL)
-            .running_mode(mode)
-            .password(TEST_PASSWORD)
-            .sys_user_name(TEST_SYS_USER_NAME)
-            .sys_password(TEST_SYS_PASSWORD)
-    } else if version == 2 {
-        Builder::new()
-            .full_user_name(TEST_FULL_USER_NAME_V2)
-            .param_url(TEST_URL_V2)
-            .running_mode(mode)
-            .password(TEST_PASSWORD_V2)
-            .sys_user_name(TEST_SYS_USER_NAME_V2)
-            .sys_password(TEST_SYS_PASSWORD_V2)
-    } else {
-        panic!("invalid version");
-    };
+pub fn build_client(mode: RunningMode) -> ObTableClient {
+    let builder = Builder::new()
+        .full_user_name(TEST_FULL_USER_NAME)
+        .param_url(TEST_URL)
+        .running_mode(mode)
+        .password(TEST_PASSWORD)
+        .sys_user_name(TEST_SYS_USER_NAME)
+        .sys_password(TEST_SYS_PASSWORD);
 
     let client = builder.build();
 
@@ -61,12 +41,12 @@ pub fn build_client(mode: RunningMode, version: u8) -> ObTableClient {
     client
 }
 
-pub fn build_hbase_client(version: u8) -> ObTableClient {
-    build_client(RunningMode::HBase, version)
+pub fn build_hbase_client() -> ObTableClient {
+    build_client(RunningMode::HBase)
 }
 
-pub fn build_normal_client(version: u8) -> ObTableClient {
-    build_client(RunningMode::Normal, version)
+pub fn build_normal_client() -> ObTableClient {
+    build_client(RunningMode::Normal)
 }
 
 pub struct BaseTest {

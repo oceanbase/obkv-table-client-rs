@@ -41,12 +41,11 @@ uuid = "0.7"
 zstd = "0.11"
 
 [dev-dependencies]
+env_logger = "0.10.0"
 scoped_threadpool = "0.1"
 serial_test = "0.2"
 serial_test_derive = "0.2"
 tempfile = "3.0"
+test-log = "0.2.11"
 time = "0.1.42"
-version_test_derive = { path = "components/version_test_derive" }
 
-[workspace]
-members = ["components/version_test_derive"]

@@ -1,12 +1,12 @@
 // Copyright 2022 CeresDB Project Authors. Licensed under Apache-2.0.
 
+#[allow(unused_imports)]
 #[allow(unused)]
 mod common;
 
 use obkv::{Table, TableQuery, Value};
-#[allow(unused_imports)]
 use serial_test_derive::serial;
-use version_test_derive::{hbase_ob_versions_test, ob_versions_test};
+use test_log::test;
 
 // TODO: use test conf to control which environments to test.
 const TEST_TABLE_NAME: &str = "test";
@@ -16,8 +16,9 @@ const TEST_KEY_VARCHAR_TABLE_NAME: &str = "test";
 const TEST_RANGE_TABLE_NAME: &str = "test";
 
 #[test]
-#[ob_versions_test]
 fn test_execute_sql() {
+    let client = common::build_normal_client();
+
     let create_table =
         format!("create table IF NOT EXISTS test_execute_sql(id int, PRIMARY KEY(id));");
     client
@@ -26,8 +27,9 @@ fn test_execute_sql() {
 }
 
 #[test]
-#[ob_versions_test]
 fn test_check_table_exists() {
+    let client = common::build_normal_client();
+
     let test_table_name = "test_check_table_exists";
     let drop_table = format!("drop table IF EXISTS {};", test_table_name);
 
@@ -56,8 +58,9 @@ fn test_check_table_exists() {
 }
 
 #[test]
-#[ob_versions_test]
 fn test_truncate_table() {
+    let client = common::build_normal_client();
+
     let truncate_once = || {
         client
             .truncate_table(TEST_TABLE_NAME)
@@ -101,8 +104,9 @@ fn test_truncate_table() {
 }
 
 #[test]
-#[ob_versions_test]
 fn test_obtable_client_curd() {
+    let client = common::build_normal_client();
+
     let result = client.insert(
         TEST_TABLE_NAME,
         vec![Value::from("foo")],
@@ -172,8 +176,9 @@ fn test_obtable_client_curd() {
 }
 
 #[test]
-#[ob_versions_test]
 fn test_obtable_client_batch_op() {
+    let client = common::build_normal_client();
+
     let test_key1 = "batchop-row-key-1";
     let test_key2 = "batchop-row-key-2";
 
@@ -239,21 +244,21 @@ fn test_obtable_client_batch_op() {
     assert_eq!("p4", value.as_string());
 }
 
-/*
-create table testHash(
-  K bigint,
-  Q varbinary(256),
-  T bigint,
-  V varbinary(1024),
-  primary key(K, Q, T)
-) partition by hash(K) partitions 16;
-*/
-// for hbase
+// The create sql of test table:
+// ```sql
+// create table testHash(
+//   K bigint,
+//   Q varbinary(256),
+//   T bigint,
+//   V varbinary(1024),
+//   primary key(K, Q, T)
+// ) partition by hash(K) partitions 16;
+// ```
 #[test]
-#[hbase_ob_versions_test]
 fn test_obtable_partition_hash_crud() {
+    let client = common::build_hbase_client();
+
     let rowk_keys = vec![
-        // Value::from("partition1"),
         Value::from(9i64),
         Value::from("partition"),
         Value::from(1550225864000i64),
@@ -309,20 +314,22 @@ fn test_obtable_partition_hash_crud() {
     assert_eq!("bb".to_owned().into_bytes(), value.as_bytes());
 }
 
-/*
- CREATE TABLE `testPartition_chunshao` (
-   `K` varbinary(1024) NOT NULL,
-   `Q` varbinary(256) NOT NULL,
-   `T` bigint(20) NOT NULL,
-   `V` varbinary(1024) DEFAULT NULL,
-   PRIMARY KEY (`K`, `Q`, `T`)
- ) DEFAULT CHARSET = utf8mb4 COLLATE UTF8MB4_BIN COMPRESSION = 'lz4_1.0' REPLICA_NUM = 3
- BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 10 partition by key(k) partitions 15;
-*/
-// for hbase
+// The create sql of the test table:
+// ```sql
+//  CREATE TABLE `testPartition` (
+//    `K` varbinary(1024) NOT NULL,
+//    `Q` varbinary(256) NOT NULL,
+//    `T` bigint(20) NOT NULL,
+//    `V` varbinary(1024) DEFAULT NULL,
+//    PRIMARY KEY (`K`, `Q`, `T`)
+//  ) DEFAULT CHARSET = utf8mb4 COLLATE UTF8MB4_BIN COMPRESSION = 'lz4_1.0'
+// REPLICA_NUM = 3  BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE =
+// 134217728 PCTFREE = 10 partition by key(k) partitions 15;
+// ```
 #[test]
-#[hbase_ob_versions_test]
 fn test_obtable_partition_key_varbinary_crud() {
+    let client = common::build_hbase_client();
+
     // same as java sdk, when k = partitionKey, after get_partition(&table_entry,
     // row_key) part_id = 2
     let rowk_keys = vec![
@@ -382,20 +389,22 @@ fn test_obtable_partition_key_varbinary_crud() {
     assert_eq!("bb".to_owned().into_bytes(), value.as_bytes());
 }
 
-/*
-CREATE TABLE `testPartition_chunshao2` (
-  `K` varchar(1024) NOT NULL,
-  `Q` varbinary(256) NOT NULL,
-  `T` bigint(20) NOT NULL,
-  `V` varbinary(1024) DEFAULT NULL,
-  PRIMARY KEY (`K`, `Q`, `T`)
-) DEFAULT CHARSET = utf8mb4 COLLATE UTF8MB4_BIN COMPRESSION = 'lz4_1.0' REPLICA_NUM = 3
- BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 10 partition by key(k) partitions 15;
-*/
-// for hbase
+// The crate sql of the test table:
+// ```sql
+// CREATE TABLE `testPartition_2` (
+//   `K` varchar(1024) NOT NULL,
+//   `Q` varbinary(256) NOT NULL,
+//   `T` bigint(20) NOT NULL,
+//   `V` varbinary(1024) DEFAULT NULL,
+//   PRIMARY KEY (`K`, `Q`, `T`)
+// ) DEFAULT CHARSET = utf8mb4 COLLATE UTF8MB4_BIN COMPRESSION = 'lz4_1.0'
+// REPLICA_NUM = 3  BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE =
+// 134217728 PCTFREE = 10 partition by key(k) partitions 15;
+// ```
 #[test]
-#[hbase_ob_versions_test]
 fn test_obtable_partition_key_varchar_crud() {
+    let client = common::build_hbase_client();
+
     // same as java sdk, when k = partitionKey2, part_id = 9
     let rowk_keys = vec![
         Value::from("partitionKey2"),
@@ -454,20 +463,21 @@ fn test_obtable_partition_key_varchar_crud() {
     assert_eq!("bb".to_owned().into_bytes(), value.as_bytes());
 }
 
-/*
-create table testRange(
-  K varbinary(1024),
-  Q varbinary(256),
-  T bigint,
-  V varbinary(102400),
-  primary key(K, Q, T)
-) partition by range columns (K) (PARTITION p0 VALUES LESS THAN ('a'),
-  PARTITION p1 VALUES LESS THAN ('w'), PARTITION p2 VALUES LESS THAN MAXVALUE);
-*/
-// for hbase
+// The crate sql of the test table is:
+// ```sql
+// create table testRange(
+//   K varbinary(1024),
+//   Q varbinary(256),
+//   T bigint,
+//   V varbinary(102400),
+//   primary key(K, Q, T)
+// ) partition by range columns (K) (PARTITION p0 VALUES LESS THAN ('a'),
+//   PARTITION p1 VALUES LESS THAN ('w'), PARTITION p2 VALUES LESS THAN MAXVALUE);
+// ```
 #[test]
-#[hbase_ob_versions_test]
 fn test_obtable_partition_range_crud() {
+    let client = common::build_hbase_client();
+
     let rowk_keys = vec![
         Value::from("partitionKey"),
         Value::from("partition"),
@@ -526,8 +536,8 @@ fn test_obtable_partition_range_crud() {
 }
 
 #[test]
-#[ob_versions_test]
 fn test_varchar_all_ob() {
+    let client = common::build_normal_client();
     let test = common::BaseTest::new(client);
     test.clean_varchar_table();
     test.test_varchar_insert();
@@ -541,8 +551,8 @@ fn test_varchar_all_ob() {
 }
 
 #[test]
-#[ob_versions_test]
 fn test_blob_all() {
+    let client = common::build_normal_client();
     let test = common::BaseTest::new(client);
     test.clean_blob_table();
     test.test_blob_insert();
@@ -556,35 +566,35 @@ fn test_blob_all() {
 }
 
 #[test]
-#[ob_versions_test]
 #[serial]
 fn test_ob_exceptions() {
+    let client = common::build_normal_client();
     let test = common::BaseTest::new(client);
     test.test_varchar_exceptions();
 }
 
 #[test]
-#[ob_versions_test]
 #[serial]
 fn test_query() {
+    let client = common::build_normal_client();
     let test = common::BaseTest::new(client);
     test.test_query("test_query_table");
 }
 
 #[test]
-#[ob_versions_test]
 #[serial]
 fn test_stream_query() {
+    let client = common::build_normal_client();
+
     let test = common::BaseTest::new(client);
     test.test_stream_query("test_stream_query_table");
 }
 
-// FIXME: now concurrent updating may cause error in test ob cluster
 #[test]
-#[ignore]
-#[ob_versions_test]
 #[serial]
 fn test_concurrent() {
+    let client = common::build_normal_client();
+
     let test = common::BaseTest::new(client);
     test.test_varchar_concurrent();
     test.clean_varchar_table();
