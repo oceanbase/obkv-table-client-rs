@@ -4,7 +4,7 @@
 OBKV Table Client is Rust Library that can be used to access table data from [OceanBase](https://github.com/oceanbase/oceanbase) storage layer. Its access method is different from JDBC, it skips the SQL parsing layer, so it has significant performance advantage.
 
 ## Acknowledgment
-CeresMeta refers to [obkv-table-client-java](https://github.com/oceanbase/obkv-table-client-java), thanks to the [OceanBase](https://github.com/oceanbase) team.
+The client refers to [obkv-table-client-java](https://github.com/oceanbase/obkv-table-client-java), thanks to the [OceanBase](https://github.com/oceanbase) team.
 
 ## Contributing
 Any contribution is welcome!
