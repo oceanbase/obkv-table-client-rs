@@ -10,9 +10,9 @@ use test_log::test;
 
 // TODO: use test conf to control which environments to test.
 const TEST_TABLE_NAME: &str = "test_varchar_table";
-const TEST_HASH_TABLE_NAME: &str = "test";
+const TEST_HASH_TABLE_NAME: &str = "testHash";
 const TEST_KEY_VARBINARY_TABLE_NAME: &str = "test";
-const TEST_KEY_VARCHAR_TABLE_NAME: &str = "test";
+const TEST_KEY_VARCHAR_TABLE_NAME: &str = "testPartition_2";
 const TEST_RANGE_TABLE_NAME: &str = "testRange";
 
 #[test]
@@ -503,14 +503,26 @@ fn test_obtable_partition_key_varchar_crud() {
 // CREATE TABLE `testRangePartition` (
 // `c1` bigint NOT NULL,
 // `c2` varchar(20) DEFAULT NULL,
-// PRIMARY KEY (`c1`))partition by range(`c1`)(partition p0 values less than(200),
+// PRIMARY KEY (`c1`)) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'lz4_1.0' REPLICA_NUM = 3 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 10
+// partition by range(`c1`)(partition p0 values less than(200),
+// partition p1 values less than(500), partition p2 values less than(900));
+// ```
+// ```sql
+// CREATE TABLE `testRangePartitionComplex` (
+// `c1` bigint NOT NULL,
+// `c1sk` varchar(20) NOT NULL,
+// `c2` varchar(20) DEFAULT NULL,
+// PRIMARY KEY (`c1`, `c1sk`)) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'lz4_1.0' REPLICA_NUM = 3 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 10
+// partition by range(`c1`)(partition p0 values less than(200),
 // partition p1 values less than(500), partition p2 values less than(900));
 // ```
 #[test]
 fn test_obtable_client_batch_atomic_op() {
     const ATOMIC_TABLE_NAME: &str = "testRangePartition";
+    const ATOMIC_TABLE_NAME_COMPLEX: &str = "testRangePartitionComplex";
     let client = common::build_normal_client();
     client.add_row_key_element(ATOMIC_TABLE_NAME, vec!["c1".to_string()],);
+    client.add_row_key_element(ATOMIC_TABLE_NAME_COMPLEX, vec!["c1".to_string(), "c1sb".to_string()],);
 
     let test_key0 : i64 = 0;
     let test_key1 : i64 = 1;
@@ -602,6 +614,89 @@ fn test_obtable_client_batch_atomic_op() {
     let result = client.execute_batch(ATOMIC_TABLE_NAME, batch_op);
     assert!(result.is_err());
     assert_eq!(obkv::ResultCodes::OB_INVALID_PARTITION, result.err().expect("Common").ob_result_code().unwrap());
+
+    // insert some data
+    let mut batch_op = client.batch_operation(4);
+    batch_op.delete(vec![Value::from(test_key0), Value::from("subKey_0")]);
+    batch_op.delete(vec![Value::from(test_key1), Value::from("subKey_1")]);
+    batch_op.insert(
+        vec![Value::from(test_key0), Value::from("subKey_0")],
+        vec!["c2".to_owned()],
+        vec![Value::from("batchValue_0")],
+    );
+    batch_op.insert(
+        vec![Value::from(test_key1), Value::from("subKey_1")],
+        vec!["c2".to_owned()],
+        vec![Value::from("batchValue_1")],
+    );
+    let result = client.execute_batch(ATOMIC_TABLE_NAME_COMPLEX, batch_op);
+    assert!(result.is_ok());
+}
+
+// ```sql
+// CREATE TABLE `testHashPartitionComplex` (
+// `c1` bigint NOT NULL,
+// `c1sk` varchar(20) NOT NULL,
+// `c2` varchar(20) DEFAULT NULL,
+// PRIMARY KEY (`c1`, `c1sk`)) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'lz4_1.0' REPLICA_NUM = 3 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 10
+// partition by hash(`c1`) partitions 16;
+// ```
+#[test]
+fn test_obtable_client_hash() {
+    const TABLE_HASH_PARTITION_COMPLEX: &str = "testHashPartitionComplex";
+    let client = common::build_normal_client();
+    client.add_row_key_element(TABLE_HASH_PARTITION_COMPLEX, vec!["c1".to_string(), "c1sb".to_string()],);
+
+    let test_key0 : i64 = 100;
+    let test_key1 : i64 = 200;
+    // insert some data
+    let mut batch_op = client.batch_operation(4);
+    batch_op.delete(vec![Value::from(test_key0), Value::from("subKey_0")]);
+    batch_op.delete(vec![Value::from(test_key1), Value::from("subKey_1")]);
+    batch_op.insert(
+        vec![Value::from(test_key0), Value::from("subKey_0")],
+        vec!["c2".to_owned()],
+        vec![Value::from("batchValue_0")],
+    );
+    batch_op.insert(
+        vec![Value::from(test_key1), Value::from("subKey_1")],
+        vec!["c2".to_owned()],
+        vec![Value::from("batchValue_1")],
+    );
+    let result = client.execute_batch(TABLE_HASH_PARTITION_COMPLEX, batch_op);
+    assert!(result.is_ok());
+}
+
+// ```sql
+// CREATE TABLE `testKeyPartitionComplex` (
+// `c1` varchar(20) NOT NULL,
+// `c1sk` varchar(20) NOT NULL,
+// `c2` varchar(20) DEFAULT NULL,
+// PRIMARY KEY (`c1`, `c1sk`)) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'lz4_1.0' REPLICA_NUM = 3 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 10
+// partition by key(`c1`) partitions 16;
+// ```
+#[test]
+fn test_obtable_client_key() {
+    const TABLE_KEY_PARTITION_COMPLEX: &str = "testKeyPartitionComplex";
+    let client = common::build_normal_client();
+    client.add_row_key_element(TABLE_KEY_PARTITION_COMPLEX, vec!["c1".to_string(), "c1sb".to_string()],);
+
+    // insert some data
+    let mut batch_op = client.batch_operation(4);
+    batch_op.delete(vec![Value::from("Key_0"), Value::from("subKey_0")]);
+    batch_op.delete(vec![Value::from("Key_1"), Value::from("subKey_1")]);
+    batch_op.insert(
+        vec![Value::from(Value::from("Key_0")), Value::from("subKey_0")],
+        vec!["c2".to_owned()],
+        vec![Value::from("batchValue_0")],
+    );
+    batch_op.insert(
+        vec![Value::from("Key_1"), Value::from("subKey_1")],
+        vec!["c2".to_owned()],
+        vec![Value::from("batchValue_1")],
+    );
+    let result = client.execute_batch(TABLE_KEY_PARTITION_COMPLEX, batch_op);
+    assert!(result.is_ok());
 }
 
 // The crate sql of the test table is:
