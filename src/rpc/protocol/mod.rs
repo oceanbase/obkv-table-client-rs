@@ -525,8 +525,8 @@ pub trait ObPayload: ProtoEncoder + ProtoDecoder {
     }
     fn len(&self) -> Result<usize> {
         let clen = self.content_len()?;
-        Ok(util::encoded_lenght_vi64(VERSION as i64)
-            + util::encoded_lenght_vi64(clen as i64)
+        Ok(util::encoded_length_vi64(VERSION as i64)
+            + util::encoded_length_vi64(clen as i64)
             + clen)
     }
     fn base(&self) -> &BasePayLoad;

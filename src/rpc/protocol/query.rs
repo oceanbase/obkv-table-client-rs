@@ -241,7 +241,7 @@ impl ObNewRange {
     }
 
     pub fn content_len(&self) -> Result<usize> {
-        Ok(util::encoded_lenght_vi64(self.table_id)
+        Ok(util::encoded_length_vi64(self.table_id)
             + 1
             + self.start_key.content_len()?
             + self.end_key.content_len()?)
@@ -374,16 +374,16 @@ impl ObPayload for ObHTableFilter {
 
         len += 1;
 
-        len += util::encoded_lenght_vi32(self.select_column_qualifier.len() as i32);
+        len += util::encoded_length_vi32(self.select_column_qualifier.len() as i32);
         for q in &self.select_column_qualifier {
             len += util::encoded_length_vstring(q);
         }
 
-        len += util::encoded_lenght_vi64(self.min_stamp);
-        len += util::encoded_lenght_vi64(self.max_stamp);
-        len += util::encoded_lenght_vi32(self.max_versions);
-        len += util::encoded_lenght_vi32(self.limit_per_row_per_cf);
-        len += util::encoded_lenght_vi32(self.offset_per_row_per_cf);
+        len += util::encoded_length_vi64(self.min_stamp);
+        len += util::encoded_length_vi64(self.max_stamp);
+        len += util::encoded_length_vi32(self.max_versions);
+        len += util::encoded_length_vi32(self.limit_per_row_per_cf);
+        len += util::encoded_length_vi32(self.offset_per_row_per_cf);
         len += util::encoded_length_vstring(&self.filter_string);
 
         Ok(len)
@@ -449,23 +449,23 @@ impl ObPayload for ObTableQuery {
     fn content_len(&self) -> Result<usize> {
         let mut len: usize = 0;
 
-        len += util::encoded_lenght_vi64(self.key_ranges.len() as i64);
+        len += util::encoded_length_vi64(self.key_ranges.len() as i64);
         for r in &self.key_ranges {
             len += r.content_len()?;
         }
 
-        len += util::encoded_lenght_vi64(self.select_columns.len() as i64);
+        len += util::encoded_length_vi64(self.select_columns.len() as i64);
         for s in &self.select_columns {
             len += util::encoded_length_vstring(s);
         }
 
         len += util::encoded_length_vstring(&self.filter_string);
-        len += util::encoded_lenght_vi32(self.limit);
-        len += util::encoded_lenght_vi32(self.offset);
+        len += util::encoded_length_vi32(self.limit);
+        len += util::encoded_length_vi32(self.offset);
         len += 1; //scan order
         len += util::encoded_length_vstring(&self.index_name);
-        len += util::encoded_lenght_vi32(self.batch_size);
-        len += util::encoded_lenght_vi64(self.max_result_size);
+        len += util::encoded_length_vi32(self.batch_size);
+        len += util::encoded_length_vi64(self.max_result_size);
 
         if self.is_hbase_query {
             match &self.htable_filter {
@@ -672,8 +672,8 @@ impl ObPayload for ObTableQueryRequest {
     fn content_len(&self) -> Result<usize> {
         Ok(util::encoded_length_bytes_string(&self.credential)
             + util::encoded_length_vstring(&self.table_name)
-            + util::encoded_lenght_vi64(self.table_id)
-            + util::encoded_lenght_vi64(self.partition_id)
+            + util::encoded_length_vi64(self.table_id)
+            + util::encoded_length_vi64(self.partition_id)
             + self.table_query.len()?
             + 2)
     }

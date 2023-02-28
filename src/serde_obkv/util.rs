@@ -22,7 +22,17 @@ pub static OB_MAX: &[u64] = &[
 ];
 
 //TODO refactor
-pub fn encoded_lenght_vi32(v: i32) -> usize {
+pub fn encoded_length_vi8(v: i8) -> usize {
+    let v = v as u64;
+    if v <= OB_MAX_V1B {
+        1
+    } else {
+        2
+    }
+}
+
+//TODO refactor
+pub fn encoded_length_vi32(v: i32) -> usize {
     let v = v as u64;
     if v <= OB_MAX_V1B {
         1
@@ -38,7 +48,7 @@ pub fn encoded_lenght_vi32(v: i32) -> usize {
 }
 
 pub fn encode_vi32(v: i32, buf: &mut BytesMut) -> Result<()> {
-    buf.reserve(encoded_lenght_vi32(v));
+    buf.reserve(encoded_length_vi32(v));
 
     let mut v = v as u32;
     while u64::from(v) > OB_MAX_V1B {
@@ -105,7 +115,7 @@ pub fn decode_vi32(buf: &mut BytesMut) -> Result<i32> {
 }
 
 //TODO refactor
-pub fn encoded_lenght_vi64(v: i64) -> usize {
+pub fn encoded_length_vi64(v: i64) -> usize {
     let v = v as u64;
     if v <= OB_MAX_V1B {
         1
@@ -131,7 +141,7 @@ pub fn encoded_lenght_vi64(v: i64) -> usize {
 }
 
 pub fn encode_vi64(v: i64, buf: &mut BytesMut) -> Result<()> {
-    buf.reserve(encoded_lenght_vi64(v));
+    buf.reserve(encoded_length_vi64(v));
 
     let mut v = v as u64;
     while v > OB_MAX_V1B {
@@ -169,14 +179,14 @@ fn utf8(buf: &[u8]) -> Result<&str> {
 }
 
 pub fn encoded_length_vstring(s: &str) -> usize {
-    encoded_lenght_vi32(s.len() as i32) as usize + s.len() + 1
+    encoded_length_vi32(s.len() as i32) as usize + s.len() + 1
 }
 
 const END: u8 = 0;
 
 pub fn encode_vstring(s: &str, buf: &mut BytesMut) -> Result<()> {
     let bs = s.as_bytes();
-    buf.reserve(encoded_lenght_vi32(bs.len() as i32) as usize + bs.len() + 1);
+    buf.reserve(encoded_length_vi32(bs.len() as i32) as usize + bs.len() + 1);
     encode_vi32(bs.len() as i32, buf)?;
     buf.put_slice(bs);
     buf.put_u8(END);
@@ -185,7 +195,7 @@ pub fn encode_vstring(s: &str, buf: &mut BytesMut) -> Result<()> {
 }
 
 pub fn encoded_length_bytes_string(v: &[u8]) -> usize {
-    encoded_lenght_vi32(v.len() as i32) as usize + v.len() + 1
+    encoded_length_vi32(v.len() as i32) as usize + v.len() + 1
 }
 
 pub fn encode_bytes_string(v: &[u8], buf: &mut BytesMut) -> Result<()> {

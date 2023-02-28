@@ -51,3 +51,10 @@ CREATE TABLE `testPartition_2` (
 PRIMARY KEY (`K`, `Q`, `T`)
 ) DEFAULT CHARSET = utf8mb4 COLLATE UTF8MB4_BIN COMPRESSION = 'lz4_1.0' REPLICA_NUM = 3 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 10
 partition by key(k) partitions 15;
+
+CREATE TABLE `testRangePartition` (
+`c1` bigint NOT NULL,
+`c2` varchar(20) DEFAULT NULL,
+PRIMARY KEY (`c1`))
+DEFAULT CHARSET = utf8mb4 COMPRESSION = 'lz4_1.0' REPLICA_NUM = 3 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 10
+partition by range(`c1`)(partition p0 values less than(200), partition p1 values less than(500), partition p2 values less than(900));

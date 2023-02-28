@@ -438,21 +438,21 @@ impl Value {
             Value::Bool(_, ref meta) => meta.len() + 1,
             Value::Int8(_, ref meta) => meta.len() + 1,
             Value::UInt8(_, ref meta) => meta.len() + 1,
-            Value::Int32(v, ref meta) => meta.len() + util::encoded_lenght_vi32(v),
-            Value::Int64(v, ref meta) => meta.len() + util::encoded_lenght_vi64(v),
-            Value::UInt32(v, ref meta) => meta.len() + util::encoded_lenght_vi32(v as i32),
-            Value::UInt64(v, ref meta) => meta.len() + util::encoded_lenght_vi64(v as i64),
-            Value::Float(f, ref meta) => meta.len() + util::encoded_lenght_vi32(f.to_bits() as i32),
+            Value::Int32(v, ref meta) => meta.len() + util::encoded_length_vi32(v),
+            Value::Int64(v, ref meta) => meta.len() + util::encoded_length_vi64(v),
+            Value::UInt32(v, ref meta) => meta.len() + util::encoded_length_vi32(v as i32),
+            Value::UInt64(v, ref meta) => meta.len() + util::encoded_length_vi64(v as i64),
+            Value::Float(f, ref meta) => meta.len() + util::encoded_length_vi32(f.to_bits() as i32),
             Value::Double(f, ref meta) => {
-                meta.len() + util::encoded_lenght_vi64(f.to_bits() as i64)
+                meta.len() + util::encoded_length_vi64(f.to_bits() as i64)
             }
-            Value::Date(d, ref meta) => meta.len() + util::encoded_lenght_vi32(d),
-            Value::Time(d, ref meta) => meta.len() + util::encoded_lenght_vi64(d),
+            Value::Date(d, ref meta) => meta.len() + util::encoded_length_vi32(d),
+            Value::Time(d, ref meta) => meta.len() + util::encoded_length_vi64(d),
             Value::Bytes(ref vc, ref meta) => {
-                meta.len() + util::encoded_lenght_vi32(vc.len() as i32) + vc.len() + 1
+                meta.len() + util::encoded_length_vi32(vc.len() as i32) + vc.len() + 1
             }
             Value::String(ref s, ref meta) => {
-                meta.len() + util::encoded_lenght_vi32(s.len() as i32) + s.len() + 1
+                meta.len() + util::encoded_length_vi32(s.len() as i32) + s.len() + 1
             }
         }
     }

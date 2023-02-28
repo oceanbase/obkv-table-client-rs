@@ -9,11 +9,11 @@ use serial_test_derive::serial;
 use test_log::test;
 
 // TODO: use test conf to control which environments to test.
-const TEST_TABLE_NAME: &str = "test";
+const TEST_TABLE_NAME: &str = "test_varchar_table";
 const TEST_HASH_TABLE_NAME: &str = "test";
 const TEST_KEY_VARBINARY_TABLE_NAME: &str = "test";
 const TEST_KEY_VARCHAR_TABLE_NAME: &str = "test";
-const TEST_RANGE_TABLE_NAME: &str = "test";
+const TEST_RANGE_TABLE_NAME: &str = "testRange";
 
 #[test]
 fn test_execute_sql() {
@@ -230,6 +230,41 @@ fn test_obtable_client_batch_op() {
 
     let result = client.execute_batch(TEST_TABLE_NAME, batch_op);
     assert!(result.is_ok());
+
+    let result = client.get(
+        TEST_TABLE_NAME,
+        vec![Value::from(test_key2)],
+        vec!["c2".to_owned()],
+    );
+    assert!(result.is_ok());
+    let mut result = result.unwrap();
+    assert_eq!(1, result.len());
+    let value = result.remove("c2").unwrap();
+    assert!(value.is_string());
+    assert_eq!("p4", value.as_string());
+
+    // test atomic batch operation
+    let mut batch_op = client.batch_operation(3);
+    batch_op.set_atomic_op(true);
+    batch_op.update(
+        vec![Value::from(test_key2)],
+        vec!["c2".to_owned()],
+        vec![Value::from("p5")],
+    );
+    batch_op.update(
+        vec![Value::from(test_key2)],
+        vec!["c2".to_owned()],
+        vec![Value::from("p6")],
+    );
+    batch_op.insert(
+        vec![Value::from(test_key2)],
+        vec!["c2".to_owned()],
+        vec![Value::from("p0")],
+    );
+
+    let result = client.execute_batch(TEST_TABLE_NAME, batch_op);
+    assert!(result.is_err());
+    assert_eq!(obkv::ResultCodes::OB_ERR_PRIMARY_KEY_DUPLICATE, result.err().expect("Common").ob_result_code().unwrap());
 
     let result = client.get(
         TEST_TABLE_NAME,
@@ -461,6 +496,112 @@ fn test_obtable_partition_key_varchar_crud() {
     let value = result.remove("V").unwrap();
     assert!(value.is_bytes());
     assert_eq!("bb".to_owned().into_bytes(), value.as_bytes());
+}
+
+// The crate sql of the test table is:
+// ```sql
+// CREATE TABLE `testRangePartition` (
+// `c1` bigint NOT NULL,
+// `c2` varchar(20) DEFAULT NULL,
+// PRIMARY KEY (`c1`))partition by range(`c1`)(partition p0 values less than(200),
+// partition p1 values less than(500), partition p2 values less than(900));
+// ```
+#[test]
+fn test_obtable_client_batch_atomic_op() {
+    const ATOMIC_TABLE_NAME: &str = "testRangePartition";
+    let client = common::build_normal_client();
+    client.add_row_key_element(ATOMIC_TABLE_NAME, vec!["c1".to_string()],);
+
+    let test_key0 : i64 = 0;
+    let test_key1 : i64 = 1;
+
+    // insert some data
+    let mut batch_op = client.batch_operation(4);
+    batch_op.delete(vec![Value::from(test_key0)]);
+    batch_op.delete(vec![Value::from(test_key1)]);
+    batch_op.insert(
+        vec![Value::from(test_key0)],
+        vec!["c2".to_owned()],
+        vec![Value::from("batchValue_0")],
+    );
+    batch_op.insert(
+        vec![Value::from(test_key1)],
+        vec!["c2".to_owned()],
+        vec![Value::from("batchValue_1")],
+    );
+    let result = client.execute_batch(ATOMIC_TABLE_NAME, batch_op);
+    assert!(result.is_ok());
+
+    let result = client.get(
+        ATOMIC_TABLE_NAME,
+        vec![Value::from(test_key0)],
+        vec!["c2".to_owned()],
+    );
+    assert!(result.is_ok());
+    let mut result = result.unwrap();
+    assert_eq!(1, result.len());
+    let value = result.remove("c2").unwrap();
+    assert!(value.is_string());
+    assert_eq!("batchValue_0", value.as_string());
+
+    // test atomic
+    let mut batch_op = client.batch_operation(3);
+    batch_op.set_atomic_op(true);
+    batch_op.update(
+        vec![Value::from(test_key0)],
+        vec!["c2".to_owned()],
+        vec![Value::from("AlterValue_0")],
+    );
+    batch_op.update(
+        vec![Value::from(test_key1)],
+        vec!["c2".to_owned()],
+        vec![Value::from("AlterValue_1")],
+    );
+    batch_op.insert(
+        vec![Value::from(test_key0)],
+        vec!["c2".to_owned()],
+        vec![Value::from("AlterValue_3")],
+    );
+
+    let result = client.execute_batch(ATOMIC_TABLE_NAME, batch_op);
+    assert!(result.is_err());
+    assert_eq!(obkv::ResultCodes::OB_ERR_PRIMARY_KEY_DUPLICATE, result.err().expect("Common").ob_result_code().unwrap());
+
+    let result = client.get(
+        ATOMIC_TABLE_NAME,
+        vec![Value::from(test_key0)],
+        vec!["c2".to_owned()],
+    );
+    assert!(result.is_ok());
+    let mut result = result.unwrap();
+    assert_eq!(1, result.len());
+    let value = result.remove("c2").unwrap();
+    assert!(value.is_string());
+    assert_eq!("batchValue_0", value.as_string());
+
+    // test atomic across multi-partition
+    let test_key2 : i64 = 500;
+    let mut batch_op = client.batch_operation(3);
+    batch_op.set_atomic_op(true);
+    batch_op.update(
+        vec![Value::from(test_key0)],
+        vec!["c2".to_owned()],
+        vec![Value::from("AlterValue_0")],
+    );
+    batch_op.insert(
+        vec![Value::from(test_key2)],
+        vec!["c2".to_owned()],
+        vec![Value::from("ERRORVALUE_2")],
+    );
+    batch_op.update(
+        vec![Value::from(test_key0)],
+        vec!["c2".to_owned()],
+        vec![Value::from("AlterValue_1")],
+    );
+
+    let result = client.execute_batch(ATOMIC_TABLE_NAME, batch_op);
+    assert!(result.is_err());
+    assert_eq!(obkv::ResultCodes::OB_INVALID_PARTITION, result.err().expect("Common").ob_result_code().unwrap());
 }
 
 // The crate sql of the test table is:
