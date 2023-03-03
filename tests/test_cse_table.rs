@@ -1,8 +1,7 @@
 // Copyright 2022 CeresDB Project Authors. Licensed under Apache-2.0.
 
 #[allow(unused)]
-mod common;
-
+mod utils;
 use std::collections::HashSet;
 
 use obkv::{client::query::TableQuery, Table, Value};
@@ -10,47 +9,28 @@ use obkv::{client::query::TableQuery, Table, Value};
 use serial_test_derive::serial;
 use test_log::test;
 
-// The test table is:
 // ```sql
-// create table data_20190308_1 (
-//  series_id bigint NOT NULL,
-//  field_id int NOT NULL,
-//  start_time INT NOT NULL,
-//  value MEDIUMBLOB NOT NULL,
-//  extra_value MEDIUMBLOB default NULL,
-//  PRIMARY KEY(series_id, field_id, start_time)
-// ) partition by range(start_time) (
-//    partition p00 values less than(3600),
-//    partition p01 values less than(7200),
-//    partition p02 values less than(10800),
-//    partition p03 values less than(14400),
-//    partition p04 values less than(18000),
-//    partition p05 values less than(21600),
-//    partition p06 values less than(25200),
-//    partition p07 values less than(28800),
-//    partition p08 values less than(32400),
-//    partition p09 values less than(36000),
-//    partition p10 values less than(39600),
-//    partition p11 values less than(43200),
-//    partition p12 values less than(46800),
-//    partition p13 values less than(50400),
-//    partition p14 values less than(54000),
-//    partition p15 values less than(57600),
-//    partition p16 values less than(61200),
-//    partition p17 values less than(64800),
-//    partition p18 values less than(68400),
-//    partition p19 values less than(72000),
-//    partition p20 values less than(75600),
-//    partition p21 values less than(79200),
-//    partition p22 values less than(82800),
-//    partition p23 values less than(86400),
-//    partition p24 values less than(max_value));
+// create table cse_data_20190308_1 (
+// series_id bigint NOT NULL,
+// field_id int NOT NULL,
+// start_time INT NOT NULL,
+// value MEDIUMBLOB NOT NULL,
+// extra_value MEDIUMBLOB default NULL,
+// PRIMARY KEY(series_id, field_id, start_time))
+// partition by range(start_time) (partition p00 values less than(3600), partition p01 values less than(7200), partition p02 values less than(10800),
+// partition p03 values less than(14400), partition p04 values less than(18000), partition p05 values less than(21600), partition p06 values less than(25200),
+// partition p07 values less than(28800), partition p08 values less than(32400), partition p09 values less than(36000), partition p10 values less than(39600),
+// partition p11 values less than(43200), partition p12 values less than(46800), partition p13 values less than(50400), partition p14 values less than(54000),
+// partition p15 values less than(57600), partition p16 values less than(61200), partition p17 values less than(64800), partition p18 values less than(68400),
+// partition p19 values less than(72000), partition p20 values less than(75600), partition p21 values less than(79200), partition p22 values less than(82800),
+// partition p23 values less than(86400), partition p24 values less than(MAXVALUE));
 // ```
 #[test]
 #[serial]
 fn test_cse_data_range_table() {
-    let client = common::build_normal_client();
-    let cse_table = "data_20190308_1";
+    let client = utils::common::build_normal_client();
+    let cse_table = "cse_data_20190308_1";
+
     client
         .truncate_table(cse_table)
         .expect("Fail to truncate table");
@@ -104,8 +84,8 @@ fn test_cse_data_range_table() {
 #[test]
 #[serial]
 fn test_data_range_part() {
-    let client = common::build_normal_client();
-    let cse_table = "data_20190308_1";
+    let client = utils::common::build_normal_client();
+    let cse_table = "cse_data_20190308_1";
     client
         .truncate_table(cse_table)
         .expect("Succeed in truncating table");
@@ -124,26 +104,23 @@ fn test_data_range_part() {
     assert_eq!(1, ret.unwrap().0);
 }
 
-// The crate sql of test table is:
 // ```sql
-// create table meta_data_0 (
-//   id INT NOT NULL AUTO_INCREMENT,
-//   name VARCHAR(1024) NOT NULL DEFAULT '',
-//   data_table_name VARCHAR(100) NOT NULL,
-//   data_table_start_time_ms INT NOT NULL,
-//   status TINYINT NOT NULL DEFAULT 0,
-//   start_time_ms BIGINT(20) DEFAULT 0,
-//   end_time_ms BIGINT(20) DEFAULT 0,
-//   interval_ms INT DEFAULT 0,
-//   PRIMARY KEY(id),
-//   UNIQUE KEY data_table_loc(data_table_name, data_table_start_time_ms)
-// );
+// create table cse_meta_data_0 (
+//      id INT NOT NULL AUTO_INCREMENT,
+//      name VARCHAR(1024) NOT NULL DEFAULT '',
+//      data_table_name VARCHAR(100) NOT NULL,
+//      data_table_start_time_ms INT NOT NULL,
+//      status TINYINT NOT NULL DEFAULT 0,
+//      start_time_ms BIGINT(20) DEFAULT 0,
+//      end_time_ms BIGINT(20) DEFAULT 0,
+//      interval_ms INT DEFAULT 0,
+//      PRIMARY KEY(id), UNIQUE KEY data_table_loc(data_table_name, data_table_start_time_ms));
 // ```
 #[test]
 #[serial]
 fn test_cse_meta_data_table() {
-    let client = common::build_normal_client();
-    let cse_table = "meta_data_0";
+    let client = utils::common::build_normal_client();
+    let cse_table = "cse_meta_data_0";
     client
         .truncate_table(cse_table)
         .expect("Fail to truncate table");
@@ -188,22 +165,21 @@ fn test_cse_meta_data_table() {
         .expect("Fail to update row");
 }
 
-// The crate sql of the test table is:
 // ```sql
-// create table index_1 (
+// create table cse_index_1 (
 //  measurement VARBINARY(1024) NOT NULL,
-//  tag_key VARBINARY(1024) NOT NULL,
-//  tag_value VARBINARY(1024) NOT NULL,
-//  series_ids MEDIUMBLOB NOT NULL,
-//  PRIMARY KEY(measurement, tag_key, tag_value)
-// ) partition by key(measurement, tag_key, tag_value) partitions 13;
+//   tag_key VARBINARY(1024) NOT NULL,
+//      tag_value VARBINARY(1024) NOT NULL,
+//      series_ids MEDIUMBLOB NOT NULL,
+//      PRIMARY KEY(measurement, tag_key, tag_value))
+// partition by key(measurement, tag_key, tag_value) partitions 13;
 // ```
 #[test]
 #[serial]
 fn test_cse_index_key_table() {
-    let client = common::build_normal_client();
+    let client = utils::common::build_normal_client();
+    let cse_table = "cse_index_1";
 
-    let cse_table = "index_1";
     client
         .truncate_table(cse_table)
         .expect("Fail to truncate table");
@@ -275,9 +251,9 @@ fn test_cse_index_key_table() {
 #[test]
 #[serial]
 fn test_index_key_part() {
-    let client = common::build_normal_client();
+    let client = utils::common::build_normal_client();
+    let cse_table = "cse_index_1";
 
-    let cse_table = "index_1";
     client
         .truncate_table(cse_table)
         .expect("Fail to truncate table");
@@ -295,22 +271,21 @@ fn test_index_key_part() {
     assert_eq!(9, result.unwrap().0);
 }
 
-// The create sql of the test table is:
 // ```sql
-// create table field_1 (
+// create table cse_field_1 (
 //  measurement VARBINARY(1024) NOT NULL,
 //  field_name VARBINARY(1024) NOT NULL,
 //  field_type INT NOT NULL,
 //  id INT NOT NULL,
-//  PRIMARY KEY(measurement, field_name)
-//  ) partition by key(measurement, field_name) partitions 13;
+//  PRIMARY KEY(measurement, field_name))
+// partition by key(measurement, field_name) partitions 13;
 // ```
 #[test]
 #[serial]
 fn test_cse_field_key_table() {
-    let client = common::build_normal_client();
+    let client = utils::common::build_normal_client();
+    let cse_table = "cse_field_1";
 
-    let cse_table = "field_1";
     client
         .truncate_table(cse_table)
         .expect("Fail to truncate table");
@@ -374,9 +349,9 @@ fn test_cse_field_key_table() {
 #[test]
 #[serial]
 fn test_field_key_part() {
-    let client = common::build_normal_client();
+    let client = utils::common::build_normal_client();
+    let cse_table = "cse_field_1";
 
-    let cse_table = "field_1";
     client
         .truncate_table(cse_table)
         .expect("Fail to truncate table");
@@ -393,19 +368,17 @@ fn test_field_key_part() {
 
 // The create sql of the test table is:
 // ```sql
-// create table series_key_to_id_1 (
-//   series_key VARBINARY(8096) NOT NULL,
-//   series_id BIGINT NOT NULL,
-//   PRIMARY KEY(series_key),
-//   KEY index_id(series_id)
-// );
+// create table cse_series_key_to_id_1 (
+//  series_key VARBINARY(8096) NOT NULL,
+//  series_id BIGINT NOT NULL,
+// PRIMARY KEY(series_key), KEY index_id(series_id));
 // ```
 #[test]
 #[serial]
 fn test_series_key_table() {
-    let client = common::build_normal_client();
+    let client = utils::common::build_normal_client();
 
-    let cse_table = "series_key_to_id_1";
+    let cse_table = "cse_series_key_to_id_1";
     client
         .truncate_table(cse_table)
         .expect("Fail to truncate table");
