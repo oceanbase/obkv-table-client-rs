@@ -286,7 +286,7 @@ impl<'a> ser::Serializer for &'a mut Serializer {
                 util::encode_vi64(len as i64, output)?;
             }
             Serializer::Len(ref mut ret_len, _) => {
-                *ret_len += util::encoded_lenght_vi64(len as i64);
+                *ret_len += util::encoded_length_vi64(len as i64);
             }
         }
 
@@ -357,7 +357,7 @@ impl<'a> ser::SerializeStruct for SerializeStruct<'a> {
                     util::encode_vi64(self.len as i64, output)?;
                 }
                 Serializer::Len(ref mut len, _) => {
-                    *len += util::encoded_lenght_vi64(self.len as i64);
+                    *len += util::encoded_length_vi64(self.len as i64);
                 }
             }
 
@@ -414,7 +414,7 @@ impl<'a> ser::SerializeMap for SerializeStruct<'a> {
                     util::encode_vi64(self.len as i64, output)?;
                 }
                 Serializer::Len(ref mut len, _) => {
-                    *len += util::encoded_lenght_vi64(self.len as i64);
+                    *len += util::encoded_length_vi64(self.len as i64);
                 }
             }
 

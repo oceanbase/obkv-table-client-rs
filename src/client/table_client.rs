@@ -1546,13 +1546,25 @@ impl ObTableClient {
 
         // fast path: to process batch operations involving only one partition
         if part_batch_ops.len() == 1 {
-            let (part_id, mut batch_op) = part_batch_ops.into_iter().next().unwrap();
-            batch_op.set_partition_id(part_id);
-            batch_op.set_table_name(table_name.to_owned());
+            let (part_id, mut part_batch_op) = part_batch_ops.into_iter().next().unwrap();
+            part_batch_op.set_partition_id(part_id);
+            part_batch_op.set_table_name(table_name.to_owned());
+            part_batch_op.set_atomic_op(batch_op.is_atomic_op());
             let (_, table) = self
                 .inner
                 .get_or_create_table(table_name, &table_entry, part_id)?;
-            return table.execute_batch(table_name, batch_op);
+            return table.execute_batch(table_name, part_batch_op);
+        }
+
+        // atomic now only support single partition
+        if (part_batch_ops.len() as u32) != 1 && batch_op.is_atomic_op() {
+            return Err(CommonErr(
+                CommonErrCode::ObException(ResultCodes::OB_INVALID_PARTITION),
+                format!(
+                    "batch operation is atomic, but involves multiple partitions: {:?}",
+                    batch_op
+                ),
+            ));
         }
 
         // slow path: have to process operations involving multiple partitions
@@ -2162,9 +2174,9 @@ impl Builder {
 
         assert!(ut_index < tc_index, "Invalid full user name.");
 
-        let cluster_name = &username[0..ut_index];
+        let user = &username[0..ut_index];
         let tenant_name = &username[(ut_index + 1)..tc_index];
-        let user = &username[(tc_index + 1)..];
+        let cluster_name = &username[(tc_index + 1)..];
 
         assert_not_empty(cluster_name, "Blank cluster name");
         assert_not_empty(tenant_name, "Blank tenant name");

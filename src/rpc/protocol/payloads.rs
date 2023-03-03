@@ -93,7 +93,7 @@ impl ObRowKey {
 
     pub fn content_len(&self) -> Result<usize> {
         let mut len: usize = 0;
-        len += util::encoded_lenght_vi64(self.keys.len() as i64);
+        len += util::encoded_length_vi64(self.keys.len() as i64);
 
         for key in &self.keys {
             len += key.len();
@@ -173,7 +173,7 @@ impl ObPayload for ObTableEntity {
     fn content_len(&self) -> Result<usize> {
         let mut len: usize = self.row_key.content_len()?;
 
-        len += util::encoded_lenght_vi64(self.properties.len() as i64);
+        len += util::encoded_length_vi64(self.properties.len() as i64);
 
         for (key, value) in &self.properties {
             len += util::encoded_length_vstring(&key);
@@ -378,9 +378,13 @@ impl ObPayload for ObTableOperationRequest {
     fn content_len(&self) -> Result<usize> {
         Ok(util::encoded_length_bytes_string(&self.credential)
             + util::encoded_length_vstring(&self.table_name)
-            + util::encoded_lenght_vi64(self.table_id)
-            + util::encoded_lenght_vi64(self.partition_id)
-            + 5
+            + util::encoded_length_vi64(self.table_id)
+            + util::encoded_length_vi64(self.partition_id)
+            + util::encoded_length_vi8(self.entity_type as i8)
+            + util::encoded_length_vi8(self.consistency_level as i8)
+            + util::encoded_length_vi8(self.return_row_key as i8)
+            + util::encoded_length_vi8(self.return_affected_entity as i8)
+            + util::encoded_length_vi8(self.return_affected_rows as i8)
             + self.table_operation.len()?)
     }
 }
@@ -430,6 +434,7 @@ pub struct ObTableBatchOperation {
     read_only: bool,
     same_type: bool,
     same_properties_names: bool,
+    atomic_op: bool,
 }
 
 impl Default for ObTableBatchOperation {
@@ -456,6 +461,7 @@ impl ObTableBatchOperation {
             read_only: true,
             same_type: true,
             same_properties_names: true,
+            atomic_op: false,
         }
     }
 
@@ -497,6 +503,14 @@ impl ObTableBatchOperation {
 
     pub fn is_same_properties_names(&self) -> bool {
         self.same_properties_names
+    }
+
+    pub fn set_atomic_op(&mut self, atomic_op: bool) {
+        self.atomic_op = atomic_op;
+    }
+
+    pub fn is_atomic_op(&self) -> bool {
+        self.atomic_op
     }
 
     pub fn add_op(&mut self, raw_op: RawObTableOperation) {
@@ -646,7 +660,7 @@ impl ObPayload for ObTableBatchOperation {
 
     fn content_len(&self) -> Result<usize> {
         let mut sz = 0usize;
-        sz += util::encoded_lenght_vi64(self.ops.len() as i64);
+        sz += util::encoded_length_vi64(self.ops.len() as i64);
         for op in self.ops.iter() {
             sz += op.len()?;
         }
@@ -687,6 +701,7 @@ pub struct ObTableBatchOperationRequest {
     return_row_key: bool,
     return_affected_entity: bool,
     return_affected_rows: bool,
+    atomic_op: bool,
 }
 
 impl ObTableBatchOperationRequest {
@@ -701,6 +716,7 @@ impl ObTableBatchOperationRequest {
             table_id: batch_operation.table_id,
             partition_id: batch_operation.partition_id,
             entity_type: ObTableEntityType::Dynamic,
+            atomic_op: batch_operation.is_atomic_op(),
             batch_operation,
             consistency_level: ObTableConsistencyLevel::Strong,
             return_row_key: false,
@@ -731,10 +747,16 @@ impl ObPayload for ObTableBatchOperationRequest {
     fn content_len(&self) -> Result<usize> {
         Ok(util::encoded_length_bytes_string(&self.credential)
             + util::encoded_length_vstring(&self.table_name)
-            + util::encoded_lenght_vi64(self.table_id)
-            + util::encoded_lenght_vi64(self.partition_id)
+            + util::encoded_length_vi64(self.table_id)
+            + util::encoded_length_vi64(self.partition_id)
             + self.batch_operation.len()?
-            + 5)
+            + util::encoded_length_vi8(self.entity_type as i8)
+            + util::encoded_length_vi8(self.consistency_level as i8)
+            + util::encoded_length_vi8(self.return_row_key as i8)
+            + util::encoded_length_vi8(self.return_affected_entity as i8)
+            + util::encoded_length_vi8(self.return_affected_rows as i8)
+            + util::encoded_length_vi8(self.atomic_op as i8)
+        )
     }
 }
 
@@ -753,6 +775,7 @@ impl ProtoEncoder for ObTableBatchOperationRequest {
         buf.put_i8(self.return_affected_entity as i8);
         buf.put_i8(self.return_affected_rows as i8);
         util::encode_vi64(self.partition_id, buf)?;
+        buf.put_i8(self.atomic_op as i8);
         Ok(())
     }
 }
@@ -951,16 +974,16 @@ impl ObPayload for ObTableLoginRequest {
     }
 
     fn content_len(&self) -> Result<usize> {
-        Ok(4 + util::encoded_lenght_vi32(self.client_capabilities)
-            + util::encoded_lenght_vi32(self.max_packet_size)
-            + util::encoded_lenght_vi32(self.reserved2)
-            + util::encoded_lenght_vi64(self.reserved3)
+        Ok(4 + util::encoded_length_vi32(self.client_capabilities)
+            + util::encoded_length_vi32(self.max_packet_size)
+            + util::encoded_length_vi32(self.reserved2)
+            + util::encoded_length_vi64(self.reserved3)
             + util::encoded_length_vstring(&self.tenant_name)
             + util::encoded_length_vstring(&self.user_name)
             + util::encoded_length_bytes_string(&self.pass_secret)
             + util::encoded_length_vstring(&self.pass_scramble)
             + util::encoded_length_vstring(&self.database_name)
-            + util::encoded_lenght_vi64(self.ttl_us))
+            + util::encoded_length_vi64(self.ttl_us))
     }
 
     fn pcode(&self) -> ObTablePacketCode {

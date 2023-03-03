@@ -182,11 +182,12 @@ impl LocationUtil {
         let part_expr: String = row
             .take(&*format!("{}part_expr", part_level_prefix))
             .unwrap();
+        let part_expr = part_expr.trim_matches('`');
 
         if part_type.is_range_part() {
             let mut range_desc = ObRangePartDesc::new();
             range_desc.set_part_func_type(part_type);
-            range_desc.set_part_expr(part_expr.clone());
+            range_desc.set_part_expr(part_expr.to_string());
             range_desc.set_ordered_part_column_names(
                 part_expr.split(',').map(|s| s.to_string()).collect(),
             );
@@ -202,7 +203,7 @@ impl LocationUtil {
         } else if part_type.is_hash_part() {
             let mut hash_desc = ObHashPartDesc::new();
             hash_desc.set_part_func_type(part_type);
-            hash_desc.set_part_expr(part_expr.clone());
+            hash_desc.set_part_expr(part_expr.to_string());
             hash_desc.set_ordered_part_column_names(
                 part_expr.split(',').map(|s| s.to_string()).collect(),
             );
@@ -231,7 +232,7 @@ impl LocationUtil {
         } else if part_type.is_key_part() {
             let mut key_part_desc = ObKeyPartDesc::new();
             key_part_desc.set_part_func_type(part_type);
-            key_part_desc.set_part_expr(part_expr.clone());
+            key_part_desc.set_part_expr(part_expr.to_string());
             key_part_desc.set_ordered_part_column_names(
                 part_expr.split(',').map(|s| s.to_string()).collect(),
             );

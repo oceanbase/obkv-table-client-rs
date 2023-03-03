@@ -764,13 +764,13 @@ impl ObKeyPartDesc {
         match collation_type {
             // TODO: support collation UTF8MB4_GENERAL_CI, current use UTF8MB4_BIN hash
             CollationType::UTF8MB4GeneralCi => {
-                unimplemented!();
-                //  return Ok(ObHashSortUtf8mb4::ob_hash_sort_utf8_mb4(
-                //      &bytes,
-                //      bytes.len() as i32,
-                //      hash_code,
-                //      seed as i64,
-                //  ));
+                 // unimplemented!();
+                 return Ok(ObHashSortUtf8mb4::ob_hash_sort_utf8_mb4(
+                     &bytes,
+                     bytes.len() as i32,
+                     hash_code,
+                     seed as i64,
+                 ));
             }
             CollationType::UTF8MB4Bin => Ok(ObHashSortUtf8mb4::ob_hash_sort_mb_bin(
                 &bytes,
