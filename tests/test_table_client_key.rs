@@ -47,6 +47,8 @@ fn test_varchar_all_ob() {
     test.test_varchar_update(TABLE_NAME);
     test.test_varchar_insert_or_update(TABLE_NAME);
     test.test_varchar_replace(TABLE_NAME);
+    test.test_varchar_append(TABLE_NAME);
+    test.test_varchar_increment(TABLE_NAME);
     test.clean_varchar_table(TABLE_NAME);
 }
 

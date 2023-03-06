@@ -247,6 +247,43 @@ impl Table for ObTable {
             .affected_rows())
     }
 
+    fn append(
+        &self,
+        table_name: &str,
+        row_keys: Vec<Value>,
+        columns: Vec<String>,
+        properties: Vec<Value>,
+    ) -> Result<i64> {
+        Ok(self
+            .execute(
+                table_name,
+                ObTableOperationType::Append,
+                row_keys,
+                Some(columns),
+                Some(properties),
+            )?
+            .affected_rows())
+    }
+
+    fn increment(
+        &self,
+        table_name: &str,
+        row_keys: Vec<Value>,
+        columns: Vec<String>,
+        properties: Vec<Value>,
+    ) -> Result<i64> {
+        Ok(self
+            .execute(
+                table_name,
+                ObTableOperationType::Increment,
+                row_keys,
+                Some(columns),
+                Some(properties),
+            )?
+            .affected_rows())
+    }
+
+
     fn delete(&self, table_name: &str, row_keys: Vec<Value>) -> Result<i64> {
         Ok(self
             .execute(table_name, ObTableOperationType::Del, row_keys, None, None)?

@@ -1,6 +1,7 @@
 CREATE TABLE `TEST_VARCHAR_TABLE_RANGE` (
     `c1` varchar(20) NOT NULL,
     `c2` varchar(20) DEFAULT NULL,
+    `c3` bigint DEFAULT 0,
     PRIMARY KEY (`c1`)
 ) DEFAULT CHARSET = utf8mb4 COMPRESSION = 'lz4_1.0' REPLICA_NUM = 3 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 10
 partition by range columns (c1) (PARTITION p0 VALUES LESS THAN ('a'), PARTITION p1 VALUES LESS THAN ('w'), PARTITION p2 VALUES LESS THAN MAXVALUE);
@@ -49,6 +50,7 @@ partition by range(`c1`) (partition p0 values less than(200), partition p1 value
 CREATE TABLE `TEST_VARCHAR_TABLE_KEY` (
     `c1` varchar(20) NOT NULL,
     `c2` varchar(20) DEFAULT NULL,
+    `c3` bigint DEFAULT 0,
     PRIMARY KEY (`c1`)
 ) DEFAULT CHARSET = utf8mb4 COMPRESSION = 'lz4_1.0' REPLICA_NUM = 3 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 10
 partition by key(c1) partitions 16;
@@ -92,6 +94,7 @@ partition by key(`c1`) partitions 16;
 CREATE TABLE `TEST_VARCHAR_TABLE_HASH` (
     `c1` bigint(20) NOT NULL,
     `c2` varchar(20) DEFAULT NULL,
+    `c3` bigint DEFAULT 0,
     PRIMARY KEY (`c1`)
 ) DEFAULT CHARSET = utf8mb4 COMPRESSION = 'lz4_1.0' REPLICA_NUM = 3 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 10
 partition by hash(c1) partitions 16;
@@ -134,6 +137,7 @@ partition by hash(`c1`) partitions 16;
 CREATE TABLE `test_varchar_table` (
 `c1` varchar(20) NOT NULL,
 `c2` varchar(20) DEFAULT NULL,
+`c3` bigint DEFAULT 0,
 PRIMARY KEY (`c1`)
 ) DEFAULT CHARSET = utf8mb4 COMPRESSION = 'lz4_1.0' REPLICA_NUM = 3 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 10;
 
