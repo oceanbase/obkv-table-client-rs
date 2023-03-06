@@ -5,12 +5,12 @@
  * Copyright (C) 2021 OceanBase
  * %%
  * OBKV Table Client Framework is licensed under Mulan PSL v2.
- * You can use this software according to the terms and conditions of the Mulan PSL v2.
- * You may obtain a copy of Mulan PSL v2 at:
+ * You can use this software according to the terms and conditions of the
+ * Mulan PSL v2. You may obtain a copy of Mulan PSL v2 at:
  *          http://license.coscl.org.cn/MulanPSL2
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
- * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY
+ * KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+ * NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PSL v2 for more details.
  * #L%
  */
@@ -122,53 +122,47 @@ pub enum CommonErrCode {
 impl Error {
     /// Returns true when the error is an ob exception.
     pub fn is_ob_exception(&self) -> bool {
-        match self {
-            Error::Common(code, _desc) => matches!(code, CommonErrCode::ObException(_)),
-            _ => false,
-        }
+        matches!(self, Error::Common(CommonErrCode::ObException(_), _))
     }
 
     // Returns true when the error is common error
     pub fn is_common_err(&self) -> bool {
-        matches!(self, Error::Common(_code, _desc))
+        matches!(self, Error::Common(_, _))
     }
 
     // Return the common error code if it's a common error, otherwise return None.
     pub fn common_err_code(&self) -> Option<CommonErrCode> {
-        match self {
-            Error::Common(code, _desc) => Some(*code),
-            _ => None,
+        if let Error::Common(code, _) = self {
+            Some(*code)
+        } else {
+            None
         }
     }
 
     /// Returns the result code of ob exception, return none if it's not an ob
     /// exception.
     pub fn ob_result_code(&self) -> Option<ResultCodes> {
-        match self {
-            Error::Common(code, _desc) => match code {
-                CommonErrCode::ObException(code) => Some(*code),
-                _ => None,
-            },
-            _ => None,
+        if let Error::Common(CommonErrCode::ObException(code), _desc) = self {
+            Some(*code)
+        } else {
+            None
         }
     }
 
     pub fn need_retry(&self) -> bool {
-        if let Error::Common(code, _desc) = self {
-            if let CommonErrCode::ObException(code) = code {
-                return code.need_retry();
-            }
+        if let Error::Common(CommonErrCode::ObException(code), _) = self {
+            code.need_retry()
+        } else {
+            false
         }
-        false
     }
 
     pub fn need_refresh_table(&self) -> bool {
-        if let Error::Common(code, _desc) = self {
-            if let CommonErrCode::ObException(code) = code {
-                return code.need_refresh_table();
-            }
+        if let Error::Common(CommonErrCode::ObException(code), _) = self {
+            code.need_refresh_table()
+        } else {
+            false
         }
-        false
     }
 }
 

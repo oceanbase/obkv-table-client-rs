@@ -5,12 +5,12 @@
  * Copyright (C) 2021 OceanBase
  * %%
  * OBKV Table Client Framework is licensed under Mulan PSL v2.
- * You can use this software according to the terms and conditions of the Mulan PSL v2.
- * You may obtain a copy of Mulan PSL v2 at:
+ * You can use this software according to the terms and conditions of the
+ * Mulan PSL v2. You may obtain a copy of Mulan PSL v2 at:
  *          http://license.coscl.org.cn/MulanPSL2
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
- * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY
+ * KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+ * NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PSL v2 for more details.
  * #L%
  */
@@ -82,12 +82,12 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
             Value::Float(f, _) => visitor.visit_f32(f),
             Value::Double(f, _) => visitor.visit_f64(f),
             Value::Bytes(ref vc, _) => visitor.visit_bytes(&vc[..]),
-            Value::String(ref s, _) => visitor.visit_str(&s),
+            Value::String(ref s, _) => visitor.visit_str(s),
             _ => self.deserialize_map(visitor),
         }
     }
 
-    fn deserialize_seq<V>(mut self, visitor: V) -> Result<V::Value>
+    fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
@@ -95,7 +95,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
         if len == 0 {
             return visitor.visit_none();
         }
-        let value = visitor.visit_seq(ValueDeserializer::new(len as usize, &mut self))?;
+        let value = visitor.visit_seq(ValueDeserializer::new(len as usize, self))?;
         Ok(value)
     }
 
@@ -128,7 +128,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     // Much like `deserialize_seq` but calls the visitors `visit_map` method
     // with a `MapAccess` implementation, rather than the visitor's `visit_seq`
     // method with a `SeqAccess` implementation.
-    fn deserialize_map<V>(mut self, visitor: V) -> Result<V::Value>
+    fn deserialize_map<V>(self, visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
@@ -136,7 +136,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
         if len == 0 {
             return visitor.visit_none();
         }
-        let value = visitor.visit_map(ValueDeserializer::new(len as usize, &mut self))?;
+        let value = visitor.visit_map(ValueDeserializer::new(len as usize, self))?;
         Ok(value)
     }
 
@@ -276,7 +276,7 @@ mod test {
         };
 
         let size = serialize_len(&test).unwrap();
-        println!("size={}", size);
+        println!("size={size}");
         let ret = to_bytes_mut(&test, size);
         assert!(ret.is_ok());
         let mut buf: BytesMut = ret.unwrap();

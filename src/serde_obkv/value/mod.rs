@@ -5,12 +5,12 @@
  * Copyright (C) 2021 OceanBase
  * %%
  * OBKV Table Client Framework is licensed under Mulan PSL v2.
- * You can use this software according to the terms and conditions of the Mulan PSL v2.
- * You may obtain a copy of Mulan PSL v2 at:
+ * You can use this software according to the terms and conditions of the
+ * Mulan PSL v2. You may obtain a copy of Mulan PSL v2 at:
  *          http://license.coscl.org.cn/MulanPSL2
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
- * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY
+ * KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+ * NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PSL v2 for more details.
  * #L%
  */
@@ -18,7 +18,7 @@
 #![allow(unused_variables)]
 #![allow(dead_code)]
 #![allow(clippy::len_without_is_empty)]
-#![allow(clippy::derive_hash_xor_eq)]
+#![allow(clippy::derived_hash_with_manual_eq)]
 #![allow(clippy::wrong_self_convention)]
 
 pub mod from;
@@ -42,10 +42,10 @@ const VALUE_MIN: i64 = -3i64;
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub enum CollationType {
     Invalid = 0,
-    UTF8MB4GeneralCi = 45, //default, case-insenstive,
-    UTF8MB4Bin = 46,       //case sensitive
+    UTF8MB4GeneralCi = 45, // default, case-insensitive,
+    UTF8MB4Bin = 46,       // case sensitive
     Binary = 63,
-    CollationFree = 100, //not supported in mysql
+    CollationFree = 100, // not supported in mysql
     Max = 101,
 }
 
@@ -59,7 +59,7 @@ impl CollationType {
             100 => Ok(CollationType::CollationFree),
             101 => Ok(CollationType::Max),
             _ => Err(Error::Custom(
-                format!("CollationType::from_u8 invalid collation type, v={}", v).into(),
+                format!("CollationType::from_u8 invalid collation type, v={v}").into(),
             )),
         }
     }
@@ -67,9 +67,9 @@ impl CollationType {
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub enum CollationLevel {
-    Explict = 0,
+    Explicit = 0,
     None = 1,
-    Implict = 2,
+    Implicit = 2,
     Sysconst = 3,
     Coercible = 4,
     Numeric = 5,
@@ -80,16 +80,16 @@ pub enum CollationLevel {
 impl CollationLevel {
     pub fn from_u8(v: u8) -> Result<CollationLevel> {
         match v {
-            0 => Ok(CollationLevel::Explict),
+            0 => Ok(CollationLevel::Explicit),
             1 => Ok(CollationLevel::None),
-            2 => Ok(CollationLevel::Implict),
+            2 => Ok(CollationLevel::Implicit),
             3 => Ok(CollationLevel::Sysconst),
             4 => Ok(CollationLevel::Coercible),
             5 => Ok(CollationLevel::Numeric),
             6 => Ok(CollationLevel::Ignorable),
             7 => Ok(CollationLevel::Invalid),
             _ => Err(Error::Custom(
-                format!("CollationLevel::from_u8 invalid collation level, v={}", v).into(),
+                format!("CollationLevel::from_u8 invalid collation level, v={v}").into(),
             )),
         }
     }
@@ -169,7 +169,7 @@ impl ObjType {
             30 => Ok(ObjType::LongText),
             31 => Ok(ObjType::Bit),
             _ => Err(Error::Custom(
-                format!("ObjType::from_u8 invalid ob obj type, v={}", v).into(),
+                format!("ObjType::from_u8 invalid ob obj type, v={v}").into(),
             )),
         }
     }
@@ -272,13 +272,13 @@ impl ObjMeta {
             ObjType::Year => ObjMeta::new_numeric_meta(t),
             ObjType::Varchar => ObjMeta::new(
                 t,
-                CollationLevel::Explict,
+                CollationLevel::Explicit,
                 CollationType::UTF8MB4GeneralCi,
                 10,
             ),
             ObjType::Char => ObjMeta::new(
                 t,
-                CollationLevel::Explict,
+                CollationLevel::Explicit,
                 CollationType::UTF8MB4GeneralCi,
                 10,
             ),
@@ -348,7 +348,7 @@ impl Value {
     pub fn as_bytes(self) -> Vec<u8> {
         match self {
             Value::Bytes(v, _) => v,
-            _ => panic!("Fail to cast: {:?}", self),
+            _ => panic!("Fail to cast: {self:?}"),
         }
     }
 
@@ -359,15 +359,15 @@ impl Value {
     pub fn as_string(self) -> String {
         match self {
             Value::String(s, _) => s,
-            _ => panic!("Fail to cast: {:?}", self),
+            _ => panic!("Fail to cast: {self:?}"),
         }
     }
 
     pub fn as_i64(&self) -> i64 {
         match self {
-            Value::Int64(i, _) => *i as i64,
+            Value::Int64(i, _) => *i,
             Value::UInt64(i, _) => *i as i64,
-            _ => panic!("Fail to cast: {:?}", self),
+            _ => panic!("Fail to cast: {self:?}"),
         }
     }
 
@@ -377,9 +377,9 @@ impl Value {
 
     pub fn as_i32(&self) -> i32 {
         match self {
-            Value::Int32(i, _) => *i as i32,
+            Value::Int32(i, _) => *i,
             Value::UInt32(i, _) => *i as i32,
-            _ => panic!("Fail to cast: {:?}", self),
+            _ => panic!("Fail to cast: {self:?}"),
         }
     }
 
@@ -397,9 +397,9 @@ impl Value {
 
     pub fn as_i8(&self) -> i8 {
         match self {
-            Value::Int8(i, _) => *i as i8,
+            Value::Int8(i, _) => *i,
             Value::UInt8(i, _) => *i as i8,
-            _ => panic!("Fail to cast: {:?}", self),
+            _ => panic!("Fail to cast: {self:?}"),
         }
     }
 
@@ -573,7 +573,7 @@ impl Value {
             }
             Value::String(ref s, ref meta) => {
                 meta.encode(buf)?;
-                encode_vstring(&s, buf)
+                encode_vstring(s, buf)
             }
         }
     }
@@ -627,7 +627,7 @@ impl Serialize for Value {
             Value::Date(d, _) => serializer.serialize_i32(d),
             Value::Time(t, _) => serializer.serialize_i64(t),
             Value::Bytes(ref vc, _) => serializer.serialize_bytes(vc),
-            Value::String(ref s, _) => serializer.serialize_str(&s),
+            Value::String(ref s, _) => serializer.serialize_str(s),
         }
     }
 }
@@ -654,7 +654,7 @@ mod test {
         };
 
         let size = serialize_len(&test).unwrap();
-        println!("size={}", size);
+        println!("size={size}");
         let ret = to_bytes_mut(&test, size);
         assert!(ret.is_ok());
         assert_eq!(35, ret.unwrap().len());

@@ -5,12 +5,12 @@
  * Copyright (C) 2021 OceanBase
  * %%
  * OBKV Table Client Framework is licensed under Mulan PSL v2.
- * You can use this software according to the terms and conditions of the Mulan PSL v2.
- * You may obtain a copy of Mulan PSL v2 at:
+ * You can use this software according to the terms and conditions of the
+ * Mulan PSL v2. You may obtain a copy of Mulan PSL v2 at:
  *          http://license.coscl.org.cn/MulanPSL2
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
- * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY
+ * KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+ * NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PSL v2 for more details.
  * #L%
  */
@@ -38,7 +38,7 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Error::Custom(ref msg) => msg.fmt(f),
-            Error::Utf8(ref err) => write!(f, "invalid UTF-8: {}", err),
+            Error::Utf8(ref err) => write!(f, "invalid UTF-8: {err}"),
         }
     }
 }
@@ -62,13 +62,13 @@ impl error::Error for Error {
 
 impl ser::Error for Error {
     fn custom<T: fmt::Display>(msg: T) -> Self {
-        Error::Custom(format!("{}", msg).into())
+        Error::Custom(format!("{msg}").into())
     }
 }
 
 impl de::Error for Error {
     fn custom<T: Display>(msg: T) -> Self {
-        Error::Custom(format!("{}", msg).into())
+        Error::Custom(format!("{msg}").into())
     }
 }
 
@@ -76,6 +76,6 @@ use std::io;
 
 impl From<Error> for io::Error {
     fn from(e: Error) -> io::Error {
-        io::Error::new(io::ErrorKind::Other, format!("cause: {}", e))
+        io::Error::new(io::ErrorKind::Other, format!("cause: {e}"))
     }
 }

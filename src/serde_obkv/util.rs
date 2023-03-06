@@ -5,12 +5,12 @@
  * Copyright (C) 2021 OceanBase
  * %%
  * OBKV Table Client Framework is licensed under Mulan PSL v2.
- * You can use this software according to the terms and conditions of the Mulan PSL v2.
- * You may obtain a copy of Mulan PSL v2 at:
+ * You can use this software according to the terms and conditions of the
+ * Mulan PSL v2. You may obtain a copy of Mulan PSL v2 at:
  *          http://license.coscl.org.cn/MulanPSL2
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
- * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY
+ * KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+ * NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PSL v2 for more details.
  * #L%
  */
@@ -194,14 +194,14 @@ fn utf8(buf: &[u8]) -> Result<&str> {
 }
 
 pub fn encoded_length_vstring(s: &str) -> usize {
-    encoded_length_vi32(s.len() as i32) as usize + s.len() + 1
+    encoded_length_vi32(s.len() as i32) + s.len() + 1
 }
 
 const END: u8 = 0;
 
 pub fn encode_vstring(s: &str, buf: &mut BytesMut) -> Result<()> {
     let bs = s.as_bytes();
-    buf.reserve(encoded_length_vi32(bs.len() as i32) as usize + bs.len() + 1);
+    buf.reserve(encoded_length_vi32(bs.len() as i32) + bs.len() + 1);
     encode_vi32(bs.len() as i32, buf)?;
     buf.put_slice(bs);
     buf.put_u8(END);
@@ -210,7 +210,7 @@ pub fn encode_vstring(s: &str, buf: &mut BytesMut) -> Result<()> {
 }
 
 pub fn encoded_length_bytes_string(v: &[u8]) -> usize {
-    encoded_length_vi32(v.len() as i32) as usize + v.len() + 1
+    encoded_length_vi32(v.len() as i32) + v.len() + 1
 }
 
 pub fn encode_bytes_string(v: &[u8], buf: &mut BytesMut) -> Result<()> {
@@ -298,12 +298,12 @@ mod test {
     fn encode_decode_vi32() {
         let nums = vec![i32::MIN, -100, -1, 0, 1, 100, i32::MAX];
         for i in nums {
-            let a = i as i32;
+            let a = i;
             let mut buf = BytesMut::new();
 
             let ret = encode_vi32(a, &mut buf);
             assert!(ret.is_ok());
-            assert!(buf.len() > 0);
+            assert!(!buf.is_empty());
             assert!(buf.len() <= 5);
 
             let mut buf = buf.clone();
@@ -317,12 +317,12 @@ mod test {
     fn encode_decode_vi64() {
         let nums = vec![i64::MIN, -100, -1, 0, 1, 100, i64::MAX];
         for i in nums {
-            let a = i as i64;
+            let a = i;
             let mut buf = BytesMut::new();
 
             let ret = encode_vi64(a, &mut buf);
             assert!(ret.is_ok());
-            assert!(buf.len() > 0);
+            assert!(!buf.is_empty());
             assert!(buf.len() <= 10);
 
             let mut buf = buf.clone();

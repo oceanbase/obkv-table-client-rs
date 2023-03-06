@@ -5,12 +5,12 @@
  * Copyright (C) 2021 OceanBase
  * %%
  * OBKV Table Client Framework is licensed under Mulan PSL v2.
- * You can use this software according to the terms and conditions of the Mulan PSL v2.
- * You may obtain a copy of Mulan PSL v2 at:
+ * You can use this software according to the terms and conditions of the
+ * Mulan PSL v2. You may obtain a copy of Mulan PSL v2 at:
  *          http://license.coscl.org.cn/MulanPSL2
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
- * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY
+ * KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+ * NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PSL v2 for more details.
  * #L%
  */
@@ -190,13 +190,9 @@ impl LocationUtil {
             ObPartitionLevel::Two => "sub_",
             _ => "",
         };
-        let part_type = PartFuncType::from_i32(
-            row.take(&*format!("{}part_type", part_level_prefix))
-                .unwrap(),
-        );
-        let part_expr: String = row
-            .take(&*format!("{}part_expr", part_level_prefix))
-            .unwrap();
+        let part_type =
+            PartFuncType::from_i32(row.take(&*format!("{part_level_prefix}part_type")).unwrap());
+        let part_expr: String = row.take(&*format!("{part_level_prefix}part_expr")).unwrap();
         let part_expr = part_expr.trim_matches('`');
 
         if part_type.is_range_part() {
@@ -208,13 +204,13 @@ impl LocationUtil {
             );
             let mut types: Vec<ObjType> = Vec::new();
             let obj_type_str: String = row
-                .take(&*format!("{}part_range_type", part_level_prefix))
+                .take(&*format!("{part_level_prefix}part_range_type"))
                 .unwrap();
             for v in obj_type_str.split(',') {
-                types.push(ObjType::from_u8(u8::from_str_radix(v, 10)?)?);
+                types.push(ObjType::from_u8(v.parse::<u8>()?)?);
             }
             range_desc.set_ordered_compare_column_types(types);
-            return Ok(Some(ObPartDesc::ObRangePartDesc(range_desc)));
+            return Ok(Some(ObPartDesc::Range(range_desc)));
         } else if part_type.is_hash_part() {
             let mut hash_desc = ObHashPartDesc::new();
             hash_desc.set_part_func_type(part_type);
@@ -223,10 +219,7 @@ impl LocationUtil {
                 part_expr.split(',').map(|s| s.to_string()).collect(),
             );
 
-            hash_desc.set_part_num(
-                row.take(&*format!("{}part_num", part_level_prefix))
-                    .unwrap(),
-            );
+            hash_desc.set_part_num(row.take(&*format!("{part_level_prefix}part_num")).unwrap());
             // in java sdk, complete_works is implemented in setPartNum()
             let mut complete_works = Vec::new();
             for i in 0..hash_desc.get_part_num() {
@@ -236,14 +229,14 @@ impl LocationUtil {
             hash_desc.set_complete_works(complete_works);
 
             hash_desc.set_part_space(
-                row.take(&*format!("{}part_space", part_level_prefix))
+                row.take(&*format!("{part_level_prefix}part_space"))
                     .unwrap(),
             );
 
             hash_desc.set_part_name_id_map(LocationUtil::build_default_part_name_id_map(
                 hash_desc.get_part_num(),
             ));
-            return Ok(Some(ObPartDesc::ObHashPartDesc(hash_desc)));
+            return Ok(Some(ObPartDesc::Hash(hash_desc)));
         } else if part_type.is_key_part() {
             let mut key_part_desc = ObKeyPartDesc::new();
             key_part_desc.set_part_func_type(part_type);
@@ -251,18 +244,15 @@ impl LocationUtil {
             key_part_desc.set_ordered_part_column_names(
                 part_expr.split(',').map(|s| s.to_string()).collect(),
             );
-            key_part_desc.set_part_num(
-                row.take(&*format!("{}part_num", part_level_prefix))
-                    .unwrap(),
-            );
+            key_part_desc.set_part_num(row.take(&*format!("{part_level_prefix}part_num")).unwrap());
             key_part_desc.set_part_space(
-                row.take(&*format!("{}part_space", part_level_prefix))
+                row.take(&*format!("{part_level_prefix}part_space"))
                     .unwrap(),
             );
             key_part_desc.set_part_name_id_map(LocationUtil::build_default_part_name_id_map(
                 key_part_desc.get_part_num(),
             ));
-            return Ok(Some(ObPartDesc::ObKeyPartDesc(key_part_desc)));
+            return Ok(Some(ObPartDesc::Key(key_part_desc)));
         } else {
             error!(
                 "LocationUtil::build_part_desc not supported part type, type = {:?}",
@@ -318,7 +308,7 @@ impl LocationUtil {
         // the default partition name is 'p0,p1...'
         let mut part_name_id_map = HashMap::new();
         for i in 0..part_num {
-            part_name_id_map.insert(format!("p{}", i), i as i64);
+            part_name_id_map.insert(format!("p{i}"), i as i64);
         }
         part_name_id_map
     }
@@ -331,7 +321,7 @@ impl LocationUtil {
             if let Some(sub_part_desc) = &partition_info.sub_part_desc {
                 let part_name_map2: &HashMap<String, i64> = sub_part_desc.get_part_name_id_map();
                 for (part_name2, part_id2) in part_name_map2 {
-                    let com_part_name = format!("{}s{}", part_name1, part_name2);
+                    let com_part_name = format!("{part_name1}s{part_name2}");
                     let part_id =
                         ObPartIdCalculator::generate_part_id(Some(*part_id1), Some(*part_id2));
                     if let Some(id) = part_id {
@@ -339,7 +329,7 @@ impl LocationUtil {
                     }
                 }
             } else {
-                part_name_map.insert(part_name1.clone(), (*part_id1) as i64);
+                part_name_map.insert(part_name1.clone(), *part_id1);
             }
         }
         part_name_map
@@ -370,7 +360,7 @@ impl LocationUtil {
                     ));
                 }
                 Some(info) => match &mut info.first_part_desc {
-                    Some(ObPartDesc::ObRangePartDesc(v)) => v.set_bounds(bounds),
+                    Some(ObPartDesc::Range(v)) => v.set_bounds(bounds),
                     _ => error!("LocationUtil::fetch_first_part never be here"),
                 },
             }
@@ -413,7 +403,7 @@ impl LocationUtil {
                     ));
                 }
                 Some(info) => match &mut info.sub_part_desc {
-                    Some(ObPartDesc::ObRangePartDesc(v)) => v.set_bounds(bounds),
+                    Some(ObPartDesc::Range(v)) => v.set_bounds(bounds),
                     _ => error!("LocationUtil::fetch_sub_part never be here"),
                 },
             }
@@ -456,9 +446,7 @@ impl LocationUtil {
 
         if let Some(part_desc) = part_desc {
             match part_desc {
-                ObPartDesc::ObRangePartDesc(v) => {
-                    order_part_columns = v.get_ordered_compare_column()
-                }
+                ObPartDesc::Range(v) => order_part_columns = v.get_ordered_compare_column(),
                 _ => error!("LocationUtil::parse_range_part never be here"),
             }
         }
@@ -472,9 +460,9 @@ impl LocationUtil {
                 for i in 0..splits.len() {
                     let element_str = LocationUtil::get_plain_string(&splits[i]);
                     if element_str.eq_ignore_ascii_case("MAXVALUE") {
-                        part_elements.push(Comparable::MAXVALUE);
+                        part_elements.push(Comparable::MaxValue);
                     } else if element_str.eq_ignore_ascii_case("MINVALUE") {
-                        part_elements.push(Comparable::MINVALUE);
+                        part_elements.push(Comparable::MinValue);
                     } else {
                         part_elements.push(Comparable::Value(
                             order_part_columns[i]
@@ -513,7 +501,7 @@ impl LocationUtil {
         } else {
             0
         };
-        let end = if !s.is_empty() && s[(s.len() - 1) as usize..] == '\''.to_string() {
+        let end = if !s.is_empty() && s[(s.len() - 1)..] == '\''.to_string() {
             s.len() - 1
         } else {
             s.len()

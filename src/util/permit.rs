@@ -5,12 +5,12 @@
  * Copyright (C) 2021 OceanBase
  * %%
  * OBKV Table Client Framework is licensed under Mulan PSL v2.
- * You can use this software according to the terms and conditions of the Mulan PSL v2.
- * You may obtain a copy of Mulan PSL v2 at:
+ * You can use this software according to the terms and conditions of the
+ * Mulan PSL v2. You may obtain a copy of Mulan PSL v2 at:
  *          http://license.coscl.org.cn/MulanPSL2
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
- * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY
+ * KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+ * NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PSL v2 for more details.
  * #L%
  */
@@ -84,7 +84,7 @@ mod test {
         let guard3 = permits.acquire().expect("Fail to acquire a permit.");
         assert_eq!(3, guard3.permit());
 
-        assert!(!permits.acquire().is_ok());
+        assert!(permits.acquire().is_err());
 
         drop(guard1);
         let guard4 = permits.acquire();
@@ -93,7 +93,7 @@ mod test {
         assert_eq!(3, guard4.permit());
 
         let guard5 = permits.acquire();
-        assert!(!guard5.is_ok());
+        assert!(guard5.is_err());
         assert_eq!(3, *permits.permits.lock());
 
         drop(guard2);

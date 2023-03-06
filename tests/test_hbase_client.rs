@@ -5,12 +5,12 @@
  * Copyright (C) 2021 OceanBase
  * %%
  * OBKV Table Client Framework is licensed under Mulan PSL v2.
- * You can use this software according to the terms and conditions of the Mulan PSL v2.
- * You may obtain a copy of Mulan PSL v2 at:
+ * You can use this software according to the terms and conditions of the
+ * Mulan PSL v2. You may obtain a copy of Mulan PSL v2 at:
  *          http://license.coscl.org.cn/MulanPSL2
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
- * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY
+ * KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+ * NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PSL v2 for more details.
  * #L%
  */
@@ -54,11 +54,7 @@ fn test_obtable_partition_hash_crud() {
     let result = result.unwrap();
     assert_eq!(1, result);
 
-    let result = client.get(
-        TEST_TABLE,
-        rowk_keys.clone(),
-        vec!["V".to_owned()],
-    );
+    let result = client.get(TEST_TABLE, rowk_keys.clone(), vec!["V".to_owned()]);
     assert!(result.is_ok());
     let mut result = result.unwrap();
     assert_eq!(1, result.len());
@@ -79,11 +75,7 @@ fn test_obtable_partition_hash_crud() {
 
     assert_eq!(1, result);
 
-    let result = client.get(
-        TEST_TABLE,
-        rowk_keys.clone(),
-        vec!["V".to_owned()],
-    );
+    let result = client.get(TEST_TABLE, rowk_keys, vec!["V".to_owned()]);
     assert!(result.is_ok());
     let mut result = result.unwrap();
     assert_eq!(1, result.len());
@@ -128,11 +120,7 @@ fn test_obtable_partition_key_varbinary_crud() {
     let result = result.unwrap();
     assert_eq!(1, result);
 
-    let result = client.get(
-        TEST_TABLE,
-        rowk_keys.clone(),
-        vec!["V".to_owned()],
-    );
+    let result = client.get(TEST_TABLE, rowk_keys.clone(), vec!["V".to_owned()]);
     assert!(result.is_ok());
     let mut result = result.unwrap();
     assert_eq!(1, result.len());
@@ -153,11 +141,7 @@ fn test_obtable_partition_key_varbinary_crud() {
 
     assert_eq!(1, result);
 
-    let result = client.get(
-        TEST_TABLE,
-        rowk_keys.clone(),
-        vec!["V".to_owned()],
-    );
+    let result = client.get(TEST_TABLE, rowk_keys, vec!["V".to_owned()]);
     assert!(result.is_ok());
     let mut result = result.unwrap();
     assert_eq!(1, result.len());
@@ -203,11 +187,7 @@ fn test_obtable_partition_key_varchar_crud() {
     let result = result.unwrap();
     assert_eq!(1, result);
 
-    let result = client.get(
-        TABLE_NAME,
-        rowk_keys.clone(),
-        vec!["V".to_owned()],
-    );
+    let result = client.get(TABLE_NAME, rowk_keys.clone(), vec!["V".to_owned()]);
     assert!(result.is_ok());
     let mut result = result.unwrap();
     assert_eq!(1, result.len());
@@ -228,11 +208,7 @@ fn test_obtable_partition_key_varchar_crud() {
 
     assert_eq!(1, result);
 
-    let result = client.get(
-        TABLE_NAME,
-        rowk_keys.clone(),
-        vec!["V".to_owned()],
-    );
+    let result = client.get(TABLE_NAME, rowk_keys, vec!["V".to_owned()]);
     assert!(result.is_ok());
     let mut result = result.unwrap();
     assert_eq!(1, result.len());
@@ -274,11 +250,7 @@ fn test_obtable_partition_range_crud() {
     let result = result.unwrap();
     assert_eq!(1, result);
 
-    let result = client.get(
-        TABLE_NAME,
-        rowk_keys.clone(),
-        vec!["V".to_owned()],
-    );
+    let result = client.get(TABLE_NAME, rowk_keys.clone(), vec!["V".to_owned()]);
     assert!(result.is_ok());
     let mut result = result.unwrap();
     assert_eq!(1, result.len());
@@ -299,11 +271,7 @@ fn test_obtable_partition_range_crud() {
 
     assert_eq!(1, result);
 
-    let result = client.get(
-        TABLE_NAME,
-        rowk_keys.clone(),
-        vec!["V".to_owned()],
-    );
+    let result = client.get(TABLE_NAME, rowk_keys, vec!["V".to_owned()]);
     assert!(result.is_ok());
     let mut result = result.unwrap();
     assert_eq!(1, result.len());

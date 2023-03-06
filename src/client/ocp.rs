@@ -318,7 +318,7 @@ mod test {
 
         let file = OcpModelCacheFile::new(path);
 
-        assert!(!file.load().is_ok());
+        assert!(file.load().is_err());
 
         let mut ocp_model = OcpModel::new();
         for i in 0..3 {
