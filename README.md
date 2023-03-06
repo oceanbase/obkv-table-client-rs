@@ -1,5 +1,4 @@
 # obkv-table-client-rs
-![License](https://img.shields.io/badge/license-Apache--2.0-green.svg)
 
 OBKV Table Client is Rust Library that can be used to access table data from [OceanBase](https://github.com/oceanbase/oceanbase) storage layer. Its access method is different from JDBC, it skips the SQL parsing layer, so it has significant performance advantage.
 
@@ -7,9 +6,11 @@ OBKV Table Client is Rust Library that can be used to access table data from [Oc
 The CeresDB team implemented this rust client from scratch. Thanks to the [CeresDB](https://github.com/CeresDB/ceresdb) team (CeresDB is a high-performance, distributed, cloud native time-series database).
 
 ## Contributing
-Any contribution is welcome!
+Contributions are warmly welcomed and greatly appreciated. Here are a few ways you can contribute:
 
-Read our [Contributing Guide](https://github.com/CeresDB/ceresdb/blob/main/CONTRIBUTING.md) and make your first contribution!
+- Raise us an [Issue](https://github.com/oceanbase/obkv-table-client-rs/issues)
+- Submit Pull Requests. For details, see [How to contribute](CONTRIBUTING.md).
 
-## Licensing
-obkv-table-client-rs is under [Apache License 2.0](./LICENSE).
+## Licencing
+obkv-table-client-rs is under [MulanPSL - 2.0](http://license.coscl.org.cn/MulanPSL2) licence. You can freely copy and use the source code. When you modify or distribute the source code, please obey the MulanPSL - 2.0 licence.
+
