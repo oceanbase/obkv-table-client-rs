@@ -10,3 +10,10 @@ check-cargo-toml:
 
 clippy:
 	cd $(DIR); cargo clippy --all-targets --all-features --workspace -- -D warnings
+
+test-ut: 
+	cd $(DIR); cargo test --lib --all-features --workspace
+
+test-all:
+	cd $(DIR); cargo test --all --all-features --workspace
+

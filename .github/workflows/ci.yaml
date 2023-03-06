@@ -1,0 +1,114 @@
+#-
+# #%L
+# OBKV Table Client Framework
+# %%
+# Copyright (C) 2021 OceanBase
+# %%
+# OBKV Table Client Framework is licensed under Mulan PSL v2.
+# You can use this software according to the terms and conditions of the Mulan PSL v2.
+# You may obtain a copy of Mulan PSL v2 at:
+#          http://license.coscl.org.cn/MulanPSL2
+# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+# EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+# MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+# See the Mulan PSL v2 for more details.
+# #L%
+
+name: CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - 'docs/**'
+      - 'etc/**'
+      - '**.md'
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - 'docs/**'
+      - 'etc/**'
+      - '**.md'
+
+# Common environment variables
+env:
+  RUSTFLAGS: "-C debuginfo=1"
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: "1"
+  LOCK_FILE: Cargo.lock
+
+jobs:
+  style-check:
+    name: style-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      matrix:
+        rust: [ nightly-2023-02-02 ]
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+      - run: |
+          rustup set auto-self-update disable
+          rustup toolchain install ${{ matrix.rust }} --profile minimal
+      - name: Cache Rust Dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo
+            ./target
+          key: debug-${{ runner.os }}-${{ hashFiles('rust-toolchain') }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            debug-${{ runner.os }}-${{ hashFiles('rust-toolchain') }}-
+            debug-${{ runner.os }}-
+            debug-
+      - name: Install clippy rustfmt
+        run: |
+          rustup component add clippy
+          rustup component add rustfmt
+          cargo install cargo-sort
+      - name: Run Style Check
+        run: |
+          make clippy
+          make fmt
+          make check-cargo-toml
+
+  unit-test:
+    name: unit-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      matrix:
+        rust: [ nightly-2023-02-02 ]
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+      - run: |
+          rustup set auto-self-update disable
+          rustup toolchain install ${{ matrix.rust }} --profile minimal
+      - name: Cache Rust Dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo
+            ./target
+          key: debug-${{ runner.os }}-${{ hashFiles('rust-toolchain') }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            debug-${{ runner.os }}-${{ hashFiles('rust-toolchain') }}-
+            debug-${{ runner.os }}-
+            debug-
+      - name: Backup Lock File
+        run: |
+          cp ${LOCK_FILE} ${LOCK_FILE}.bak
+      - name: Run Unit Tests
+        run: |
+          make test-ut
+          echo "Checking if ${LOCK_FILE} has changed..."
+      - name: Check Lock File
+        run: |
+          diff ${LOCK_FILE} ${LOCK_FILE}.bak
