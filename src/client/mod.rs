@@ -74,6 +74,24 @@ pub trait Table {
         properties: Vec<Value>,
     ) -> Result<i64>;
 
+    /// Append
+    fn append(
+        &self,
+        table_name: &str,
+        row_keys: Vec<Value>,
+        columns: Vec<String>,
+        properties: Vec<Value>,
+    ) -> Result<i64>;
+
+    /// Increment
+    fn increment(
+        &self,
+        table_name: &str,
+        row_keys: Vec<Value>,
+        columns: Vec<String>,
+        properties: Vec<Value>,
+    ) -> Result<i64>;
+
     /// Delete records by row keys.
     fn delete(&self, table_name: &str, row_keys: Vec<Value>) -> Result<i64>;
 

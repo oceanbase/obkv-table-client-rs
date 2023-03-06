@@ -1691,6 +1691,46 @@ impl Table for ObTableClient {
     }
 
     #[inline]
+    fn append(
+        &self,
+        table_name: &str,
+        row_keys: Vec<Value>,
+        columns: Vec<String>,
+        properties: Vec<Value>,
+    ) -> Result<i64> {
+        Ok(self
+            .inner
+            .execute(
+                table_name,
+                ObTableOperationType::Append,
+                row_keys,
+                Some(columns),
+                Some(properties),
+            )?
+            .affected_rows())
+    }
+
+    #[inline]
+    fn increment(
+        &self,
+        table_name: &str,
+        row_keys: Vec<Value>,
+        columns: Vec<String>,
+        properties: Vec<Value>,
+    ) -> Result<i64> {
+        Ok(self
+            .inner
+            .execute(
+                table_name,
+                ObTableOperationType::Increment,
+                row_keys,
+                Some(columns),
+                Some(properties),
+            )?
+            .affected_rows())
+    }
+
+    #[inline]
     fn delete(&self, table_name: &str, row_keys: Vec<Value>) -> Result<i64> {
         Ok(self
             .inner

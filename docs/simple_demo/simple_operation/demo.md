@@ -10,8 +10,8 @@ Now we provide an interface to access data from OceanBase, which we will introdu
 ## demo
 
 ### Simple Operation
-obkv-table-client-rs support several simple operations, such as get, insert, update, insert_or_update, replace, delete.
-Notice that increment and append are not supported yet.
+obkv-table-client-rs support several simple operations, such as get, insert, update, insert_or_update, replace, append, increment, delete.
+
 ```rust Table and ObTableClient
 impl Table for ObTableClient {
     // implement operation in Table

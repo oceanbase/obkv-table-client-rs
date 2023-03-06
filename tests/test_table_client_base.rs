@@ -277,6 +277,60 @@ impl BaseTest {
         self.assert_varchar_get_result(table_name,"unknown", "baz");
     }
 
+    pub fn test_varchar_append(&self, table_name: &str) {
+        let result = self.client.append(
+            table_name,
+            vec![Value::from("foo")],
+            vec!["c2".to_owned()],
+            vec![Value::from("_append")],
+        );
+        assert!(result.is_ok());
+        assert_eq!(1, result.unwrap());
+        self.assert_varchar_get_result(table_name, "foo", "bar_append");
+    }
+
+    pub fn test_varchar_increment(&self, table_name: &str) {
+        let result = self.client.increment(
+            table_name,
+            vec![Value::from("foo")],
+            vec!["c3".to_owned()],
+            vec![Value::from(10i64)],
+        );
+        assert!(result.is_ok());
+        assert_eq!(1, result.unwrap());
+
+        let result = self.client.get(
+            table_name,
+            vec![Value::from("foo")],
+            vec!["c3".to_owned()],
+        );
+        assert!(result.is_ok());
+        let mut result = result.unwrap();
+        assert_eq!(1, result.len());
+        let value = result.remove("c3").unwrap();
+        assert_eq!(10i64, value.as_i64());
+
+        let result = self.client.increment(
+            table_name,
+            vec![Value::from("foo")],
+            vec!["c3".to_owned()],
+            vec![Value::from(15i64)],
+        );
+        assert!(result.is_ok());
+        assert_eq!(1, result.unwrap());
+
+        let result = self.client.get(
+            table_name,
+            vec![Value::from("foo")],
+            vec!["c3".to_owned()],
+        );
+        assert!(result.is_ok());
+        let mut result = result.unwrap();
+        assert_eq!(1, result.len());
+        let value = result.remove("c3").unwrap();
+        assert_eq!(25i64, value.as_i64());
+    }
+
     pub fn clean_varchar_table(&self, table_name: &str) {
         let result = self
             .client
@@ -503,7 +557,7 @@ impl BaseTest {
         let result = self.client.insert(
             table_name,
             vec![Value::from("exception_key")],
-            vec!["c3".to_owned()],
+            vec!["c4".to_owned()],
             vec![Value::from("baz")],
         );
 
@@ -542,6 +596,14 @@ impl BaseTest {
             vec![Value::from("exception_key")],
             vec!["c2".to_owned()],
             vec![Value::default()],
+        );
+        // assert result is ok
+        assert!(result.is_ok());
+
+        // delete exception_key
+        let result = self.client.delete(
+            table_name,
+            vec![Value::from("exception_key")],
         );
         // assert result is ok
         assert!(result.is_ok());
