@@ -17,3 +17,5 @@ test-ut:
 test-all:
 	cd $(DIR); cargo test --all --all-features --workspace
 
+fmt:
+	cd $(DIR); cargo fmt -- --check
