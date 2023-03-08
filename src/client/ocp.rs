@@ -20,8 +20,7 @@ use std::{
     io, thread, time,
 };
 
-use reqwest::Client;
-use serde::Deserialize;
+use reqwest::blocking::Client;
 use spin::Mutex;
 
 use crate::{
