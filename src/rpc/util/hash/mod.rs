@@ -15,4 +15,5 @@
  * #L%
  */
 
+ #[rustfmt::skip]
 pub mod ob_hash_sort_utf8mb4;

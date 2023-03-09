@@ -3389,6 +3389,6 @@ mod test {
         let s = String::from("partitionKey2");
         let seed: u64 = 0xc6a4a7935bd1e995;
         let n = ObHashSortUtf8mb4::ob_hash_sort_bin(&s.into_bytes(), 13, 0, seed);
-        assert_eq!(n, -728277002377450284);
+        assert_eq!(n as i64, -728277002377450284);
     }
 }

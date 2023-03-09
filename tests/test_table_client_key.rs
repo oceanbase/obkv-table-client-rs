@@ -21,10 +21,9 @@ pub mod test_table_client_base;
 mod utils;
 
 use obkv::{Table, Value};
+use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use serial_test_derive::serial;
 use test_log::test;
-use rand::{thread_rng, Rng};
-use rand::distributions::Alphanumeric;
 
 // ```sql
 // CREATE TABLE `TEST_VARCHAR_TABLE_KEY` (
@@ -195,11 +194,18 @@ fn test_partition() {
     for i in 926..977 {
         let result = client.delete(BIGINT_TABLE_NAME, vec![Value::from(i as i64)]);
         assert!(result.is_ok());
-        let insert_sql = format!("insert into {} values({}, {});", BIGINT_TABLE_NAME, i, &"'value'");
+        let insert_sql = format!(
+            "insert into {} values({}, {});",
+            BIGINT_TABLE_NAME, i, &"'value'"
+        );
         client.execute_sql(&insert_sql).expect("fail to insert");
     }
     for i in 926..977 {
-        let result = client.get(BIGINT_TABLE_NAME, vec![Value::from(i as i64)], vec!["c2".to_owned()]);
+        let result = client.get(
+            BIGINT_TABLE_NAME,
+            vec![Value::from(i as i64)],
+            vec!["c2".to_owned()],
+        );
         assert!(result.is_ok());
         let result = result.unwrap();
         assert_eq!(1, result.len());
@@ -210,12 +216,19 @@ fn test_partition() {
         let rowkey = format!("{}", i);
         let result = client.delete(VARCHAR_BIN_TABLE_NAME, vec![Value::from(rowkey.to_owned())]);
         assert!(result.is_ok());
-        let insert_sql = format!("insert into {} values({}, {});", VARCHAR_BIN_TABLE_NAME, rowkey, &"'value'");
+        let insert_sql = format!(
+            "insert into {} values({}, {});",
+            VARCHAR_BIN_TABLE_NAME, rowkey, &"'value'"
+        );
         client.execute_sql(&insert_sql).expect("fail to insert");
     }
     for i in 926..977 {
         let rowkey = format!("{}", i);
-        let result = client.get(VARCHAR_BIN_TABLE_NAME, vec![Value::from(rowkey.to_owned())], vec!["c2".to_owned()]);
+        let result = client.get(
+            VARCHAR_BIN_TABLE_NAME,
+            vec![Value::from(rowkey.to_owned())],
+            vec!["c2".to_owned()],
+        );
         assert!(result.is_ok());
         let result = result.unwrap();
         assert_eq!(1, result.len());
@@ -226,27 +239,38 @@ fn test_partition() {
         let rowkey = format!("{}", i);
         let result = client.delete(VARCHAR_TABLE_NAME, vec![Value::from(rowkey.to_owned())]);
         assert!(result.is_ok());
-        let insert_sql = format!("insert into {} values({}, {});", VARCHAR_TABLE_NAME, rowkey, &"'value'");
+        let insert_sql = format!(
+            "insert into {} values({}, {});",
+            VARCHAR_TABLE_NAME, rowkey, &"'value'"
+        );
         client.execute_sql(&insert_sql).expect("fail to insert");
     }
     for i in 926..977 {
         let rowkey = format!("{}", i);
-        let result = client.get(VARCHAR_TABLE_NAME, vec![Value::from(rowkey.to_owned())], vec!["c2".to_owned()]);
+        let result = client.get(
+            VARCHAR_TABLE_NAME,
+            vec![Value::from(rowkey.to_owned())],
+            vec!["c2".to_owned()],
+        );
         assert!(result.is_ok());
-        let result= result.unwrap();
+        let result = result.unwrap();
         assert_eq!(1, result.len());
     }
     for _i in 0..64 {
-        let rowkey: String = thread_rng()
-            .sample_iter(&Alphanumeric)
-            .take(512)
-            .collect();
+        let rowkey: String = thread_rng().sample_iter(&Alphanumeric).take(512).collect();
         let sql_rowkey = format!("'{}'", rowkey);
         let result = client.delete(VARCHAR_TABLE_NAME, vec![Value::from(rowkey.to_owned())]);
         assert!(result.is_ok());
-        let insert_sql = format!("insert into {} values({}, {});", VARCHAR_TABLE_NAME, sql_rowkey, &"'value'");
+        let insert_sql = format!(
+            "insert into {} values({}, {});",
+            VARCHAR_TABLE_NAME, sql_rowkey, &"'value'"
+        );
         client.execute_sql(&insert_sql).expect("fail to insert");
-        let result = client.get(VARCHAR_TABLE_NAME, vec![Value::from(rowkey.to_owned())], vec!["c2".to_owned()]);
+        let result = client.get(
+            VARCHAR_TABLE_NAME,
+            vec![Value::from(rowkey.to_owned())],
+            vec!["c2".to_owned()],
+        );
         assert!(result.is_ok());
         let result = result.unwrap();
         assert_eq!(1, result.len());
