@@ -31,6 +31,7 @@ use crate::{
     },
     serde_obkv::value::{CollationType, ObjType, Value},
 };
+use crate::location::part_func_type::PartFuncType::{KeyImplicitV2, KeyV3};
 
 #[derive(Clone, Debug)]
 pub enum ObPartDesc {
@@ -639,7 +640,6 @@ impl ObKeyPartDesc {
         end: &[Value],
         _end_inclusive: bool,
     ) -> Result<Vec<i64>> {
-        // diff with java sdk
         // if start=[min,min,min] end=[max,max,max], scan all partitions
         let mut is_min_max = true;
         for v in start {
@@ -687,7 +687,7 @@ impl ObKeyPartDesc {
             .ordered_part_ref_column_row_key_relations
             .len();
 
-        let mut hash_value = 0i64;
+        let mut hash_value = 0u64;
         for i in 0..part_ref_column_size {
             hash_value = ObKeyPartDesc::to_hashcode(
                 &row_key[i],
@@ -696,8 +696,10 @@ impl ObKeyPartDesc {
                     .ordered_part_ref_column_row_key_relations[i]
                     .0,
                 hash_value,
+                &self.ob_part_desc_obj.part_func_type,
             )?;
         }
+        let mut hash_value = hash_value as i64;
         hash_value = hash_value.abs();
         Ok(
             ((self.part_space as i64) << ob_part_constants::PART_ID_BITNUM)
@@ -710,23 +712,26 @@ impl ObKeyPartDesc {
     pub fn to_hashcode(
         value: &Value,
         ref_column: &Box<dyn ObColumn>,
-        hash_code: i64,
-    ) -> Result<i64> {
+        hash_code: u64,
+        part_func_type: &PartFuncType,
+    ) -> Result<u64> {
         match value {
             // varchar & varbinary
             Value::String(v, meta) => ObKeyPartDesc::varchar_hash(
                 Value::String(v.clone(), meta.clone()),
                 ref_column.get_ob_collation_type(),
                 hash_code,
+                part_func_type.to_owned()
             ),
 
-            Value::Int64(v, _meta) => ObKeyPartDesc::long_hash(*v, hash_code),
+            Value::Int64(v, _meta) => ObKeyPartDesc::long_hash(*v as i64, hash_code),
             Value::Int32(v, _meta) => ObKeyPartDesc::long_hash(*v as i64, hash_code),
             Value::Int8(v, _meta) => ObKeyPartDesc::long_hash(*v as i64, hash_code),
             Value::Bytes(v, meta) => ObKeyPartDesc::varchar_hash(
                 Value::Bytes(v.clone(), meta.clone()),
                 ref_column.get_ob_collation_type(),
                 hash_code,
+                part_func_type.to_owned()
             ),
             // TODO: support value Time
             Value::Time(_v, _meta) => unimplemented!(),
@@ -737,8 +742,8 @@ impl ObKeyPartDesc {
     }
 
     // TODO: check if murmur2 hash value is correct(java sdk)
-    pub fn long_hash(value: i64, hash_code: i64) -> Result<i64> {
-        Ok(murmur2::murmur64a(value.to_string().as_bytes(), hash_code as u64) as i64)
+    pub fn long_hash(value: i64, hash_code: u64) -> Result<u64> {
+        Ok(murmur2::murmur64a(&value.to_ne_bytes(), hash_code))
     }
 
     // TODO: support value Time
@@ -754,8 +759,9 @@ impl ObKeyPartDesc {
     pub fn varchar_hash(
         value: Value,
         collation_type: &CollationType,
-        hash_code: i64,
-    ) -> Result<i64> {
+        hash_code: u64,
+        part_func_type: PartFuncType,
+    ) -> Result<u64> {
         let seed: u64 = 0xc6a4_a793_5bd1_e995;
         let bytes: Vec<u8>;
         match value {
@@ -777,27 +783,42 @@ impl ObKeyPartDesc {
             }
         }
         match collation_type {
-            // TODO: support collation UTF8MB4_GENERAL_CI, current use UTF8MB4_BIN hash
             CollationType::UTF8MB4GeneralCi => {
-                 // unimplemented!();
-                 return Ok(ObHashSortUtf8mb4::ob_hash_sort_utf8_mb4(
-                     &bytes,
-                     bytes.len() as i32,
-                     hash_code,
-                     seed as i64,
-                 ));
+                return if part_func_type == KeyV3 || part_func_type == KeyImplicitV2 {
+                    Ok(ObHashSortUtf8mb4::ob_hash_sort_utf8_mb4(
+                        &bytes,
+                        bytes.len() as i32,
+                        hash_code as u64,
+                        seed as u64,
+                        true,
+                    ))
+                } else {
+                    Ok(ObHashSortUtf8mb4::ob_hash_sort_utf8_mb4(
+                        &bytes,
+                        bytes.len() as i32,
+                        hash_code as u64,
+                        seed as u64,
+                        false,
+                    ))
+                }
             }
-            CollationType::UTF8MB4Bin => Ok(ObHashSortUtf8mb4::ob_hash_sort_mb_bin(
-                &bytes,
-                bytes.len() as i32,
-                hash_code,
-                seed as i64,
-            )),
+            CollationType::UTF8MB4Bin => {
+                return if part_func_type == KeyV3 || part_func_type == KeyImplicitV2 {
+                    Ok(murmur2::murmur64a(&bytes, hash_code))
+                } else {
+                    Ok(ObHashSortUtf8mb4::ob_hash_sort_mb_bin(
+                        &bytes,
+                        bytes.len() as i32,
+                        hash_code,
+                        seed,
+                    ))
+                }
+            },
             CollationType::Binary => Ok(ObHashSortUtf8mb4::ob_hash_sort_bin(
                 &bytes,
                 bytes.len() as i32,
                 hash_code,
-                seed as i64,
+                seed,
             )),
             _ => {
                 error!(
