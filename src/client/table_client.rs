@@ -5,12 +5,12 @@
  * Copyright (C) 2021 OceanBase
  * %%
  * OBKV Table Client Framework is licensed under Mulan PSL v2.
- * You can use this software according to the terms and conditions of the Mulan PSL v2.
- * You may obtain a copy of Mulan PSL v2 at:
+ * You can use this software according to the terms and conditions of the
+ * Mulan PSL v2. You may obtain a copy of Mulan PSL v2 at:
  *          http://license.coscl.org.cn/MulanPSL2
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
- * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY
+ * KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+ * NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PSL v2 for more details.
  * #L%
  */
@@ -1295,6 +1295,7 @@ impl ObTableClientInner {
 
         let mut servers: Vec<ObServerAddr> = vec![];
 
+        let mut conn_count = 0;
         for replica_location in table_entry.table_location().replica_locations().iter() {
             let info = replica_location.info();
 
@@ -1308,7 +1309,18 @@ impl ObTableClientInner {
 
             servers.push(addr.clone());
 
-            self.add_ob_table(&addr)?;
+            match self.add_ob_table(&addr){
+                Ok(_) => conn_count += 1,
+                Err(e) => warn!("ObTableClientInner::init_metadata add ob table fail with location:{:?}, err:{:?}",
+                      replica_location.addr(), e)
+            }
+        }
+        if conn_count == 0 {
+            return Err(CommonErr(
+                CommonErrCode::InvalidServerAddr,
+                format!(
+                    "ObTableClientInner::init_metadata failed because all ob server address are invalid!")
+                ));
         }
 
         self.server_roster.reset(servers);
