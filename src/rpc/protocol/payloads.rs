@@ -5,12 +5,12 @@
  * Copyright (C) 2021 OceanBase
  * %%
  * OBKV Table Client Framework is licensed under Mulan PSL v2.
- * You can use this software according to the terms and conditions of the Mulan PSL v2.
- * You may obtain a copy of Mulan PSL v2 at:
+ * You can use this software according to the terms and conditions of the
+ * Mulan PSL v2. You may obtain a copy of Mulan PSL v2 at:
  *          http://license.coscl.org.cn/MulanPSL2
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
- * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY
+ * KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+ * NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PSL v2 for more details.
  * #L%
  */
@@ -71,7 +71,7 @@ impl ObTableOperationType {
             7 => Ok(ObTableOperationType::Append),
             _ => Err(io::Error::new(
                 std::io::ErrorKind::InvalidData,
-                format!("Invalid operation type :{}", i),
+                format!("Invalid operation type: {i}"),
             )),
         }
     }
@@ -191,7 +191,7 @@ impl ObPayload for ObTableEntity {
         len += util::encoded_length_vi64(self.properties.len() as i64);
 
         for (key, value) in &self.properties {
-            len += util::encoded_length_vstring(&key);
+            len += util::encoded_length_vstring(key);
             len += value.len();
         }
 
@@ -660,7 +660,7 @@ impl ObTableBatchOperation {
     }
 
     pub fn take_raw_ops(&mut self) -> Vec<RawObTableOperation> {
-        mem::replace(&mut self.raw_ops, Vec::new())
+        mem::take(&mut self.raw_ops)
     }
 }
 
@@ -770,8 +770,7 @@ impl ObPayload for ObTableBatchOperationRequest {
             + util::encoded_length_vi8(self.return_row_key as i8)
             + util::encoded_length_vi8(self.return_affected_entity as i8)
             + util::encoded_length_vi8(self.return_affected_rows as i8)
-            + util::encoded_length_vi8(self.atomic_op as i8)
-        )
+            + util::encoded_length_vi8(self.atomic_op as i8))
     }
 }
 
@@ -1103,7 +1102,7 @@ impl ObTableLoginResult {
     }
 
     pub fn take_credential(&mut self) -> Vec<u8> {
-        mem::replace(&mut self.credential, vec![])
+        mem::take(&mut self.credential)
     }
 
     pub fn tenant_id(&self) -> u64 {
@@ -1332,7 +1331,7 @@ impl ProtoDecoder for ObTableBatchOperationResult {
         if op_res_num < 0 {
             return Err(io::Error::new(
                 std::io::ErrorKind::InvalidData,
-                format!("invalid operation results num:{}", op_res_num),
+                format!("invalid operation results num:{op_res_num}"),
             ));
         }
         assert_eq!(0, self.op_results.len());
@@ -1381,7 +1380,7 @@ mod test {
             partition_id: 1,
             entity_type: ObTableEntityType::KV,
             table_operation: ObTableOperation {
-                base: base.clone(),
+                base,
                 op_type: ObTableOperationType::Insert,
                 entity,
             },
@@ -1412,7 +1411,7 @@ mod test {
         let columns = vec![String::from("column-0"), String::from("column-1")];
         let properties = vec![Value::from("column-v1"), Value::from("column-v2")];
         batch_op.insert(row_keys.clone(), columns, properties);
-        batch_op.delete(row_keys.clone());
+        batch_op.delete(row_keys);
 
         let req = ObTableBatchOperationRequest::new(
             batch_op.clone(),

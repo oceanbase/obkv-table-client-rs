@@ -5,12 +5,12 @@
  * Copyright (C) 2021 OceanBase
  * %%
  * OBKV Table Client Framework is licensed under Mulan PSL v2.
- * You can use this software according to the terms and conditions of the Mulan PSL v2.
- * You may obtain a copy of Mulan PSL v2 at:
+ * You can use this software according to the terms and conditions of the
+ * Mulan PSL v2. You may obtain a copy of Mulan PSL v2 at:
  *          http://license.coscl.org.cn/MulanPSL2
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
- * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY
+ * KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+ * NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PSL v2 for more details.
  * #L%
  */
@@ -122,8 +122,7 @@ impl ObSimpleColumn {
         ob_obj_type: ObjType,
         ob_collation_type: CollationType,
     ) -> Self {
-        let mut ref_column_names = Vec::new();
-        ref_column_names.push(column_name.clone());
+        let ref_column_names = vec![column_name.clone()];
         Self {
             column_name,
             index,
@@ -157,10 +156,10 @@ impl ObColumn for ObSimpleColumn {
 
     fn eval_value(&self, refs: &[Value]) -> Result<Value> {
         if refs.len() != 1 {
-            error!("ObSimpleColumn::eval_value ObSimpleColumn is refer to itself so that the length of the refs must be 1. refs:{:?}", refs);
+            error!("ObSimpleColumn::eval_value ObSimpleColumn is refer to itself so that the length of the refs must be 1. refs:{refs:?}");
             return Err(CommonErr(
                 CommonErrCode::InvalidParam,
-                format!("ObSimpleColumn::eval_value ObSimpleColumn is refer to itself so that the length of the refs must be 1. refs:{:?}", refs),
+                format!("ObSimpleColumn::eval_value ObSimpleColumn is refer to itself so that the length of the refs must be 1. refs:{refs:?}"),
             ));
         }
         match self.ob_obj_type {
@@ -201,7 +200,7 @@ impl ObColumn for ObSimpleColumn {
                         ),
                     )),
                     Value::Int64(v, _meta) => Ok(Value::Int64(
-                        v as i64,
+                        v,
                         ObjMeta::new(
                             ObjType::Int64,
                             CollationLevel::Numeric,

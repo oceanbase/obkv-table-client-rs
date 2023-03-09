@@ -5,12 +5,12 @@
  * Copyright (C) 2021 OceanBase
  * %%
  * OBKV Table Client Framework is licensed under Mulan PSL v2.
- * You can use this software according to the terms and conditions of the Mulan PSL v2.
- * You may obtain a copy of Mulan PSL v2 at:
+ * You can use this software according to the terms and conditions of the
+ * Mulan PSL v2. You may obtain a copy of Mulan PSL v2 at:
  *          http://license.coscl.org.cn/MulanPSL2
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
- * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY
+ * KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+ * NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PSL v2 for more details.
  * #L%
  */
@@ -585,7 +585,7 @@ impl Connection {
                 self.on_recv_timeout();
                 return Err(CommonErr(
                     CommonErrCode::Rpc,
-                    format!("wait for rpc response timeout, err:{}", err),
+                    format!("wait for rpc response timeout, err:{err}"),
                 ));
             }
         };
@@ -607,12 +607,10 @@ impl Connection {
                     return Err(CommonErr(
                         CommonErrCode::ObException(result_code.rcode()),
                         format!(
-                            "rcode:{:?}, message:{}, addr:{}, trace_id:{}, server_trace_id:{}",
+                            "rcode:{:?}, message:{}, addr:{}, trace_id:{trace_id}, server_trace_id:{server_trace_id}",
                             result_code.rcode(),
                             result_code.message(),
                             self.addr,
-                            trace_id,
-                            server_trace_id,
                         ),
                     ));
                 }
@@ -622,7 +620,7 @@ impl Connection {
             }
             ObTablePacket::TransportPacket { error, code } => Err(CommonErr(
                 CommonErrCode::Rpc,
-                format!("transport code: [{:?}], error: [{}]", code, error),
+                format!("transport code: [{code:?}], error: [{error}]"),
             )),
             _other => {
                 panic!("Connection::execute unexpected response packet here.");
@@ -893,7 +891,7 @@ impl Builder {
 
             tcp.reuse_address(true)?;
 
-            let stream = tcp.connect(&addr)?;
+            let stream = tcp.connect(addr)?;
 
             debug!("Builder::build succeeds in connecting to {}.", addr);
 

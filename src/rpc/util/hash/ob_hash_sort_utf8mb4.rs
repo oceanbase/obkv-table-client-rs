@@ -5,17 +5,18 @@
  * Copyright (C) 2021 OceanBase
  * %%
  * OBKV Table Client Framework is licensed under Mulan PSL v2.
- * You can use this software according to the terms and conditions of the Mulan PSL v2.
- * You may obtain a copy of Mulan PSL v2 at:
+ * You can use this software according to the terms and conditions of the
+ * Mulan PSL v2. You may obtain a copy of Mulan PSL v2 at:
  *          http://license.coscl.org.cn/MulanPSL2
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
- * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY
+ * KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+ * NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PSL v2 for more details.
  * #L%
  */
 
 #![allow(dead_code)]
+#![allow(clippy::nonminimal_bool)]
 
 macro_rules! is_continuation_byte {
     ($byte:expr) => {
@@ -3263,7 +3264,7 @@ impl ObHashSortUtf8mb4 {
         }
 
         let c = s[start];
-        return if c < 0x80 {
+        if c < 0x80 {
             *wc = c as u32;
             1
         } else if c < 0xC2 {
@@ -3322,11 +3323,11 @@ impl ObHashSortUtf8mb4 {
     fn ob_tosort_unicode(uni_plane: &ObUnicaseInfo, wc: &mut u32, flags: u32) {
         if *wc <= uni_plane.maxchar as u32 {
             let page = (uni_plane.page[(*wc >> 8) as usize]).as_ref();
-            if page.is_some() {
+            if let Some(page) = page {
                 *wc = if flags & OB_CS_LOWER_SORT != 0 {
-                    page.unwrap()[(*wc & 0xFF) as usize].tolower as u32
+                    page[(*wc & 0xFF) as usize].tolower as u32
                 } else {
-                    page.unwrap()[(*wc & 0xFF) as usize].sort as u32
+                    page[(*wc & 0xFF) as usize].sort as u32
                 };
             }
         } else {
@@ -3389,6 +3390,6 @@ mod test {
         let s = String::from("partitionKey2");
         let seed: u64 = 0xc6a4a7935bd1e995;
         let n = ObHashSortUtf8mb4::ob_hash_sort_bin(&s.into_bytes(), 13, 0, seed);
-        assert_eq!(n, -728277002377450284);
+        assert_eq!(n as i64, -728277002377450284);
     }
 }

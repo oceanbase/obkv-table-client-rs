@@ -5,20 +5,20 @@
  * Copyright (C) 2021 OceanBase
  * %%
  * OBKV Table Client Framework is licensed under Mulan PSL v2.
- * You can use this software according to the terms and conditions of the Mulan PSL v2.
- * You may obtain a copy of Mulan PSL v2 at:
+ * You can use this software according to the terms and conditions of the
+ * Mulan PSL v2. You may obtain a copy of Mulan PSL v2 at:
  *          http://license.coscl.org.cn/MulanPSL2
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
- * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY
+ * KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+ * NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PSL v2 for more details.
  * #L%
  */
 
+pub mod test_table_client_base;
 #[allow(unused_imports)]
 #[allow(unused)]
 mod utils;
-pub mod test_table_client_base;
 
 use obkv::{Table, Value};
 use serial_test_derive::serial;
@@ -56,10 +56,10 @@ fn test_concurrent() {
 fn test_obtable_client_hash() {
     let client = utils::common::build_normal_client();
     const TABLE_NAME: &str = "TEST_TABLE_BATCH_HASH";
-    client.add_row_key_element(TABLE_NAME, vec!["c1".to_string(), "c1sb".to_string()],);
+    client.add_row_key_element(TABLE_NAME, vec!["c1".to_string(), "c1sb".to_string()]);
 
-    let test_key0 : i64 = 100;
-    let test_key1 : i64 = 200;
+    let test_key0: i64 = 100;
+    let test_key1: i64 = 200;
     // insert some data
     let mut batch_op = client.batch_operation(4);
     batch_op.delete(vec![Value::from(test_key0), Value::from("subKey_0")]);

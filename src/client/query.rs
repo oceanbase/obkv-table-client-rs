@@ -5,12 +5,12 @@
  * Copyright (C) 2021 OceanBase
  * %%
  * OBKV Table Client Framework is licensed under Mulan PSL v2.
- * You can use this software according to the terms and conditions of the Mulan PSL v2.
- * You may obtain a copy of Mulan PSL v2 at:
+ * You can use this software according to the terms and conditions of the
+ * Mulan PSL v2. You may obtain a copy of Mulan PSL v2 at:
  *          http://license.coscl.org.cn/MulanPSL2
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
- * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY
+ * KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+ * NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PSL v2 for more details.
  * #L%
  */
@@ -215,7 +215,7 @@ impl QueryStreamResult {
         }
 
         if self.table_query.batch_size() == -1 {
-            let tuples = std::mem::replace(&mut self.expectant, HashMap::new());
+            let tuples = std::mem::take(&mut self.expectant);
 
             for (_, tuple) in tuples {
                 self.refer_to_new_partition(tuple)?;
@@ -308,7 +308,7 @@ impl QueryStreamResult {
             .execute_stream(self, (part_id, ob_table), &mut req)
     }
 
-    fn next_row(&mut self) -> Result<Option<Vec<Value>>> {
+    fn pop_next_row_from_cache(&mut self) -> Result<Option<Vec<Value>>> {
         self.row_index += 1;
         Ok(self.cache_rows.pop_front())
     }
@@ -334,7 +334,7 @@ impl QueryStreamResult {
         self.cache_properties.clone()
     }
 
-    pub fn next(&mut self) -> Result<Option<Vec<Value>>> {
+    pub fn fetch_next_row(&mut self) -> Result<Option<Vec<Value>>> {
         if !self.initialized {
             return Err(CommonErr(
                 CommonErrCode::NotInitialized,
@@ -355,7 +355,7 @@ impl QueryStreamResult {
 
         //1. Found from cache.
         if !self.cache_rows.is_empty() {
-            return self.next_row();
+            return self.pop_next_row_from_cache();
         }
 
         //2. Get from the last stream request result
@@ -369,18 +369,18 @@ impl QueryStreamResult {
                         if row_count == 0 {
                             continue;
                         }
-                        return self.next_row();
+                        return self.pop_next_row_from_cache();
                     }
                 }
             }
         }
 
         //3. Query from new parttion
-        let mut refered_partitions = vec![];
+        let mut referred_partitions = vec![];
         let mut has_next = false;
 
         for (k, tuple) in self.expectant.clone() {
-            refered_partitions.push(k);
+            referred_partitions.push(k);
             let row_count = self.refer_to_new_partition(tuple)?;
 
             if row_count != 0 {
@@ -389,12 +389,12 @@ impl QueryStreamResult {
             }
         }
 
-        for k in refered_partitions {
+        for k in referred_partitions {
             self.expectant.remove(&k);
         }
 
         if has_next {
-            self.next_row()
+            self.pop_next_row_from_cache()
         } else {
             //4. Reach the end.
             self.eof = true;
@@ -413,16 +413,11 @@ impl Drop for QueryStreamResult {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub enum QueryResultSet {
-    Some(QueryStreamResult),
+    #[default]
     None,
-}
-
-impl Default for QueryResultSet {
-    fn default() -> Self {
-        QueryResultSet::None
-    }
+    Some(QueryStreamResult),
 }
 
 impl QueryResultSet {
@@ -464,7 +459,7 @@ impl Iterator for QueryResultSet {
         match self {
             QueryResultSet::None => None,
             QueryResultSet::Some(ref mut stream_result) => {
-                match stream_result.next() {
+                match stream_result.fetch_next_row() {
                     //Find a row.
                     Ok(Some(mut row)) => {
                         let mut names = stream_result.cache_properties();

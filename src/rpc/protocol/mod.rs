@@ -5,12 +5,12 @@
  * Copyright (C) 2021 OceanBase
  * %%
  * OBKV Table Client Framework is licensed under Mulan PSL v2.
- * You can use this software according to the terms and conditions of the Mulan PSL v2.
- * You may obtain a copy of Mulan PSL v2 at:
+ * You can use this software according to the terms and conditions of the
+ * Mulan PSL v2. You may obtain a copy of Mulan PSL v2 at:
  *          http://license.coscl.org.cn/MulanPSL2
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
- * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY
+ * KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+ * NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PSL v2 for more details.
  * #L%
  */
@@ -64,7 +64,7 @@ impl ObCompressType {
             5 => Ok(ObCompressType::Zstd),
             _ => Err(io::Error::new(
                 io::ErrorKind::InvalidData,
-                format!("ObCompressType::from_i32 invalid compress type, i={}", i),
+                format!("ObCompressType::from_i32 invalid compress type, i={i}"),
             )),
         }
     }
@@ -119,7 +119,7 @@ impl ObTablePacketCode {
             PCODE_ERROR_PACKET => Ok(ObTablePacketCode::Error),
             _ => Err(io::Error::new(
                 io::ErrorKind::InvalidData,
-                format!("ObTablePacketCode::from_u16 invalid value, i={}", i),
+                format!("ObTablePacketCode::from_u16 invalid value, i={i}"),
             )),
         }
     }
@@ -182,7 +182,7 @@ impl ProtoEncoder for ObRpcCostTime {
 
 impl ProtoDecoder for ObRpcCostTime {
     fn decode(&mut self, buf: &mut BytesMut) -> Result<()> {
-        if buf.len() < COST_TIME_ENCODE_SIZE as usize {
+        if buf.len() < COST_TIME_ENCODE_SIZE {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 format!(
@@ -210,11 +210,11 @@ impl ProtoDecoder for ObRpcCostTime {
 }
 
 // cluster id
-pub const RPC_PACKET_HEADER_SIZE: usize = (HEADER_SIZE + COST_TIME_ENCODE_SIZE //
+pub const RPC_PACKET_HEADER_SIZE: usize = HEADER_SIZE + COST_TIME_ENCODE_SIZE //
                                            + 8 // cluster id
                                            + 4 // compress type
-                                           + 4) // original len
-    as usize;
+                                           + 4 // original len
+                                           ;
 
 /*
  *
@@ -283,7 +283,7 @@ impl ObRpcPacketHeader {
             trace_id0: 0,
             trace_id1: 0,
             timeout: OP_TIMEOUT * 1000, // OB server timeout(us)
-            timestamp: u::current_time_millis() as i64 * 1000, //(us)
+            timestamp: u::current_time_millis() * 1000, //(us)
             checksum: 0,
             rpc_cost_time: ObRpcCostTime::new(),
             cluster_id: -1,
@@ -482,7 +482,7 @@ impl ProtoDecoder for ObRpcPacketHeader {
             );
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
-                format!("Invalid RPC header {:?}.", self),
+                format!("Invalid RPC header {self:?}."),
             ));
         };
 
@@ -540,9 +540,7 @@ pub trait ObPayload: ProtoEncoder + ProtoDecoder {
     }
     fn len(&self) -> Result<usize> {
         let clen = self.content_len()?;
-        Ok(util::encoded_length_vi64(VERSION as i64)
-            + util::encoded_length_vi64(clen as i64)
-            + clen)
+        Ok(util::encoded_length_vi64(VERSION) + util::encoded_length_vi64(clen as i64) + clen)
     }
     fn base(&self) -> &BasePayLoad;
     fn base_mut(&mut self) -> &mut BasePayLoad;
@@ -719,10 +717,7 @@ impl Encoder for ObTablePacketCodec {
             }
             packet => Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                format!(
-                    "ObTablePacketCodec::encode unexpect packet, packet={:?}",
-                    packet
-                ),
+                format!("ObTablePacketCodec::encode unexpected packet, packet={packet:?}",),
             )),
         }
     }
@@ -881,7 +876,7 @@ mod test {
     #[test]
     fn test_decompress() {
         let s = "hello world";
-        let es = zstd::stream::encode_all(&s.as_bytes()[..], 3).expect("Fail to encode");
+        let es = zstd::stream::encode_all(s.as_bytes(), 3).expect("Fail to encode");
 
         let mut buf = BytesMut::with_capacity(s.len());
         buf.extend_from_slice(&es);
@@ -901,9 +896,9 @@ mod test {
     #[test]
     fn test_trace_id() {
         let trace_id = TraceId(3792882129, 1195690242);
-        assert_eq!("YE212C9D1-000000004744C902", format!("{}", trace_id));
+        assert_eq!("YE212C9D1-000000004744C902", format!("{trace_id}"));
 
         let trace_id = TraceId(2523515528, 1397722356);
-        assert_eq!("Y9669CA88-00000000534F8CF4", format!("{}", trace_id));
+        assert_eq!("Y9669CA88-00000000534F8CF4", format!("{trace_id}"));
     }
 }
