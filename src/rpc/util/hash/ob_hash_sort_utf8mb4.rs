@@ -16,6 +16,7 @@
  */
 
 #![allow(dead_code)]
+#![allow(clippy::nonminimal_bool)]
 
 macro_rules! is_continuation_byte {
     ($byte:expr) => {
@@ -3263,7 +3264,7 @@ impl ObHashSortUtf8mb4 {
         }
 
         let c = s[start];
-        return if c < 0x80 {
+        if c < 0x80 {
             *wc = c as u32;
             1
         } else if c < 0xC2 {
@@ -3322,11 +3323,11 @@ impl ObHashSortUtf8mb4 {
     fn ob_tosort_unicode(uni_plane: &ObUnicaseInfo, wc: &mut u32, flags: u32) {
         if *wc <= uni_plane.maxchar as u32 {
             let page = (uni_plane.page[(*wc >> 8) as usize]).as_ref();
-            if page.is_some() {
+            if let Some(page) = page {
                 *wc = if flags & OB_CS_LOWER_SORT != 0 {
-                    page.unwrap()[(*wc & 0xFF) as usize].tolower as u32
+                    page[(*wc & 0xFF) as usize].tolower as u32
                 } else {
-                    page.unwrap()[(*wc & 0xFF) as usize].sort as u32
+                    page[(*wc & 0xFF) as usize].sort as u32
                 };
             }
         } else {

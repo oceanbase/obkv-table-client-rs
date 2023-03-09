@@ -194,10 +194,7 @@ fn test_partition() {
     for i in 926..977 {
         let result = client.delete(BIGINT_TABLE_NAME, vec![Value::from(i as i64)]);
         assert!(result.is_ok());
-        let insert_sql = format!(
-            "insert into {} values({}, {});",
-            BIGINT_TABLE_NAME, i, &"'value'"
-        );
+        let insert_sql = format!("insert into {BIGINT_TABLE_NAME} values({i}, 'value');");
         client.execute_sql(&insert_sql).expect("fail to insert");
     }
     for i in 926..977 {
@@ -213,17 +210,14 @@ fn test_partition() {
 
     // test varchar utf bin partition
     for i in 926..977 {
-        let rowkey = format!("{}", i);
+        let rowkey = format!("{i}");
         let result = client.delete(VARCHAR_BIN_TABLE_NAME, vec![Value::from(rowkey.to_owned())]);
         assert!(result.is_ok());
-        let insert_sql = format!(
-            "insert into {} values({}, {});",
-            VARCHAR_BIN_TABLE_NAME, rowkey, &"'value'"
-        );
+        let insert_sql = format!("insert into {VARCHAR_BIN_TABLE_NAME} values({rowkey}, 'value');");
         client.execute_sql(&insert_sql).expect("fail to insert");
     }
     for i in 926..977 {
-        let rowkey = format!("{}", i);
+        let rowkey = format!("{i}");
         let result = client.get(
             VARCHAR_BIN_TABLE_NAME,
             vec![Value::from(rowkey.to_owned())],
@@ -236,17 +230,14 @@ fn test_partition() {
 
     // test varchar partition
     for i in 926..977 {
-        let rowkey = format!("{}", i);
+        let rowkey = format!("{i}");
         let result = client.delete(VARCHAR_TABLE_NAME, vec![Value::from(rowkey.to_owned())]);
         assert!(result.is_ok());
-        let insert_sql = format!(
-            "insert into {} values({}, {});",
-            VARCHAR_TABLE_NAME, rowkey, &"'value'"
-        );
+        let insert_sql = format!("insert into {VARCHAR_TABLE_NAME} values({rowkey}, 'value');");
         client.execute_sql(&insert_sql).expect("fail to insert");
     }
     for i in 926..977 {
-        let rowkey = format!("{}", i);
+        let rowkey = format!("{i}");
         let result = client.get(
             VARCHAR_TABLE_NAME,
             vec![Value::from(rowkey.to_owned())],
@@ -258,13 +249,10 @@ fn test_partition() {
     }
     for _i in 0..64 {
         let rowkey: String = thread_rng().sample_iter(&Alphanumeric).take(512).collect();
-        let sql_rowkey = format!("'{}'", rowkey);
+        let sql_rowkey = format!("'{rowkey}'");
         let result = client.delete(VARCHAR_TABLE_NAME, vec![Value::from(rowkey.to_owned())]);
         assert!(result.is_ok());
-        let insert_sql = format!(
-            "insert into {} values({}, {});",
-            VARCHAR_TABLE_NAME, sql_rowkey, &"'value'"
-        );
+        let insert_sql = format!("insert into {VARCHAR_TABLE_NAME} values({sql_rowkey}, 'value');");
         client.execute_sql(&insert_sql).expect("fail to insert");
         let result = client.get(
             VARCHAR_TABLE_NAME,

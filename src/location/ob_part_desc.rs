@@ -696,7 +696,7 @@ impl ObKeyPartDesc {
                 part_func_type.to_owned(),
             ),
 
-            Value::Int64(v, _meta) => ObKeyPartDesc::long_hash(*v as i64, hash_code),
+            Value::Int64(v, _meta) => ObKeyPartDesc::long_hash(*v, hash_code),
             Value::Int32(v, _meta) => ObKeyPartDesc::long_hash(*v as i64, hash_code),
             Value::Int8(v, _meta) => ObKeyPartDesc::long_hash(*v as i64, hash_code),
             Value::Bytes(v, meta) => ObKeyPartDesc::varchar_hash(
@@ -754,26 +754,26 @@ impl ObKeyPartDesc {
         };
         match collation_type {
             CollationType::UTF8MB4GeneralCi => {
-                return if part_func_type == KeyV3 || part_func_type == KeyImplicitV2 {
+                if part_func_type == KeyV3 || part_func_type == KeyImplicitV2 {
                     Ok(ObHashSortUtf8mb4::ob_hash_sort_utf8_mb4(
                         &bytes,
                         bytes.len() as i32,
-                        hash_code as u64,
-                        seed as u64,
+                        hash_code,
+                        seed,
                         true,
                     ))
                 } else {
                     Ok(ObHashSortUtf8mb4::ob_hash_sort_utf8_mb4(
                         &bytes,
                         bytes.len() as i32,
-                        hash_code as u64,
-                        seed as u64,
+                        hash_code,
+                        seed,
                         false,
                     ))
                 }
             }
             CollationType::UTF8MB4Bin => {
-                return if part_func_type == KeyV3 || part_func_type == KeyImplicitV2 {
+                if part_func_type == KeyV3 || part_func_type == KeyImplicitV2 {
                     Ok(murmur2::murmur64a(&bytes, hash_code))
                 } else {
                     Ok(ObHashSortUtf8mb4::ob_hash_sort_mb_bin(
