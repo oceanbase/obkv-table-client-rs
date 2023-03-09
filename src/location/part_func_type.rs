@@ -28,6 +28,7 @@ pub enum PartFuncType {
     ListColumns = 7,
     HashV2 = 8,
     KeyV3 = 9,
+    KeyImplicitV2 = 10,
 }
 
 impl PartFuncType {
@@ -43,6 +44,7 @@ impl PartFuncType {
             7 => PartFuncType::ListColumns,
             8 => PartFuncType::HashV2,
             9 => PartFuncType::KeyV3,
+            10=> PartFuncType::KeyImplicitV2,
             _ => PartFuncType::UNKNOWN,
         }
     }
@@ -52,7 +54,7 @@ impl PartFuncType {
     }
 
     pub fn is_key_part(&self) -> bool {
-        matches!(self, PartFuncType::KeyImplicit | PartFuncType::KeyV2 | PartFuncType::KeyV3)
+        matches!(self, PartFuncType::KeyImplicit | PartFuncType::KeyV2 | PartFuncType::KeyV3 | PartFuncType::KeyImplicitV2)
     }
 
     pub fn is_range_part(&self) -> bool {
