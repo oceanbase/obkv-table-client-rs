@@ -953,7 +953,7 @@ impl BaseTest {
                 .as_string()
         );
 
-        //>=124 && <=123)
+        // (>=124 && <=123)
         let query = self
             .client
             .query(table_name)

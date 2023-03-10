@@ -629,7 +629,9 @@ impl ObKeyPartDesc {
             is_min_max &= v.is_max();
         }
 
-        if is_min_max {
+        // Note: Java / ODP may not query all the partitions, and will return an error
+        // instead
+        if is_min_max || !self.is_equal_keys(start, end) {
             let mut part_ids: Vec<i64> = Vec::with_capacity(self.part_num as usize);
             for i in 0..self.part_num as i64 {
                 part_ids.push(i);
@@ -677,6 +679,15 @@ impl ObKeyPartDesc {
             ((self.part_space as i64) << ob_part_constants::PART_ID_BITNUM)
                 | (hash_value % (self.part_num as i64)),
         )
+    }
+
+    pub fn is_equal_keys(&self, start: &[Value], end: &[Value]) -> bool {
+        for (start_value, end_value) in start.iter().zip(end.iter()) {
+            if start_value != end_value {
+                return false;
+            }
+        }
+        true
     }
 
     #[allow(clippy::wrong_self_convention)]
