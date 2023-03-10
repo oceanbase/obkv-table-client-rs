@@ -128,6 +128,7 @@ pub enum ObjType {
     Year = 21,
     Varchar = 22,
     Char = 23,
+    HexString = 24,
     Extend = 25,
     TinyText = 27,
     Text = 28,
@@ -282,6 +283,9 @@ impl ObjMeta {
                 CollationType::UTF8MB4GeneralCi,
                 10,
             ),
+            ObjType::HexString => {
+                unimplemented!();
+            }
             ObjType::Extend => ObjMeta::new_numeric_meta(t),
             ObjType::TinyText => ObjMeta::new_numeric_meta(t),
             ObjType::Text => ObjMeta::new_numeric_meta(t),
@@ -499,6 +503,7 @@ impl Value {
             ObjType::Year => unimplemented!(),
             ObjType::Varchar => Self::decode_binary(buf, meta),
             ObjType::Char => Self::decode_binary(buf, meta),
+            // TODO: ObjType::HexString
             ObjType::Extend => Ok(Value::Int64(decode_vi64(buf)?, meta)),
             ObjType::TinyText => Self::decode_binary(buf, meta),
             ObjType::Text => Self::decode_binary(buf, meta),

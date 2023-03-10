@@ -20,7 +20,7 @@ pub mod test_table_client_base;
 #[allow(unused)]
 mod utils;
 
-use obkv::{Table, Value};
+use obkv::{ObTableClient, Table, TableQuery, Value};
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use serial_test_derive::serial;
 use test_log::test;
@@ -89,6 +89,17 @@ fn test_ob_exceptions() {
     test.test_varchar_exceptions(TABLE_NAME);
 }
 
+fn insert_query_test_record(client: &ObTableClient, table_name: &str, row_key: &str, value: &str) {
+    let result = client.insert_or_update(
+        table_name,
+        vec![Value::from(row_key)],
+        vec!["c2".to_owned()],
+        vec![Value::from(value)],
+    );
+    assert!(result.is_ok());
+    assert_eq!(1, result.unwrap());
+}
+
 // ```sql
 // CREATE TABLE `TEST_QUERY_TABLE_KEY` (
 //     `c1` varchar(20) NOT NULL,
@@ -103,9 +114,207 @@ fn test_query() {
     let client = utils::common::build_normal_client();
     const TABLE_NAME: &str = "TEST_QUERY_TABLE_KEY";
     client.add_row_key_element(TABLE_NAME, vec!["c1".to_string()]);
-    let test = test_table_client_base::BaseTest::new(client);
+    insert_query_test_record(&client, TABLE_NAME, "124", "124c2");
+    insert_query_test_record(&client, TABLE_NAME, "234", "234c2");
+    insert_query_test_record(&client, TABLE_NAME, "456", "456c2");
+    insert_query_test_record(&client, TABLE_NAME, "567", "567c2");
 
-    test.test_query(TABLE_NAME);
+    let query = client
+        .query(TABLE_NAME)
+        .select(vec!["c2".to_owned()])
+        .primary_index()
+        .add_scan_range(
+            vec![Value::from("123")],
+            true,
+            vec![Value::from("567")],
+            true,
+        );
+
+    let result_set = query.execute();
+    assert!(result_set.is_ok());
+    let result_set = result_set.unwrap();
+    assert_eq!(5, result_set.cache_size());
+
+    // >= 123 && <= 123
+    let mut query = client
+        .query(TABLE_NAME)
+        .select(vec!["c2".to_owned()])
+        .primary_index()
+        .add_scan_range(
+            vec![Value::from("123")],
+            true,
+            vec![Value::from("123")],
+            true,
+        );
+
+    let result_set = query.execute();
+    assert!(result_set.is_ok());
+    let mut result_set = result_set.unwrap();
+    assert_eq!(1, result_set.cache_size());
+    assert_eq!(
+        "123c2",
+        result_set
+            .next()
+            .unwrap()
+            .unwrap()
+            .remove("c2")
+            .unwrap()
+            .as_string()
+    );
+
+    // >= 124 && <= 456
+    query.clear();
+    let mut query = query
+        .select(vec!["c2".to_owned()])
+        .primary_index()
+        .add_scan_range(
+            vec![Value::from("124")],
+            true,
+            vec![Value::from("456")],
+            true,
+        );
+
+    let result_set = query.execute();
+    assert!(result_set.is_ok());
+    let result_set = result_set.unwrap();
+    assert_eq!(3, result_set.cache_size());
+
+    // > 123 && < 567
+    query.clear();
+    let mut query = query
+        .select(vec!["c2".to_owned()])
+        .primary_index()
+        .add_scan_range(
+            vec![Value::from("123")],
+            false,
+            vec![Value::from("567")],
+            false,
+        );
+
+    let result_set = query.execute();
+    assert!(result_set.is_ok());
+    let result_set = result_set.unwrap();
+    assert_eq!(3, result_set.cache_size());
+
+    // > 123 && <= 567
+    query.clear();
+    let mut query = query
+        .select(vec!["c2".to_owned()])
+        .primary_index()
+        .add_scan_range(
+            vec![Value::from("123")],
+            false,
+            vec![Value::from("567")],
+            true,
+        );
+
+    let result_set = query.execute();
+    assert!(result_set.is_ok());
+    let result_set = result_set.unwrap();
+    assert_eq!(4, result_set.cache_size());
+
+    // >=123 && < 567
+    query.clear();
+    let mut query = query
+        .select(vec!["c2".to_owned()])
+        .primary_index()
+        .add_scan_range(
+            vec![Value::from("123")],
+            true,
+            vec![Value::from("567")],
+            false,
+        );
+
+    let result_set = query.execute();
+    assert!(result_set.is_ok());
+    let result_set = result_set.unwrap();
+    assert_eq!(4, result_set.cache_size());
+
+    // >= 12 && <= 126
+    query.clear();
+    let mut query = query
+        .select(vec!["c2".to_owned()])
+        .primary_index()
+        .add_scan_range(
+            vec![Value::from("12")],
+            true,
+            vec![Value::from("126")],
+            true,
+        );
+
+    let result_set = query.execute();
+    assert!(result_set.is_ok());
+    let result_set = result_set.unwrap();
+    assert_eq!(2, result_set.cache_size());
+
+    // (>=12 && <=126) || (>="456" && <="567")
+    query.clear();
+    let query = query
+        .select(vec!["c2".to_owned()])
+        .primary_index()
+        .add_scan_range(
+            vec![Value::from("12")],
+            true,
+            vec![Value::from("126")],
+            true,
+        )
+        .add_scan_range(
+            vec![Value::from("456")],
+            true,
+            vec![Value::from("567")],
+            true,
+        );
+
+    let result_set = query.execute();
+    assert!(result_set.is_ok());
+    let result_set = result_set.unwrap();
+    assert_eq!(4, result_set.cache_size());
+
+    // (>=124 && <=124)
+    let query = client
+        .query(TABLE_NAME)
+        .select(vec!["c2".to_owned()])
+        .primary_index()
+        .add_scan_range(
+            vec![Value::from("124")],
+            true,
+            vec![Value::from("124")],
+            true,
+        );
+
+    let result_set = query.execute();
+    assert!(result_set.is_ok());
+    let mut result_set = result_set.unwrap();
+    assert_eq!(1, result_set.cache_size());
+    assert_eq!(
+        "124c2",
+        result_set
+            .next()
+            .unwrap()
+            .unwrap()
+            .remove("c2")
+            .unwrap()
+            .as_string()
+    );
+
+    // (>=124 && <=123)
+    let query = client
+        .query(TABLE_NAME)
+        .select(vec!["c2".to_owned()])
+        .primary_index()
+        .add_scan_range(
+            vec![Value::from("124")],
+            true,
+            vec![Value::from("123")],
+            true,
+        );
+
+    let result_set = query.execute();
+    assert!(result_set.is_ok());
+    let result_set = result_set.unwrap();
+    assert_eq!(0, result_set.cache_size());
+
+    // TODO: add more test cases on batchsize query
 }
 
 // ```sql
