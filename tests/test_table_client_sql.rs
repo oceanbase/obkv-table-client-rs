@@ -5,12 +5,12 @@
  * Copyright (C) 2021 OceanBase
  * %%
  * OBKV Table Client Framework is licensed under Mulan PSL v2.
- * You can use this software according to the terms and conditions of the Mulan PSL v2.
- * You may obtain a copy of Mulan PSL v2 at:
+ * You can use this software according to the terms and conditions of the
+ * Mulan PSL v2. You may obtain a copy of Mulan PSL v2 at:
  *          http://license.coscl.org.cn/MulanPSL2
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
- * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY
+ * KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+ * NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PSL v2 for more details.
  * #L%
  */
@@ -26,7 +26,7 @@ fn test_execute_sql() {
     let client = utils::common::build_normal_client();
     let test_table_name = "test_execute_sql";
     let create_table =
-        format!("create table IF NOT EXISTS {}(id int, PRIMARY KEY(id));", test_table_name);
+        format!("create table IF NOT EXISTS {test_table_name}(id int, PRIMARY KEY(id));");
     client
         .execute_sql(&create_table)
         .expect("fail to create table");
@@ -36,7 +36,7 @@ fn test_execute_sql() {
 fn test_check_table_exists() {
     let client = utils::common::build_normal_client();
     let test_table_name = "test_check_table_exists";
-    let drop_table = format!("drop table IF EXISTS {};", test_table_name);
+    let drop_table = format!("drop table IF EXISTS {test_table_name};");
 
     client
         .execute_sql(&drop_table)
@@ -47,10 +47,8 @@ fn test_check_table_exists() {
         .expect("fail to check table exists");
     assert!(!exists, "should not exists");
 
-    let create_table = format!(
-        "create table IF NOT EXISTS {}(id int, PRIMARY KEY(id));",
-        test_table_name
-    );
+    let create_table =
+        format!("create table IF NOT EXISTS {test_table_name}(id int, PRIMARY KEY(id));");
 
     client
         .execute_sql(&create_table)

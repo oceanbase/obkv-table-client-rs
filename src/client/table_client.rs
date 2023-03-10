@@ -228,6 +228,7 @@ struct ObTableClientInner {
 }
 
 impl ObTableClientInner {
+    #[allow(clippy::too_many_arguments)]
     fn internal_new(
         param_url: String,
         full_user_name: String,
@@ -243,11 +244,7 @@ impl ObTableClientInner {
         let ocp_manager =
             ObOcpModelManager::new(config.rslist_acquire_timeout, &config.ocp_model_cache_file)?;
 
-        let query_permits = if let Some(max) = config.query_concurrency_limit {
-            Some(Permits::new(max))
-        } else {
-            None
-        };
+        let query_permits = config.query_concurrency_limit.map(Permits::new);
 
         Ok(Self {
             ocp_manager,
@@ -304,10 +301,7 @@ impl ObTableClientInner {
 
     #[inline]
     fn get_table_entry_from_cache(&self, table_name: &str) -> Option<Arc<TableEntry>> {
-        match self.table_locations.rl().get(table_name) {
-            Some(v) => Some(v.clone()),
-            None => None,
-        }
+        self.table_locations.rl().get(table_name).cloned()
     }
 
     fn on_table_op_failure(&self, table_name: &str, error: &error::Error) -> Result<()> {
@@ -402,10 +396,7 @@ impl ObTableClientInner {
                         None => {
                             return Err(CommonErr(
                                 CommonErrCode::NotFound,
-                                format!(
-                                    "Partition table must has row key element, table_key={:?}",
-                                    table_entry_key
-                                ),
+                                format!("Partition table must has row key element, table_key={table_entry_key:?}"),
                             ));
                         }
                     },
@@ -475,7 +466,7 @@ impl ObTableClientInner {
                         } else {
                             return Err(CommonErr(
                                 CommonErrCode::NotFound,
-                                format!("ObTable to {:?} not found in table_roster.", leader),
+                                format!("ObTable to {leader:?} not found in table_roster."),
                             ));
                         }
                     }
@@ -483,11 +474,7 @@ impl ObTableClientInner {
                         //Leader not found
                         return Err(CommonErr(
                             CommonErrCode::NotFound,
-                            format!(
-                                "Leader not found part_id={} for table {:?}",
-                                part_id,
-                                table_entry.to_owned(),
-                            ),
+                            format!("Leader not found part_id={part_id} for table {table_entry:?}"),
                         ));
                     }
                 },
@@ -597,10 +584,7 @@ impl ObTableClientInner {
             //Level two
             Err(CommonErr(
                 CommonErrCode::PartitionError,
-                format!(
-                    "Unsupported partition level two right now, table={:?}",
-                    table_entry
-                ),
+                format!("Unsupported partition level two right now, table={table_entry:?}"),
             ))
         }
     }
@@ -658,7 +642,7 @@ impl ObTableClientInner {
             .start_timer();
 
         // check whether exists
-        if let Some(table) = table_roster.get(&addr) {
+        if let Some(table) = table_roster.get(addr) {
             return Ok(table.clone());
         }
 
@@ -698,15 +682,12 @@ impl ObTableClientInner {
 
                 None => Err(CommonErr(
                     CommonErrCode::NotFound,
-                    format!("Replica not found for table {}-{}", table_name, part_id),
+                    format!("Replica not found for table {table_name}-{part_id}"),
                 )),
             },
             None => Err(CommonErr(
                 CommonErrCode::NotFound,
-                format!(
-                    "Partition leader not found for table {}-{}",
-                    table_name, part_id
-                ),
+                format!("Partition leader not found for table {table_name}-{part_id}"),
             )),
         }
     }
@@ -926,12 +907,11 @@ impl ObTableClientInner {
         } else {
             match table_mutex.try_lock() {
                 Ok(lock) => lock,
-                Err(_e) =>
-                    return Err(CommonErr(CommonErrCode::Lock,
-                                         format!(
-                                             "ObTableClientInner::get_or_refresh_table_entry: fail to acquire table lock because \
-                        some other thread is refreshing with the lock, table_name:{}", table_name)
-                    ))
+                Err(_e) => {
+                    let err_msg = format!("ObTableClientInner::get_or_refresh_table_entry: fail to acquire table \
+                        lock because some other thread is refreshing with the lock, table_name:{table_name}");
+                    return Err(CommonErr(CommonErrCode::Lock, err_msg));
+                }
             }
         };
 
@@ -1041,7 +1021,7 @@ impl ObTableClientInner {
             } else {
                 let pool = Arc::new(
                     CpuPoolBuilder::new()
-                        .name_prefix(format!("batch-ops-for-{}", table_name))
+                        .name_prefix(format!("batch-ops-for-{table_name}"))
                         .pool_size(self.config.table_batch_op_thread_num)
                         .create(),
                 );
@@ -1090,7 +1070,7 @@ impl ObTableClientInner {
     }
 
     fn check_table_exists(&self, table_name: &str) -> Result<bool> {
-        let select_sql = format!("SELECT 1 FROM {} LIMIT 1;", table_name);
+        let select_sql = format!("SELECT 1 FROM {table_name} LIMIT 1;");
         let exists = match self.execute_sql(&select_sql) {
             Ok(_) => true,
             Err(e) => {
@@ -1106,7 +1086,7 @@ impl ObTableClientInner {
     }
 
     fn truncate_table(&self, table_name: &str) -> Result<()> {
-        let truncate_table_sql = format!("truncate table {}; purge recyclebin;", table_name);
+        let truncate_table_sql = format!("truncate table {table_name}; purge recyclebin;");
         self.execute_sql(&truncate_table_sql)
     }
 
@@ -1245,11 +1225,11 @@ impl ObTableClientInner {
 
                 servers.push(addr.clone());
 
-                if table_roster.contains_key(&addr) {
+                if table_roster.contains_key(addr) {
                     continue;
                 }
 
-                self.add_ob_table_to_roster(&addr, &mut table_roster)?;
+                self.add_ob_table_to_roster(addr, &mut table_roster)?;
             }
 
             table_roster.retain(|addr, _| {
@@ -1588,8 +1568,7 @@ impl ObTableClient {
             return Err(CommonErr(
                 CommonErrCode::ObException(ResultCodes::OB_INVALID_PARTITION),
                 format!(
-                    "batch operation is atomic, but involves multiple partitions: {:?}",
-                    batch_op
+                    "batch operation is atomic, but involves multiple partitions: {batch_op:?}",
                 ),
             ));
         }
@@ -2303,7 +2282,7 @@ impl Builder {
             assert!(kv.len() == 2, "Invalid param");
 
             if kv.first().unwrap().to_lowercase() == DATABASE_PARAM_KEY {
-                db = &kv[1];
+                db = kv[1];
             }
         }
 

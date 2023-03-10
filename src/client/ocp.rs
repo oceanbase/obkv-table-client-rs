@@ -5,12 +5,12 @@
  * Copyright (C) 2021 OceanBase
  * %%
  * OBKV Table Client Framework is licensed under Mulan PSL v2.
- * You can use this software according to the terms and conditions of the Mulan PSL v2.
- * You may obtain a copy of Mulan PSL v2 at:
+ * You can use this software according to the terms and conditions of the
+ * Mulan PSL v2. You may obtain a copy of Mulan PSL v2 at:
  *          http://license.coscl.org.cn/MulanPSL2
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
- * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY
+ * KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+ * NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PSL v2 for more details.
  * #L%
  */
@@ -299,6 +299,7 @@ mod test {
     const TEST_URL: &str = "127.0.0.1";
 
     #[test]
+    #[ignore = "need to start ocp server"]
     fn test_load_ocp_model() {
         let manager = ObOcpModelManager::new(Duration::from_secs(10), "/tmp/test")
             .expect("fail to create ocp manager.");
@@ -317,7 +318,7 @@ mod test {
 
         let file = OcpModelCacheFile::new(path);
 
-        assert!(!file.load().is_ok());
+        assert!(file.load().is_err());
 
         let mut ocp_model = OcpModel::new();
         for i in 0..3 {

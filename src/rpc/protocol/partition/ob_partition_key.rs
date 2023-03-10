@@ -5,12 +5,12 @@
  * Copyright (C) 2021 OceanBase
  * %%
  * OBKV Table Client Framework is licensed under Mulan PSL v2.
- * You can use this software according to the terms and conditions of the Mulan PSL v2.
- * You may obtain a copy of Mulan PSL v2 at:
+ * You can use this software according to the terms and conditions of the
+ * Mulan PSL v2. You may obtain a copy of Mulan PSL v2 at:
  *          http://license.coscl.org.cn/MulanPSL2
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
- * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY
+ * KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+ * NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PSL v2 for more details.
  * #L%
  */
@@ -21,19 +21,19 @@ use crate::serde_obkv::value::Value;
 
 #[derive(Debug, Clone)]
 pub enum Comparable {
-    MAXVALUE,
-    MINVALUE,
+    MaxValue,
+    MinValue,
     Value(Value),
 }
 
 impl PartialOrd for Comparable {
     fn partial_cmp(&self, other: &Comparable) -> Option<Ordering> {
         match &self {
-            Comparable::MAXVALUE => Some(Ordering::Greater),
-            Comparable::MINVALUE => Some(Ordering::Less),
+            Comparable::MaxValue => Some(Ordering::Greater),
+            Comparable::MinValue => Some(Ordering::Less),
             Comparable::Value(v) => match other {
-                Comparable::MAXVALUE => Some(Ordering::Less),
-                Comparable::MINVALUE => Some(Ordering::Greater),
+                Comparable::MaxValue => Some(Ordering::Less),
+                Comparable::MinValue => Some(Ordering::Greater),
                 Comparable::Value(o) => v.partial_cmp(o),
             },
         }
@@ -43,11 +43,11 @@ impl PartialOrd for Comparable {
 impl PartialEq for Comparable {
     fn eq(&self, other: &Comparable) -> bool {
         match &self {
-            Comparable::MAXVALUE => false,
-            Comparable::MINVALUE => false,
+            Comparable::MaxValue => false,
+            Comparable::MinValue => false,
             Comparable::Value(v) => match other {
-                Comparable::MAXVALUE => false,
-                Comparable::MINVALUE => false,
+                Comparable::MaxValue => false,
+                Comparable::MinValue => false,
                 Comparable::Value(o) => v == o,
             },
         }
@@ -74,14 +74,14 @@ impl PartialOrd for ObPartitionKey {
             if self.partition_elements[i] == that.partition_elements[i] {
                 continue;
             }
-            if self.partition_elements[i] == Comparable::MAXVALUE
-                || that.partition_elements[i] == Comparable::MINVALUE
+            if self.partition_elements[i] == Comparable::MaxValue
+                || that.partition_elements[i] == Comparable::MinValue
             {
                 return Some(Ordering::Greater);
             }
 
-            if that.partition_elements[i] == Comparable::MAXVALUE
-                || self.partition_elements[i] == Comparable::MINVALUE
+            if that.partition_elements[i] == Comparable::MaxValue
+                || self.partition_elements[i] == Comparable::MinValue
             {
                 return Some(Ordering::Less);
             }
@@ -109,14 +109,14 @@ impl PartialEq for ObPartitionKey {
             if self.partition_elements[i] == that.partition_elements[i] {
                 continue;
             }
-            if self.partition_elements[i] == Comparable::MAXVALUE
-                || that.partition_elements[i] == Comparable::MINVALUE
+            if self.partition_elements[i] == Comparable::MaxValue
+                || that.partition_elements[i] == Comparable::MinValue
             {
                 return false;
             }
 
-            if that.partition_elements[i] == Comparable::MAXVALUE
-                || self.partition_elements[i] == Comparable::MINVALUE
+            if that.partition_elements[i] == Comparable::MaxValue
+                || self.partition_elements[i] == Comparable::MinValue
             {
                 return false;
             }

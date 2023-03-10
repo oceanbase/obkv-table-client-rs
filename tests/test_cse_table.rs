@@ -5,12 +5,12 @@
  * Copyright (C) 2021 OceanBase
  * %%
  * OBKV Table Client Framework is licensed under Mulan PSL v2.
- * You can use this software according to the terms and conditions of the Mulan PSL v2.
- * You may obtain a copy of Mulan PSL v2 at:
+ * You can use this software according to the terms and conditions of the
+ * Mulan PSL v2. You may obtain a copy of Mulan PSL v2 at:
  *          http://license.coscl.org.cn/MulanPSL2
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
- * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY
+ * KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+ * NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PSL v2 for more details.
  * #L%
  */
@@ -88,7 +88,7 @@ fn test_cse_data_range_table() {
 
     assert_eq!(1, result);
 
-    let result = client.get(cse_table, rowk_keys.clone(), vec!["value".to_owned()]);
+    let result = client.get(cse_table, rowk_keys, vec!["value".to_owned()]);
     let mut result = result.unwrap();
     assert_eq!(1, result.len());
     let value = result.remove("value").unwrap();
@@ -348,7 +348,7 @@ fn test_cse_field_key_table() {
 
     let result = client.get(
         cse_table,
-        rowk_keys.clone(),
+        rowk_keys,
         vec!["field_type".to_owned(), "id".to_owned()],
     );
     let mut result = result.unwrap();
@@ -414,7 +414,7 @@ fn test_series_key_table() {
     let result = client.get(cse_table, rowk_keys.clone(), vec!["series_id".to_owned()]);
     let mut result = result.unwrap();
     assert_eq!(1, result.len());
-    println!("result get:{:?}", result);
+    println!("result get:{result:?}");
     let value = result.remove("series_id").unwrap();
     assert!(value.is_i64());
     assert_eq!(1i64, value.as_i64());
@@ -430,7 +430,7 @@ fn test_series_key_table() {
 
     assert_eq!(1i64, result);
 
-    let result = client.get(cse_table, rowk_keys.clone(), vec!["series_id".to_owned()]);
+    let result = client.get(cse_table, rowk_keys, vec!["series_id".to_owned()]);
     let mut result = result.unwrap();
     assert_eq!(1, result.len());
     let value = result.remove("series_id").unwrap();

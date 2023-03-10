@@ -5,12 +5,12 @@
  * Copyright (C) 2021 OceanBase
  * %%
  * OBKV Table Client Framework is licensed under Mulan PSL v2.
- * You can use this software according to the terms and conditions of the Mulan PSL v2.
- * You may obtain a copy of Mulan PSL v2 at:
+ * You can use this software according to the terms and conditions of the
+ * Mulan PSL v2. You may obtain a copy of Mulan PSL v2 at:
  *          http://license.coscl.org.cn/MulanPSL2
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
- * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY
+ * KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+ * NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PSL v2 for more details.
  * #L%
  */
@@ -137,7 +137,7 @@ impl ObServerAddr {
             let tmps: Vec<&str> = addr.split(':').collect();
             assert!(tmps.len() >= 2);
             self.ip = tmps.first().unwrap().to_owned().to_owned();
-            self.svr_port = i32::from_str(&tmps[1].to_owned()).unwrap();
+            self.svr_port = i32::from_str(tmps[1]).unwrap();
         } else {
             self.ip = addr;
         }
@@ -524,10 +524,7 @@ impl ObTableLocation {
         cache_key: &str,
     ) -> Option<Arc<my::Pool>> {
         match pools.get(server_addr) {
-            Some(map) => match map.get(cache_key) {
-                Some(pool) => Some(pool.clone()),
-                None => None,
-            },
+            Some(map) => map.get(cache_key).cloned(),
             None => None,
         }
     }
@@ -549,7 +546,7 @@ impl ObTableLocation {
         connect_timeout: Option<Duration>,
         sock_timeout: Option<Duration>,
     ) -> Result<Arc<my::Pool>> {
-        let cache_key = format!("{}/{}", username, db_name);
+        let cache_key = format!("{username}/{db_name}");
         {
             let pools = self.mysql_pools.rl();
             if let Some(pool) = self.get_pool_from_cache(&pools, server_addr, &cache_key) {
@@ -600,6 +597,7 @@ impl ObTableLocation {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn execute_sql(
         &self,
         sql: &str,
@@ -614,13 +612,13 @@ impl ObTableLocation {
             "ObTableLocation::execute_sql begin query by sql:{}, addr:{:?}",
             sql, server_addr
         );
-        let full_username = format!("{}@{}", username, tenant_name);
+        let full_username = format!("{username}@{tenant_name}");
         let pool = self
             .get_or_create_mysql_pool(
                 &full_username,
                 password,
                 database,
-                &server_addr,
+                server_addr,
                 Some(timeout),
                 Some(timeout),
             )
@@ -643,7 +641,7 @@ impl ObTableLocation {
                 e
             })?;
 
-        let query_res = conn.query(sql.to_owned()).map_err(|e| {
+        let query_res = conn.query(sql).map_err(|e| {
             error!(
                 "ObTableLocation::execute_sql failed, sql:{}, addr:{:?}, err:{}",
                 sql, server_addr, e
@@ -676,7 +674,7 @@ impl ObTableLocation {
         let mut rng = thread_rng();
         let random_server = rs_list.choose(&mut rng).unwrap();
 
-        self.get_table_entry_from_remote(&random_server, key, connect_timeout, sock_timeout)
+        self.get_table_entry_from_remote(random_server, key, connect_timeout, sock_timeout)
     }
 
     /// refresh table entry with callback and priority
@@ -719,7 +717,7 @@ impl ObTableLocation {
         let mut rng = thread_rng();
         let addr = rs_list.choose(&mut rng).unwrap();
 
-        match callback(self, &addr, key, connect_timeout, sock_timeout) {
+        match callback(self, addr, key, connect_timeout, sock_timeout) {
             Ok(table_entry) => {
                 if addr.priority() != 0 {
                     let grant_priority_times = u::current_time_millis() as usize;
@@ -811,12 +809,12 @@ impl ObTableLocation {
 
         let mut conn = pool.try_get_conn(u::duration_to_millis(&connect_timeout) as u32)?;
 
-        let part_entry = self.get_table_location_from_remote(&mut conn, &key, table_entry)?;
+        let part_entry = self.get_table_location_from_remote(&mut conn, key, table_entry)?;
         //Clone a new table entry to return.
         let mut table_entry = table_entry.clone();
         //Update partiton entry and refresh_time
         table_entry.partition_entry = Some(part_entry);
-        table_entry.set_refresh_time_mills(u::current_time_millis() as i64);
+        table_entry.set_refresh_time_mills(u::current_time_millis());
 
         Ok(table_entry)
     }
@@ -873,7 +871,7 @@ impl ObTableLocation {
                         error!("ObTableLocation::get_table_entry_from_remote: fail to do mysql row conversion, err:{}", e);
                         return Err(CommonErr(
                             CommonErrCode::ConvertFailed,
-                            format!("mysql row conversion err:{}", e),
+                            format!("mysql row conversion err:{e}"),
                         ));
                     }
                 };
@@ -924,9 +922,9 @@ impl ObTableLocation {
             row_key_element: HashMap::new(),
         };
 
-        let part_entry = self.get_table_location_from_remote(&mut conn, &key, &table_entry)?;
+        let part_entry = self.get_table_location_from_remote(&mut conn, key, &table_entry)?;
         table_entry.partition_entry = Some(part_entry);
-        table_entry.set_refresh_time_mills(u::current_time_millis() as i64);
+        table_entry.set_refresh_time_mills(u::current_time_millis());
 
         if table_entry.is_partition_table() {
             // fetch partition info
@@ -935,14 +933,13 @@ impl ObTableLocation {
                 Err(e) => {
                     table_entry.partition_info = None;
                     error!(
-                        "Location::get_table_entry_from_remote fetch_partition_info error:{:?}",
+                        "Location::get_table_entry_from_remote fetch_partition_info error:{}",
                         e
                     );
                     return Err(CommonErr(
                         CommonErrCode::PartitionError,
                         format!(
-                            "location::get_table_entry_from_remote fetch_partition_info error:{:?}",
-                            e
+                            "location::get_table_entry_from_remote fetch_partition_info error:{e}",
                         ),
                     ));
                 }
@@ -991,7 +988,7 @@ impl ObTableLocation {
             if i > 0 {
                 part_str.push(',');
             }
-            part_str.push_str(&format!("{}", i));
+            part_str.push_str(&format!("{i}"));
         }
 
         let sql = format!("SELECT /*+READ_CONSISTENCY(WEAK)*/ A.partition_id as partition_id, A.svr_ip as svr_ip, A.sql_port as sql_port,
@@ -1003,7 +1000,7 @@ impl ObTableLocation {
                       &key.table_name,
                       &part_str);
 
-        let mut parititon_location = HashMap::new();
+        let mut partition_location = HashMap::new();
 
         for result in conn.query(sql)? {
             let row = result.map_err(|e| {
@@ -1020,7 +1017,7 @@ impl ObTableLocation {
                         error!("ObTableLocation::get_table_location_from_remote: fail to do mysql row conversion, err:{}", e);
                         return Err(CommonErr(
                             CommonErrCode::ConvertFailed,
-                            format!("mysql row conversion err:{}", e),
+                            format!("mysql row conversion err:{e}"),
                         ));
                     }
                 };
@@ -1051,7 +1048,7 @@ impl ObTableLocation {
             };
 
             let mut location =
-                parititon_location
+                partition_location
                     .entry(partition_id)
                     .or_insert(ObPartitionLocation {
                         leader: None,
@@ -1067,31 +1064,31 @@ impl ObTableLocation {
 
         // Check partition info.
         for part_id in 0..table_entry.partition_num {
-            let location = parititon_location.get(&part_id);
+            let location = partition_location.get(&part_id);
 
             if location.is_none() {
                 error!("Location::get_table_location_from_remote: partition num={} is not exists, table={:?}, locations={:?}",
-                   part_id, table_entry, parititon_location);
+                   part_id, table_entry, partition_location);
                 return Err(CommonErr(
                 CommonErrCode::PartitionError,
-                format!("Location::get_table_location_from_remote: partition num={} is not exists, table={:?}, locations={:?}",
-                        part_id, table_entry, parititon_location),
+                format!("Location::get_table_location_from_remote: partition num={part_id} is not exists, table={table_entry:?}, locations={partition_location:?}"),
             ));
             }
 
             if location.unwrap().leader.is_none() {
                 error!("Location::get_table_location_from_remote: partition num={} has no leader, table={:?}, locations={:?}",
-                   part_id, table_entry, parititon_location);
+                   part_id, table_entry, partition_location);
 
                 return Err(CommonErr(
                 CommonErrCode::PartitionError,
-                format!("Location::get_table_location_from_remote: partition num={} has no leader, table={:?}, locations={:?}",
-                        part_id, table_entry, parititon_location),
+                format!("Location::get_table_location_from_remote: partition num={part_id} has no leader, table={table_entry:?}, locations={partition_location:?}"),
             ));
             }
         }
 
-        Ok(ObPartitionEntry { parititon_location })
+        Ok(ObPartitionEntry {
+            parititon_location: partition_location,
+        })
     }
 }
 
@@ -1165,7 +1162,7 @@ mod test {
 
         let _result = location
             .load_table_entry_randomly(
-                &vec![addr],
+                &[addr],
                 &key,
                 Duration::from_secs(10),
                 Duration::from_secs(10),

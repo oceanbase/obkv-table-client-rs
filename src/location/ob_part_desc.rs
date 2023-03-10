@@ -5,23 +5,22 @@
  * Copyright (C) 2021 OceanBase
  * %%
  * OBKV Table Client Framework is licensed under Mulan PSL v2.
- * You can use this software according to the terms and conditions of the Mulan PSL v2.
- * You may obtain a copy of Mulan PSL v2 at:
+ * You can use this software according to the terms and conditions of the
+ * Mulan PSL v2. You may obtain a copy of Mulan PSL v2 at:
  *          http://license.coscl.org.cn/MulanPSL2
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
- * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY
+ * KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+ * NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PSL v2 for more details.
  * #L%
  */
 
 use std::collections::HashMap;
 
-use murmur2;
-
 use super::{ob_part_constants, part_func_type::PartFuncType};
 use crate::{
     error::{CommonErrCode, Error::Common as CommonErr, Result},
+    location::part_func_type::PartFuncType::{KeyImplicitV2, KeyV3},
     rpc::{
         protocol::partition::{
             ob_column::ObColumn,
@@ -34,58 +33,52 @@ use crate::{
 
 #[derive(Clone, Debug)]
 pub enum ObPartDesc {
-    ObRangePartDesc(ObRangePartDesc),
-    ObHashPartDesc(ObHashPartDesc),
-    ObKeyPartDesc(ObKeyPartDesc),
+    Range(ObRangePartDesc),
+    Hash(ObHashPartDesc),
+    Key(ObKeyPartDesc),
     // TODO: impl list part
 }
 
 impl ObPartDesc {
     pub fn set_row_key_element(&mut self, row_key_element: HashMap<String, i32>) {
         match self {
-            ObPartDesc::ObRangePartDesc(ref mut v) => {
-                v.ob_part_desc_obj.set_row_key_element(row_key_element)
-            }
+            ObPartDesc::Range(ref mut v) => v.ob_part_desc_obj.set_row_key_element(row_key_element),
 
-            ObPartDesc::ObHashPartDesc(ref mut v) => {
-                v.ob_part_desc_obj.set_row_key_element(row_key_element)
-            }
+            ObPartDesc::Hash(ref mut v) => v.ob_part_desc_obj.set_row_key_element(row_key_element),
 
-            ObPartDesc::ObKeyPartDesc(ref mut v) => {
-                v.ob_part_desc_obj.set_row_key_element(row_key_element)
-            }
+            ObPartDesc::Key(ref mut v) => v.ob_part_desc_obj.set_row_key_element(row_key_element),
         }
     }
 
     pub fn get_part_func_type(&self) -> PartFuncType {
         match self {
-            ObPartDesc::ObRangePartDesc(v) => v.ob_part_desc_obj.part_func_type.clone(),
-            ObPartDesc::ObHashPartDesc(v) => v.ob_part_desc_obj.part_func_type.clone(),
-            ObPartDesc::ObKeyPartDesc(v) => v.ob_part_desc_obj.part_func_type.clone(),
+            ObPartDesc::Range(v) => v.ob_part_desc_obj.part_func_type.clone(),
+            ObPartDesc::Hash(v) => v.ob_part_desc_obj.part_func_type.clone(),
+            ObPartDesc::Key(v) => v.ob_part_desc_obj.part_func_type.clone(),
         }
     }
 
     pub fn get_ordered_part_column_names(&self) -> &[String] {
         match self {
-            ObPartDesc::ObRangePartDesc(v) => &v.ob_part_desc_obj.ordered_part_column_names,
-            ObPartDesc::ObHashPartDesc(v) => &v.ob_part_desc_obj.ordered_part_column_names,
-            ObPartDesc::ObKeyPartDesc(v) => &v.ob_part_desc_obj.ordered_part_column_names,
+            ObPartDesc::Range(v) => &v.ob_part_desc_obj.ordered_part_column_names,
+            ObPartDesc::Hash(v) => &v.ob_part_desc_obj.ordered_part_column_names,
+            ObPartDesc::Key(v) => &v.ob_part_desc_obj.ordered_part_column_names,
         }
     }
 
     pub fn get_part_name_id_map(&self) -> &HashMap<String, i64> {
         match &self {
-            ObPartDesc::ObRangePartDesc(v) => &v.ob_part_desc_obj.part_name_id_map,
-            ObPartDesc::ObHashPartDesc(v) => &v.ob_part_desc_obj.part_name_id_map,
-            ObPartDesc::ObKeyPartDesc(v) => &v.ob_part_desc_obj.part_name_id_map,
+            ObPartDesc::Range(v) => &v.ob_part_desc_obj.part_name_id_map,
+            ObPartDesc::Hash(v) => &v.ob_part_desc_obj.part_name_id_map,
+            ObPartDesc::Key(v) => &v.ob_part_desc_obj.part_name_id_map,
         }
     }
 
     pub fn get_part_id(&self, row_key: &[Value]) -> Result<i64> {
         match &self {
-            ObPartDesc::ObRangePartDesc(v) => v.get_part_id(row_key),
-            ObPartDesc::ObHashPartDesc(v) => v.get_part_id(row_key),
-            ObPartDesc::ObKeyPartDesc(v) => v.get_part_id(row_key),
+            ObPartDesc::Range(v) => v.get_part_id(row_key),
+            ObPartDesc::Hash(v) => v.get_part_id(row_key),
+            ObPartDesc::Key(v) => v.get_part_id(row_key),
         }
     }
 
@@ -97,84 +90,68 @@ impl ObPartDesc {
         end_inclusive: bool,
     ) -> Result<Vec<i64>> {
         match &self {
-            ObPartDesc::ObRangePartDesc(v) => {
-                v.get_part_ids(start, start_inclusive, end, end_inclusive)
-            }
-            ObPartDesc::ObHashPartDesc(v) => {
-                v.get_part_ids(start, start_inclusive, end, end_inclusive)
-            }
-            ObPartDesc::ObKeyPartDesc(v) => {
-                v.get_part_ids(start, start_inclusive, end, end_inclusive)
-            }
+            ObPartDesc::Range(v) => v.get_part_ids(start, start_inclusive, end, end_inclusive),
+            ObPartDesc::Hash(v) => v.get_part_ids(start, start_inclusive, end, end_inclusive),
+            ObPartDesc::Key(v) => v.get_part_ids(start, start_inclusive, end, end_inclusive),
         }
     }
 
     pub fn set_part_columns(&mut self, part_columns: Vec<Box<dyn ObColumn>>) {
         match self {
-            ObPartDesc::ObRangePartDesc(ref mut v) => {
-                v.ob_part_desc_obj.part_columns = part_columns
-            }
-            ObPartDesc::ObHashPartDesc(ref mut v) => v.ob_part_desc_obj.part_columns = part_columns,
-            ObPartDesc::ObKeyPartDesc(ref mut v) => v.ob_part_desc_obj.part_columns = part_columns,
+            ObPartDesc::Range(ref mut v) => v.ob_part_desc_obj.part_columns = part_columns,
+            ObPartDesc::Hash(ref mut v) => v.ob_part_desc_obj.part_columns = part_columns,
+            ObPartDesc::Key(ref mut v) => v.ob_part_desc_obj.part_columns = part_columns,
         }
     }
 
     pub fn set_ordered_compare_columns(&mut self, ordered_part_column: Vec<Box<dyn ObColumn>>) {
         match self {
-            ObPartDesc::ObRangePartDesc(ref mut v) => {
-                v.ordered_compare_column = ordered_part_column
-            }
+            ObPartDesc::Range(ref mut v) => v.ordered_compare_column = ordered_part_column,
 
-            ObPartDesc::ObHashPartDesc(_) => (),
-            ObPartDesc::ObKeyPartDesc(_) => (),
+            ObPartDesc::Hash(_) => (),
+            ObPartDesc::Key(_) => (),
         }
     }
 
     pub fn set_part_name_id_map(&mut self, part_name_id_map: HashMap<String, i64>) {
         match self {
-            ObPartDesc::ObRangePartDesc(ref mut v) => {
-                v.ob_part_desc_obj.part_name_id_map = part_name_id_map
-            }
+            ObPartDesc::Range(ref mut v) => v.ob_part_desc_obj.part_name_id_map = part_name_id_map,
 
-            ObPartDesc::ObHashPartDesc(ref mut v) => {
-                v.ob_part_desc_obj.part_name_id_map = part_name_id_map
-            }
+            ObPartDesc::Hash(ref mut v) => v.ob_part_desc_obj.part_name_id_map = part_name_id_map,
 
-            ObPartDesc::ObKeyPartDesc(ref mut v) => {
-                v.ob_part_desc_obj.part_name_id_map = part_name_id_map
-            }
+            ObPartDesc::Key(ref mut v) => v.ob_part_desc_obj.part_name_id_map = part_name_id_map,
         }
     }
 
     pub fn is_list_part(&self) -> bool {
         match self {
-            ObPartDesc::ObRangePartDesc(v) => v.ob_part_desc_obj.part_func_type.is_list_part(),
-            ObPartDesc::ObHashPartDesc(v) => v.ob_part_desc_obj.part_func_type.is_list_part(),
-            ObPartDesc::ObKeyPartDesc(v) => v.ob_part_desc_obj.part_func_type.is_list_part(),
+            ObPartDesc::Range(v) => v.ob_part_desc_obj.part_func_type.is_list_part(),
+            ObPartDesc::Hash(v) => v.ob_part_desc_obj.part_func_type.is_list_part(),
+            ObPartDesc::Key(v) => v.ob_part_desc_obj.part_func_type.is_list_part(),
         }
     }
 
     pub fn is_key_part(&self) -> bool {
         match self {
-            ObPartDesc::ObRangePartDesc(v) => v.ob_part_desc_obj.part_func_type.is_key_part(),
-            ObPartDesc::ObHashPartDesc(v) => v.ob_part_desc_obj.part_func_type.is_key_part(),
-            ObPartDesc::ObKeyPartDesc(v) => v.ob_part_desc_obj.part_func_type.is_key_part(),
+            ObPartDesc::Range(v) => v.ob_part_desc_obj.part_func_type.is_key_part(),
+            ObPartDesc::Hash(v) => v.ob_part_desc_obj.part_func_type.is_key_part(),
+            ObPartDesc::Key(v) => v.ob_part_desc_obj.part_func_type.is_key_part(),
         }
     }
 
     pub fn is_range_part(&self) -> bool {
         match self {
-            ObPartDesc::ObRangePartDesc(v) => v.ob_part_desc_obj.part_func_type.is_range_part(),
-            ObPartDesc::ObHashPartDesc(v) => v.ob_part_desc_obj.part_func_type.is_range_part(),
-            ObPartDesc::ObKeyPartDesc(v) => v.ob_part_desc_obj.part_func_type.is_range_part(),
+            ObPartDesc::Range(v) => v.ob_part_desc_obj.part_func_type.is_range_part(),
+            ObPartDesc::Hash(v) => v.ob_part_desc_obj.part_func_type.is_range_part(),
+            ObPartDesc::Key(v) => v.ob_part_desc_obj.part_func_type.is_range_part(),
         }
     }
 
     pub fn prepare(&mut self) -> Result<()> {
         match self {
-            ObPartDesc::ObRangePartDesc(v) => v.ob_part_desc_obj.prepare(),
-            ObPartDesc::ObHashPartDesc(v) => v.ob_part_desc_obj.prepare(),
-            ObPartDesc::ObKeyPartDesc(v) => v.ob_part_desc_obj.prepare(),
+            ObPartDesc::Range(v) => v.ob_part_desc_obj.prepare(),
+            ObPartDesc::Hash(v) => v.ob_part_desc_obj.prepare(),
+            ObPartDesc::Key(v) => v.ob_part_desc_obj.prepare(),
         }
     }
 }
@@ -193,7 +170,7 @@ pub struct ObPartDescObj {
 impl ObPartDescObj {
     pub fn new() -> Self {
         Self {
-            part_func_type: PartFuncType::UNKNOWN,
+            part_func_type: PartFuncType::Unknown,
             part_expr: String::new(),
             ordered_part_column_names: Vec::new(),
             ordered_part_ref_column_row_key_relations: Vec::new(),
@@ -241,7 +218,7 @@ impl ObPartDescObj {
             for column in &self.part_columns {
                 if column
                     .get_column_name()
-                    .eq_ignore_ascii_case(&part_order_column_name)
+                    .eq_ignore_ascii_case(part_order_column_name)
                 {
                     let mut part_ref_column_row_key_indexes = Vec::new();
                     for ref_column in column.get_ref_column_names() {
@@ -260,8 +237,7 @@ impl ObPartDescObj {
                             return Err(CommonErr(
                                     CommonErrCode::PartitionError,
                                     format!(
-                                        "ObPartDescObj::prepare partition order column {:?} refer to non-row-key column {:?}",
-                                        part_order_column_name, ref_column
+                                        "ObPartDescObj::prepare partition order column {part_order_column_name:?} refer to non-row-key column {ref_column:?}",
                                     ),
                                 ));
                         }
@@ -297,10 +273,8 @@ impl ObPartDescObj {
             let mut eval_params: Vec<Value> =
                 Vec::with_capacity(ordered_part_ref_column_row_key_relation.1.len());
             for j in 0..ordered_part_ref_column_row_key_relation.1.len() {
-                eval_params.push(
-                    row_key[ordered_part_ref_column_row_key_relation.1[j as usize] as usize]
-                        .clone(),
-                );
+                eval_params
+                    .push(row_key[ordered_part_ref_column_row_key_relation.1[j] as usize].clone());
             }
             eval_values.push(
                 ordered_part_ref_column_row_key_relation
@@ -321,9 +295,9 @@ impl ObPartDescObj {
             let _column = &ob_columns[i];
             // TODO: Collation type, _column.get_ob_collation_type()
             if row_key[i].is_max() {
-                comparable_element.push(Comparable::MAXVALUE);
+                comparable_element.push(Comparable::MaxValue);
             } else if row_key[i].is_min() {
-                comparable_element.push(Comparable::MINVALUE);
+                comparable_element.push(Comparable::MinValue);
             } else {
                 comparable_element.push(Comparable::Value(row_key[i].clone()))
             }
@@ -639,7 +613,6 @@ impl ObKeyPartDesc {
         end: &[Value],
         _end_inclusive: bool,
     ) -> Result<Vec<i64>> {
-        // diff with java sdk
         // if start=[min,min,min] end=[max,max,max], scan all partitions
         let mut is_min_max = true;
         for v in start {
@@ -667,8 +640,7 @@ impl ObKeyPartDesc {
         let mut row_keys: Vec<Value> = Vec::with_capacity(2);
         row_keys.append(&mut start.to_vec());
         row_keys.append(&mut end.to_vec());
-        let mut part_ids = Vec::with_capacity(1);
-        part_ids.push(self.get_part_id(&row_keys)?);
+        let part_ids = vec![self.get_part_id(&row_keys)?];
         Ok(part_ids)
     }
 
@@ -681,23 +653,25 @@ impl ObKeyPartDesc {
             ));
         }
         // TODO: evalRowKeyValues
-        // let mut part_id: Option<i64> = None;
         let part_ref_column_size = self
             .ob_part_desc_obj
             .ordered_part_ref_column_row_key_relations
             .len();
 
-        let mut hash_value = 0i64;
-        for i in 0..part_ref_column_size {
+        let mut hash_value = 0u64;
+        // FIXME: shall we do a check to ensure part_ref_column_size <= row_key.len()?
+        for (idx, row_key) in row_key.iter().enumerate().take(part_ref_column_size) {
             hash_value = ObKeyPartDesc::to_hashcode(
-                &row_key[i],
+                row_key,
                 &self
                     .ob_part_desc_obj
-                    .ordered_part_ref_column_row_key_relations[i]
+                    .ordered_part_ref_column_row_key_relations[idx]
                     .0,
                 hash_value,
+                &self.ob_part_desc_obj.part_func_type,
             )?;
         }
+        let mut hash_value = hash_value as i64;
         hash_value = hash_value.abs();
         Ok(
             ((self.part_space as i64) << ob_part_constants::PART_ID_BITNUM)
@@ -710,14 +684,16 @@ impl ObKeyPartDesc {
     pub fn to_hashcode(
         value: &Value,
         ref_column: &Box<dyn ObColumn>,
-        hash_code: i64,
-    ) -> Result<i64> {
+        hash_code: u64,
+        part_func_type: &PartFuncType,
+    ) -> Result<u64> {
         match value {
             // varchar & varbinary
             Value::String(v, meta) => ObKeyPartDesc::varchar_hash(
                 Value::String(v.clone(), meta.clone()),
                 ref_column.get_ob_collation_type(),
                 hash_code,
+                part_func_type.to_owned(),
             ),
 
             Value::Int64(v, _meta) => ObKeyPartDesc::long_hash(*v, hash_code),
@@ -727,6 +703,7 @@ impl ObKeyPartDesc {
                 Value::Bytes(v.clone(), meta.clone()),
                 ref_column.get_ob_collation_type(),
                 hash_code,
+                part_func_type.to_owned(),
             ),
             // TODO: support value Time
             Value::Time(_v, _meta) => unimplemented!(),
@@ -737,8 +714,8 @@ impl ObKeyPartDesc {
     }
 
     // TODO: check if murmur2 hash value is correct(java sdk)
-    pub fn long_hash(value: i64, hash_code: i64) -> Result<i64> {
-        Ok(murmur2::murmur64a(value.to_string().as_bytes(), hash_code as u64) as i64)
+    pub fn long_hash(value: i64, hash_code: u64) -> Result<u64> {
+        Ok(murmur2::murmur64a(&value.to_ne_bytes(), hash_code))
     }
 
     // TODO: support value Time
@@ -754,14 +731,14 @@ impl ObKeyPartDesc {
     pub fn varchar_hash(
         value: Value,
         collation_type: &CollationType,
-        hash_code: i64,
-    ) -> Result<i64> {
+        hash_code: u64,
+        part_func_type: PartFuncType,
+    ) -> Result<u64> {
         let seed: u64 = 0xc6a4_a793_5bd1_e995;
-        let bytes: Vec<u8>;
-        match value {
-            Value::String(v, _meta) => bytes = v.into_bytes(),
+        let bytes = match value {
+            Value::String(v, _meta) => v.into_bytes(),
 
-            Value::Bytes(v, _meta) => bytes = v,
+            Value::Bytes(v, _meta) => v,
             _ => {
                 error!(
                     "ObKeyPartDesc::varchar_hash varchar not supported, ObCollationType:{:?} object:{:?}",
@@ -770,34 +747,48 @@ impl ObKeyPartDesc {
                 return Err(CommonErr(
                     CommonErrCode::PartitionError,
                     format!(
-                        "ObKeyPartDesc::varchar_hash varchar not supported, ObCollationType:{:?} object:{:?}",
-                        collation_type, value
+                        "ObKeyPartDesc::varchar_hash varchar not supported, ObCollationType:{collation_type:?} object:{value:?}",
                     ),
                 ));
             }
-        }
+        };
         match collation_type {
-            // TODO: support collation UTF8MB4_GENERAL_CI, current use UTF8MB4_BIN hash
             CollationType::UTF8MB4GeneralCi => {
-                 // unimplemented!();
-                 return Ok(ObHashSortUtf8mb4::ob_hash_sort_utf8_mb4(
-                     &bytes,
-                     bytes.len() as i32,
-                     hash_code,
-                     seed as i64,
-                 ));
+                if part_func_type == KeyV3 || part_func_type == KeyImplicitV2 {
+                    Ok(ObHashSortUtf8mb4::ob_hash_sort_utf8_mb4(
+                        &bytes,
+                        bytes.len() as i32,
+                        hash_code,
+                        seed,
+                        true,
+                    ))
+                } else {
+                    Ok(ObHashSortUtf8mb4::ob_hash_sort_utf8_mb4(
+                        &bytes,
+                        bytes.len() as i32,
+                        hash_code,
+                        seed,
+                        false,
+                    ))
+                }
             }
-            CollationType::UTF8MB4Bin => Ok(ObHashSortUtf8mb4::ob_hash_sort_mb_bin(
-                &bytes,
-                bytes.len() as i32,
-                hash_code,
-                seed as i64,
-            )),
+            CollationType::UTF8MB4Bin => {
+                if part_func_type == KeyV3 || part_func_type == KeyImplicitV2 {
+                    Ok(murmur2::murmur64a(&bytes, hash_code))
+                } else {
+                    Ok(ObHashSortUtf8mb4::ob_hash_sort_mb_bin(
+                        &bytes,
+                        bytes.len() as i32,
+                        hash_code,
+                        seed,
+                    ))
+                }
+            }
             CollationType::Binary => Ok(ObHashSortUtf8mb4::ob_hash_sort_bin(
                 &bytes,
                 bytes.len() as i32,
                 hash_code,
-                seed as i64,
+                seed,
             )),
             _ => {
                 error!(
@@ -807,8 +798,7 @@ impl ObKeyPartDesc {
                 Err(CommonErr(
                     CommonErrCode::PartitionError,
                     format!(
-                        "ObKeyPartDesc::varchar_hash not supported collation type, type:{:?}",
-                        collation_type
+                        "ObKeyPartDesc::varchar_hash not supported collation type, type:{collation_type:?}",
                     ),
                 ))
             }

@@ -5,19 +5,18 @@
  * Copyright (C) 2021 OceanBase
  * %%
  * OBKV Table Client Framework is licensed under Mulan PSL v2.
- * You can use this software according to the terms and conditions of the Mulan PSL v2.
- * You may obtain a copy of Mulan PSL v2 at:
+ * You can use this software according to the terms and conditions of the
+ * Mulan PSL v2. You may obtain a copy of Mulan PSL v2 at:
  *          http://license.coscl.org.cn/MulanPSL2
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
- * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY
+ * KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+ * NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PSL v2 for more details.
  * #L%
  */
 
 #[allow(unused_imports)]
 #[allow(unused)]
-
 use std::{
     sync::{
         atomic::{AtomicUsize, Ordering},
@@ -27,8 +26,7 @@ use std::{
     time::Duration,
 };
 
-use obkv::error::CommonErrCode;
-use obkv::{ObTableClient, ResultCodes, Table, TableQuery, Value};
+use obkv::{error::CommonErrCode, ObTableClient, ResultCodes, Table, TableQuery, Value};
 use time::PreciseTime;
 
 pub struct BaseTest {
@@ -51,8 +49,8 @@ impl BaseTest {
             let counter = counter.clone();
             handles.push(thread::spawn(move || {
                 for i in 0..100 {
-                    let key = format!("foo{}", i);
-                    let value = format!("bar{}", i);
+                    let key = format!("foo{i}");
+                    let value = format!("bar{i}");
                     let result = client
                         .insert_or_update(
                             table_name,
@@ -64,11 +62,7 @@ impl BaseTest {
                     assert_eq!(1, result);
 
                     let mut result = client
-                        .get(
-                            table_name,
-                            vec![Value::from(key)],
-                            vec!["c2".to_owned()],
-                        )
+                        .get(table_name, vec![Value::from(key)], vec!["c2".to_owned()])
                         .expect("fail to get");
                     assert_eq!(1, result.len());
                     let v = result.remove("c2").unwrap();
@@ -101,8 +95,8 @@ impl BaseTest {
             let counter = counter.clone();
             handles.push(thread::spawn(move || {
                 for i in 0..100 {
-                    let key :i64 = i;
-                    let value = format!("value{}", i);
+                    let key: i64 = i;
+                    let value = format!("value{i}");
                     let result = client
                         .insert_or_update(
                             table_name,
@@ -114,11 +108,7 @@ impl BaseTest {
                     assert_eq!(1, result);
 
                     let mut result = client
-                        .get(
-                            table_name,
-                            vec![Value::from(key)],
-                            vec!["c2".to_owned()],
-                        )
+                        .get(table_name, vec![Value::from(key)], vec!["c2".to_owned()])
                         .expect("fail to get");
                     assert_eq!(1, result.len());
                     let v = result.remove("c2").unwrap();
@@ -198,15 +188,13 @@ impl BaseTest {
     }
 
     pub fn test_varchar_get(&self, table_name: &str) {
-        let result = self.client.get(
-            table_name,
-            vec![Value::from("bar")],
-            vec!["c2".to_owned()],
-        );
+        let result = self
+            .client
+            .get(table_name, vec![Value::from("bar")], vec!["c2".to_owned()]);
         assert!(result.is_ok());
         assert!(result.unwrap().is_empty());
 
-        self.assert_varchar_get_result(table_name,"foo", "bar");
+        self.assert_varchar_get_result(table_name, "foo", "bar");
     }
 
     pub fn test_varchar_update(&self, table_name: &str) {
@@ -274,7 +262,7 @@ impl BaseTest {
         assert!(result.is_ok());
         assert_eq!(1, result.unwrap());
 
-        self.assert_varchar_get_result(table_name,"unknown", "baz");
+        self.assert_varchar_get_result(table_name, "unknown", "baz");
     }
 
     pub fn test_varchar_append(&self, table_name: &str) {
@@ -299,11 +287,9 @@ impl BaseTest {
         assert!(result.is_ok());
         assert_eq!(1, result.unwrap());
 
-        let result = self.client.get(
-            table_name,
-            vec![Value::from("foo")],
-            vec!["c3".to_owned()],
-        );
+        let result = self
+            .client
+            .get(table_name, vec![Value::from("foo")], vec!["c3".to_owned()]);
         assert!(result.is_ok());
         let mut result = result.unwrap();
         assert_eq!(1, result.len());
@@ -319,11 +305,9 @@ impl BaseTest {
         assert!(result.is_ok());
         assert_eq!(1, result.unwrap());
 
-        let result = self.client.get(
-            table_name,
-            vec![Value::from("foo")],
-            vec!["c3".to_owned()],
-        );
+        let result = self
+            .client
+            .get(table_name, vec![Value::from("foo")], vec!["c3".to_owned()]);
         assert!(result.is_ok());
         let mut result = result.unwrap();
         assert_eq!(1, result.len());
@@ -332,38 +316,26 @@ impl BaseTest {
     }
 
     pub fn clean_varchar_table(&self, table_name: &str) {
-        let result = self
-            .client
-            .delete(table_name, vec![Value::from("unknown")]);
+        let result = self.client.delete(table_name, vec![Value::from("unknown")]);
         assert!(result.is_ok());
-        let result = self
-            .client
-            .delete(table_name, vec![Value::from("foo")]);
+        let result = self.client.delete(table_name, vec![Value::from("foo")]);
         assert!(result.is_ok());
-        let result = self
-            .client
-            .delete(table_name, vec![Value::from("bar")]);
+        let result = self.client.delete(table_name, vec![Value::from("bar")]);
         assert!(result.is_ok());
-        let result = self
-            .client
-            .delete(table_name, vec![Value::from("baz")]);
+        let result = self.client.delete(table_name, vec![Value::from("baz")]);
         assert!(result.is_ok());
 
         for i in 0..100 {
-            let key = format!("foo{}", i);
-            let result = self
-                .client
-                .delete(table_name, vec![Value::from(key)]);
+            let key = format!("foo{i}");
+            let result = self.client.delete(table_name, vec![Value::from(key)]);
             assert!(result.is_ok());
         }
     }
 
     pub fn clean_bigint_table(&self, table_name: &str) {
         for i in 0..100 {
-            let key :i64 = i;
-            let result = self
-                .client
-                .delete(table_name, vec![Value::from(key)]);
+            let key: i64 = i;
+            let result = self.client.delete(table_name, vec![Value::from(key)]);
             assert!(result.is_ok());
         }
     }
@@ -425,11 +397,9 @@ impl BaseTest {
     }
 
     pub fn test_blob_get(&self, table_name: &str) {
-        let result = self.client.get(
-            table_name,
-            vec![Value::from("bar")],
-            vec!["c2".to_owned()],
-        );
+        let result = self
+            .client
+            .get(table_name, vec![Value::from("bar")], vec!["c2".to_owned()]);
         assert!(result.is_ok());
         assert!(result.unwrap().is_empty());
 
@@ -531,10 +501,9 @@ impl BaseTest {
 
     pub fn test_varchar_exceptions(&self, table_name: &str) {
         // delete exception_key
-        let result = self.client.delete(
-            table_name,
-            vec![Value::from("exception_key")],
-        );
+        let result = self
+            .client
+            .delete(table_name, vec![Value::from("exception_key")]);
         // assert result is ok
         assert!(result.is_ok());
 
@@ -601,10 +570,9 @@ impl BaseTest {
         assert!(result.is_ok());
 
         // delete exception_key
-        let result = self.client.delete(
-            table_name,
-            vec![Value::from("exception_key")],
-        );
+        let result = self
+            .client
+            .delete(table_name, vec![Value::from("exception_key")]);
         // assert result is ok
         assert!(result.is_ok());
     }
@@ -621,8 +589,7 @@ impl BaseTest {
     }
 
     pub fn test_stream_query(&self, table_name: &str) {
-        // print table name
-        println!("test_stream_query for table name: {} is unsupported now", table_name);
+        println!("test_stream_query for table name: {table_name} is unsupported now");
         // for i in 0..10 {
         //     let key = format!("{}", i);
         //     self.insert_query_test_record(table_name, &key, &key);
@@ -634,7 +601,8 @@ impl BaseTest {
         //     .batch_size(2)
         //     .select(vec!["c2".to_owned()])
         //     .primary_index()
-        //     .add_scan_range(vec![Value::from("0")], true, vec![Value::from("9")], true);
+        //     .add_scan_range(vec![Value::from("0")], true,
+        // vec![Value::from("9")], true);
         //
         // let result_set = query.execute();
         //
@@ -683,8 +651,7 @@ impl BaseTest {
 
         assert_eq!(5, result_set.cache_size());
 
-        let mut i = 0;
-        for row in result_set {
+        for (i, row) in result_set.enumerate() {
             assert!(row.is_ok());
             let mut row = row.unwrap();
             match i {
@@ -695,7 +662,6 @@ impl BaseTest {
                 4 => assert_eq!("567c2", row.remove("c2").unwrap().as_string()),
                 _ => unreachable!(),
             }
-            i = i + 1;
         }
 
         //reverse order
@@ -720,8 +686,7 @@ impl BaseTest {
 
         assert_eq!(5, result_set.cache_size());
 
-        let mut i = 0;
-        for row in result_set {
+        for (i, row) in result_set.enumerate() {
             assert!(row.is_ok());
             let mut row = row.unwrap();
             match i {
@@ -732,7 +697,6 @@ impl BaseTest {
                 4 => assert_eq!("123c2", row.remove("c2").unwrap().as_string()),
                 _ => unreachable!(),
             }
-            i = i + 1;
         }
 
         // >= 123 && <= 123
@@ -787,8 +751,7 @@ impl BaseTest {
 
         assert_eq!(3, result_set.cache_size());
 
-        let mut i = 0;
-        for row in result_set {
+        for (i, row) in result_set.enumerate() {
             assert!(row.is_ok());
             let mut row = row.unwrap();
             match i {
@@ -797,7 +760,6 @@ impl BaseTest {
                 2 => assert_eq!("456c2", row.remove("c2").unwrap().as_string()),
                 _ => unreachable!(),
             }
-            i = i + 1;
         }
 
         // > 123 && < 567
@@ -820,8 +782,7 @@ impl BaseTest {
 
         assert_eq!(3, result_set.cache_size());
 
-        let mut i = 0;
-        for row in result_set {
+        for (i, row) in result_set.enumerate() {
             assert!(row.is_ok());
             let mut row = row.unwrap();
             match i {
@@ -830,7 +791,6 @@ impl BaseTest {
                 2 => assert_eq!("456c2", row.remove("c2").unwrap().as_string()),
                 _ => unreachable!(),
             }
-            i = i + 1;
         }
 
         // > 123 && <= 567
@@ -853,8 +813,7 @@ impl BaseTest {
 
         assert_eq!(4, result_set.cache_size());
 
-        let mut i = 0;
-        for row in result_set {
+        for (i, row) in result_set.enumerate() {
             assert!(row.is_ok());
             let mut row = row.unwrap();
             match i {
@@ -864,7 +823,6 @@ impl BaseTest {
                 3 => assert_eq!("567c2", row.remove("c2").unwrap().as_string()),
                 _ => unreachable!(),
             }
-            i = i + 1;
         }
 
         // >=123 && < 567
@@ -887,8 +845,7 @@ impl BaseTest {
 
         assert_eq!(4, result_set.cache_size());
 
-        let mut i = 0;
-        for row in result_set {
+        for (i, row) in result_set.enumerate() {
             assert!(row.is_ok());
             let mut row = row.unwrap();
             match i {
@@ -898,7 +855,6 @@ impl BaseTest {
                 3 => assert_eq!("456c2", row.remove("c2").unwrap().as_string()),
                 _ => unreachable!(),
             }
-            i = i + 1;
         }
 
         // >= 12 && <= 126
@@ -921,8 +877,7 @@ impl BaseTest {
 
         assert_eq!(2, result_set.cache_size());
 
-        let mut i = 0;
-        for row in result_set {
+        for (i, row) in result_set.enumerate() {
             assert!(row.is_ok());
             let mut row = row.unwrap();
             match i {
@@ -930,7 +885,6 @@ impl BaseTest {
                 1 => assert_eq!("124c2", row.remove("c2").unwrap().as_string()),
                 _ => unreachable!(),
             }
-            i = i + 1;
         }
 
         // (>=12 && <=126) || (>="456" && <="567")
@@ -955,8 +909,7 @@ impl BaseTest {
         assert!(result_set.is_ok());
         let result_set = result_set.unwrap();
         assert_eq!(4, result_set.cache_size());
-        let mut i = 0;
-        for row in result_set {
+        for (i, row) in result_set.enumerate() {
             assert!(row.is_ok());
             let mut row = row.unwrap();
             match i {
@@ -966,7 +919,6 @@ impl BaseTest {
                 3 => assert_eq!("567c2", row.remove("c2").unwrap().as_string()),
                 _ => unreachable!(),
             }
-            i = i + 1;
         }
 
         // (>=124 && <=124)
@@ -1043,18 +995,16 @@ impl BaseTest {
         assert!(query_result_set.is_ok());
         let query_result_set = query_result_set.unwrap();
         assert_eq!(4, query_result_set.cache_size());
-        let mut j = 0;
-        for row in query_result_set {
+        for (i, row) in query_result_set.enumerate() {
             assert!(row.is_ok());
             let mut row = row.unwrap();
-            match j {
+            match i {
                 0 => assert_eq!("123c2", row.remove("c2").unwrap().as_string()),
                 1 => assert_eq!("124c2", row.remove("c2").unwrap().as_string()),
                 2 => assert_eq!("456c2", row.remove("c2").unwrap().as_string()),
                 3 => assert_eq!("567c2", row.remove("c2").unwrap().as_string()),
                 _ => unreachable!(),
             }
-            j = j + 1;
         }
 
         //Close result set before usage
@@ -1137,7 +1087,8 @@ impl BaseTest {
         // assert!(e.is_ob_exception());
         // // the exception is OB_TIMEOUT on ob2.x and is OB_TRANS_ROLLBACKED in ob1.x.
         // let code = e.ob_result_code().unwrap();
-        // assert!(code == ResultCodes::OB_TRANS_ROLLBACKED || code == ResultCodes::OB_TRANS_TIMEOUT);
+        // assert!(code == ResultCodes::OB_TRANS_ROLLBACKED || code ==
+        // ResultCodes::OB_TRANS_TIMEOUT);
 
         // TODO
         //In session timeout
@@ -1173,7 +1124,10 @@ impl BaseTest {
         let row = result_set.next();
         assert!(row.is_some());
         let row = row.unwrap();
-        println!("TODO: could not find data, row error code: {:?}", row.unwrap_err().ob_result_code());
+        println!(
+            "TODO: could not find data, row error code: {:?}",
+            row.unwrap_err().ob_result_code()
+        );
         // assert!(row.is_ok());
     }
 }
