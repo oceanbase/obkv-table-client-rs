@@ -1289,7 +1289,7 @@ impl ObTableClientInner {
 
             servers.push(addr.clone());
 
-            match self.add_ob_table(&addr){
+            match self.add_ob_table(addr){
                 Ok(_) => conn_count += 1,
                 Err(e) => warn!("ObTableClientInner::init_metadata add ob table fail with location:{:?}, err:{:?}",
                       replica_location.addr(), e)
@@ -1298,8 +1298,7 @@ impl ObTableClientInner {
         if conn_count == 0 {
             return Err(CommonErr(
                 CommonErrCode::InvalidServerAddr,
-                format!(
-                    "ObTableClientInner::init_metadata failed because all ob server address are invalid!")
+                    "ObTableClientInner::init_metadata failed because all ob server address are invalid!".to_string()
                 ));
         }
 
