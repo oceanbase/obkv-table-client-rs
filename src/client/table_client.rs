@@ -1275,6 +1275,7 @@ impl ObTableClientInner {
 
         let mut servers: Vec<ObServerAddr> = vec![];
 
+        let mut conn_count = 0;
         for replica_location in table_entry.table_location().replica_locations().iter() {
             let info = replica_location.info();
 
@@ -1288,7 +1289,17 @@ impl ObTableClientInner {
 
             servers.push(addr.clone());
 
-            self.add_ob_table(addr)?;
+            match self.add_ob_table(addr){
+                Ok(_) => conn_count += 1,
+                Err(e) => warn!("ObTableClientInner::init_metadata add ob table fail with location:{:?}, err:{:?}",
+                      replica_location.addr(), e)
+            }
+        }
+        if conn_count == 0 {
+            return Err(CommonErr(
+                CommonErrCode::InvalidServerAddr,
+                    "ObTableClientInner::init_metadata failed because all ob server address are invalid!".to_string()
+                ));
         }
 
         self.server_roster.reset(servers);
