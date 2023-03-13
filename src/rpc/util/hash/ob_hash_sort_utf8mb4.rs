@@ -3449,7 +3449,33 @@ mod test {
     fn ob_hash_sort_mb_bin_test() {
         let s = String::from("partitionKey2");
         let seed: u64 = 0xc6a4a7935bd1e995;
-        let n = ObHashSortUtf8mb4::ob_hash_sort_bin(&s.into_bytes(), 13, 0, seed);
+        let n = ObHashSortUtf8mb4::ob_hash_sort_mb_bin(&s.into_bytes(), 13, 0, seed);
         assert_eq!(n as i64, -728277002377450284);
+    }
+
+    #[test]
+    fn ob_mb_wc_utf8mb4_normal_test() {
+        let s = String::from("partitionKey3");
+        let mut wc: u32 = 0;
+        let n = ObHashSortUtf8mb4::ob_mb_wc_utf8mb4_normal(&mut wc, s.as_bytes(), 9, 13);
+        assert_eq!(n as i64, 1);
+        assert_eq!(wc, 75);
+    }
+
+    #[test]
+    fn ob_mb_wc_utf8mb4_test() {
+        let s = String::from("partitionKey4");
+        let mut wc: u32 = 0;
+        let n = ObHashSortUtf8mb4::ob_mb_wc_utf8mb4(&mut wc, s.as_bytes(), 9, 13);
+        assert_eq!(n as i64, 1);
+        assert_eq!(wc, 75);
+    }
+
+    #[test]
+    fn ob_hash_sort_utf8_mb4_test() {
+        let s = String::from("partitionKey5");
+        let seed: u64 = 0xc6a4a7935bd1e995;
+        let n = ObHashSortUtf8mb4::ob_hash_sort_utf8_mb4(&s.into_bytes(), 13, 0, seed, true);
+        assert_eq!(n as i64, 668434772661134333);
     }
 }
