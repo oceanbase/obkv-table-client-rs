@@ -18,9 +18,15 @@
 #![allow(dead_code)]
 #![allow(clippy::nonminimal_bool)]
 
-macro_rules! is_continuation_byte {
+macro_rules! is_continuation_byte_normal {
     ($byte:expr) => {
         ($byte & 0xC0) == 0x80
+    };
+}
+
+macro_rules! is_continuation_byte {
+    ($byte:expr) => {
+        ($byte ^ 0x80) < 0x40
     };
 }
 
@@ -3278,6 +3284,61 @@ impl ObHashSortUtf8mb4 {
             if !(is_continuation_byte!(c1)) {
                 return OB_CS_ILSEQ;
             }
+            *wc = ((c & 0x1F) as u32) << 6 | (c1 ^ 0x80) as u32;
+            2
+        } else if c < 0xF0 {
+            if start + 3 > end {
+                // we need 3 characters
+                return OB_CS_TOOSMALL3;
+            }
+            let c1 = s[start + 1];
+            let c2 = s[start + 2];
+            if !(is_continuation_byte!(c1) && is_continuation_byte!(c2) && (c >= 0xE1 || c1 >= 0xA0)) {
+                return OB_CS_ILSEQ;
+            }
+            *wc = ((c & 0x0F) as u32) << 12 | ((c1 ^ 0x80) as u32) << 6 | (c2 ^ 0x80) as u32;
+            3
+        } else if c < 0xF5 {
+            if start + 4 > end {
+                // we need 4 characters
+                return OB_CS_TOOSMALL;
+            }
+            let c1 = s[start + 1];
+            let c2 = s[start + 2];
+            let c3 = s[start + 3];
+            if !(is_continuation_byte!(c1) && is_continuation_byte!(c2) && is_continuation_byte!(c3) && (c >= 0xF1 || c1 >= 0x90) && (c <= 0xF3 || c1 <= 0x8F)) {
+                return OB_CS_ILSEQ;
+            }
+            *wc = ((c & 0x07) as u32) << 18 | ((c1 ^ 0x80) as u32) << 12 | ((c2 ^ 0x80) as u32) << 6 | (c3 ^ 0x80) as u32;
+            4
+        } else {
+            OB_CS_ILSEQ
+        }
+    }
+
+    fn ob_mb_wc_utf8mb4_normal(wc: &mut u32, s: &[u8], start: i32, end: i32) -> i32 {
+        // This content is another way to implement ob_mb_wc_utf8mb4, recognize to use the first one.
+        let start: usize = start as usize;
+        let end: usize = end as usize;
+        if start >= end {
+            return OB_CS_TOOSMALL;
+        }
+
+        let c = s[start];
+        if c < 0x80 {
+            *wc = c as u32;
+            1
+        } else if c < 0xC2 {
+            OB_CS_ILSEQ
+        } else if c < 0xE0 {
+            if start + 2 > end {
+                // we need 2 characters
+                return OB_CS_TOOSMALL2;
+            }
+            let c1 = s[start + 1];
+            if !(is_continuation_byte_normal!(c1)) {
+                return OB_CS_ILSEQ;
+            }
             *wc = ((c & 0x1F) as u32) << 6 | (c1 & 0x3F) as u32;
             2
         } else if c < 0xF0 {
@@ -3287,7 +3348,7 @@ impl ObHashSortUtf8mb4 {
             }
             let c1 = s[start + 1];
             let c2 = s[start + 2];
-            if !(is_continuation_byte!(c1) && is_continuation_byte!(c2)) {
+            if !(is_continuation_byte_normal!(c1) && is_continuation_byte_normal!(c2)) {
                 return OB_CS_ILSEQ;
             }
             *wc = ((c & 0x0F) as u32) << 12 | ((c1 & 0x3F) as u32) << 6 | (c2 & 0x3F) as u32;
@@ -3351,12 +3412,11 @@ impl ObHashSortUtf8mb4 {
     }
 
     pub fn ob_hash_sort_bin(s: &[u8], len: i32, n1: u64, n2: u64) -> u64 {
+        // for 2.x
         let mut n1 = n1;
         let mut n2 = n2;
         for i in 0..len {
-            let n1_tmp = (((n1 & 63) + n2) as i128 * ObHashSortUtf8mb4::to_i128(s[i as usize])
-                + (n1 << 8) as i128) as u64;
-            n1 ^= n1_tmp;
+            n1 ^= (((n1 & 63) + n2).wrapping_mul(ObHashSortUtf8mb4::to_u64(s[i as usize]))).wrapping_add(n1 << 8);
             n2 += 3;
         }
         n1
@@ -3389,7 +3449,33 @@ mod test {
     fn ob_hash_sort_mb_bin_test() {
         let s = String::from("partitionKey2");
         let seed: u64 = 0xc6a4a7935bd1e995;
-        let n = ObHashSortUtf8mb4::ob_hash_sort_bin(&s.into_bytes(), 13, 0, seed);
+        let n = ObHashSortUtf8mb4::ob_hash_sort_mb_bin(&s.into_bytes(), 13, 0, seed);
         assert_eq!(n as i64, -728277002377450284);
+    }
+
+    #[test]
+    fn ob_mb_wc_utf8mb4_normal_test() {
+        let s = String::from("partitionKey3");
+        let mut wc: u32 = 0;
+        let n = ObHashSortUtf8mb4::ob_mb_wc_utf8mb4_normal(&mut wc, s.as_bytes(), 9, 13);
+        assert_eq!(n as i64, 1);
+        assert_eq!(wc, 75);
+    }
+
+    #[test]
+    fn ob_mb_wc_utf8mb4_test() {
+        let s = String::from("partitionKey4");
+        let mut wc: u32 = 0;
+        let n = ObHashSortUtf8mb4::ob_mb_wc_utf8mb4(&mut wc, s.as_bytes(), 9, 13);
+        assert_eq!(n as i64, 1);
+        assert_eq!(wc, 75);
+    }
+
+    #[test]
+    fn ob_hash_sort_utf8_mb4_test() {
+        let s = String::from("partitionKey5");
+        let seed: u64 = 0xc6a4a7935bd1e995;
+        let n = ObHashSortUtf8mb4::ob_hash_sort_utf8_mb4(&s.into_bytes(), 13, 0, seed, true);
+        assert_eq!(n as i64, 668434772661134333);
     }
 }

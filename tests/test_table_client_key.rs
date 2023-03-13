@@ -388,7 +388,7 @@ fn test_batch() {
 }
 
 #[test]
-fn test_partition() {
+fn test_partition_bigint() {
     let client = utils::common::build_normal_client();
     const BIGINT_TABLE_NAME: &str = "TEST_TABLE_PARTITION_BIGINT_KEY";
     const VARCHAR_BIN_TABLE_NAME: &str = "TEST_TABLE_PARTITION_VARCHAR_BIN_KEY";
@@ -416,6 +416,13 @@ fn test_partition() {
         let result = result.unwrap();
         assert_eq!(1, result.len());
     }
+}
+
+#[test]
+fn test_partition_varchar_bin() {
+    let client = utils::common::build_normal_client();
+    const VARCHAR_BIN_TABLE_NAME: &str = "TEST_TABLE_PARTITION_VARCHAR_BIN_KEY";
+    client.add_row_key_element(VARCHAR_BIN_TABLE_NAME, vec!["c1".to_string()]);
 
     // test varchar utf bin partition
     for i in 926..977 {
@@ -436,6 +443,30 @@ fn test_partition() {
         let result = result.unwrap();
         assert_eq!(1, result.len());
     }
+    for _i in 0..64 {
+        let rowkey: String = thread_rng().sample_iter(&Alphanumeric).take(512).collect();
+        let sql_rowkey = format!("'{rowkey}'");
+        let result = client.delete(VARCHAR_BIN_TABLE_NAME, vec![Value::from(rowkey.to_owned())]);
+        assert!(result.is_ok());
+        let insert_sql =
+            format!("insert into {VARCHAR_BIN_TABLE_NAME} values({sql_rowkey}, 'value');");
+        client.execute_sql(&insert_sql).expect("fail to insert");
+        let result = client.get(
+            VARCHAR_BIN_TABLE_NAME,
+            vec![Value::from(rowkey.to_owned())],
+            vec!["c2".to_owned()],
+        );
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(1, result.len());
+    }
+}
+
+#[test]
+fn test_partition_varchar_general_ci() {
+    let client = utils::common::build_normal_client();
+    const VARCHAR_TABLE_NAME: &str = "TEST_TABLE_PARTITION_VARCHAR_KEY";
+    client.add_row_key_element(VARCHAR_TABLE_NAME, vec!["c1".to_string()]);
 
     // test varchar partition
     for i in 926..977 {
@@ -465,6 +496,50 @@ fn test_partition() {
         client.execute_sql(&insert_sql).expect("fail to insert");
         let result = client.get(
             VARCHAR_TABLE_NAME,
+            vec![Value::from(rowkey.to_owned())],
+            vec!["c2".to_owned()],
+        );
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(1, result.len());
+    }
+}
+
+#[test]
+fn test_partition_varbinary() {
+    let client = utils::common::build_normal_client();
+    const VARBINARY_TABLE_NAME: &str = "TEST_TABLE_PARTITION_VARBINARY_KEY";
+    client.add_row_key_element(VARBINARY_TABLE_NAME, vec!["c1".to_string()]);
+
+    // test varbinary partition
+    for i in 926..977 {
+        let rowkey = format!("{i}");
+        let result = client.delete(VARBINARY_TABLE_NAME, vec![Value::from(rowkey.to_owned())]);
+        assert!(result.is_ok());
+        let insert_sql = format!("insert into {VARBINARY_TABLE_NAME} values({rowkey}, 'value');");
+        client.execute_sql(&insert_sql).expect("fail to insert");
+    }
+    for i in 926..977 {
+        let rowkey = format!("{i}");
+        let result = client.get(
+            VARBINARY_TABLE_NAME,
+            vec![Value::from(rowkey.to_owned())],
+            vec!["c2".to_owned()],
+        );
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(1, result.len());
+    }
+    for _i in 0..64 {
+        let rowkey: String = thread_rng().sample_iter(&Alphanumeric).take(512).collect();
+        let sql_rowkey = format!("'{rowkey}'");
+        let result = client.delete(VARBINARY_TABLE_NAME, vec![Value::from(rowkey.to_owned())]);
+        assert!(result.is_ok());
+        let insert_sql =
+            format!("insert into {VARBINARY_TABLE_NAME} values({sql_rowkey}, 'value');");
+        client.execute_sql(&insert_sql).expect("fail to insert");
+        let result = client.get(
+            VARBINARY_TABLE_NAME,
             vec![Value::from(rowkey.to_owned())],
             vec!["c2".to_owned()],
         );

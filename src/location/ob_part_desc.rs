@@ -774,6 +774,7 @@ impl ObKeyPartDesc {
                         true,
                     ))
                 } else {
+                    // TODO: may have problem in 2.x
                     Ok(ObHashSortUtf8mb4::ob_hash_sort_utf8_mb4(
                         &bytes,
                         bytes.len() as i32,
@@ -795,12 +796,18 @@ impl ObKeyPartDesc {
                     ))
                 }
             }
-            CollationType::Binary => Ok(ObHashSortUtf8mb4::ob_hash_sort_bin(
-                &bytes,
-                bytes.len() as i32,
-                hash_code,
-                seed,
-            )),
+            CollationType::Binary => {
+                if part_func_type == KeyV3 || part_func_type == KeyImplicitV2 {
+                    Ok(murmur2::murmur64a(&bytes, hash_code))
+                } else {
+                    Ok(ObHashSortUtf8mb4::ob_hash_sort_bin(
+                        &bytes,
+                        bytes.len() as i32,
+                        hash_code,
+                        seed,
+                    ))
+                }
+            }
             _ => {
                 error!(
                     "ObKeyPartDesc::varchar_hash not supported collation type, type:{:?}",

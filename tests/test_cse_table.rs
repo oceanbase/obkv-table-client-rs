@@ -283,7 +283,7 @@ fn test_index_key_part() {
     let rowk_keys = vec![Value::from("a"), Value::from("site"), Value::from("et2")];
 
     let result = client.get_table(cse_table, &rowk_keys, false);
-    assert_eq!(9, result.unwrap().0);
+    assert_eq!(8, result.unwrap().0);
 }
 
 // ```sql
@@ -378,7 +378,7 @@ fn test_field_key_part() {
 
     let ret = client.get_table(cse_table, &rowk_keys, false);
     assert!(ret.is_ok());
-    assert_eq!(7, ret.unwrap().0);
+    assert_eq!(3, ret.unwrap().0);
 }
 
 // The create sql of the test table is:
