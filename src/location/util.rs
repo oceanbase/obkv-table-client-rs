@@ -522,11 +522,7 @@ impl ObPartIdCalculator {
         }
         if let Some(id1) = part_id1 {
             if let Some(id2) = part_id2 {
-                return Some(
-                    id1 << ob_part_constants::OB_PART_ID_SHIFT
-                        | id2
-                        | ob_part_constants::OB_TWOPART_BEGIN_MASK,
-                );
+                return Some(ob_part_constants::generate_phy_part_id(id1, id2));
             }
         }
         None
