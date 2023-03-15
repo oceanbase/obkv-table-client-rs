@@ -798,32 +798,33 @@ impl ObTableClientInner {
                                 ));
                             }
 
-                            let part_id1 = first_part_desc.get_part_id(&row_key[..first_part_len]);
-                            let part_id2 = sub_part_desc.get_part_id(&row_key[first_part_len..]);
-                            match (part_id1, part_id2) {
+                            let first_part_id =
+                                first_part_desc.get_part_id(&row_key[..first_part_len]);
+                            let sub_part_id = sub_part_desc.get_part_id(&row_key[first_part_len..]);
+                            return match (first_part_id, sub_part_id) {
                                 (Err(e1), Err(e2)) => {
                                     error!("first_part_desc get_part_id err:{:?}, sub_part_desc get_part_id err:{:?}", e1, e2);
-                                    return Err(CommonErr(
+                                    Err(CommonErr(
                                         CommonErrCode::PartitionError,
                                         "first_part_desc get_part_id err and sub_part_desc get_part_id err".to_owned(),
-                                    ));
+                                    ))
                                 }
                                 (Err(e1), Ok(_)) => {
                                     error!("first_part_desc get_part_id err:{:?}", e1);
-                                    return Err(CommonErr(
+                                    Err(CommonErr(
                                         CommonErrCode::PartitionError,
                                         "first_part_desc get_part_id err ".to_owned(),
-                                    ));
+                                    ))
                                 }
                                 (Ok(_), Err(e2)) => {
                                     error!("sub_part_desc get_part_id err:{:?}", e2);
-                                    return Err(CommonErr(
+                                    Err(CommonErr(
                                         CommonErrCode::PartitionError,
                                         "sub_part_desc get_part_id err".to_owned(),
-                                    ));
+                                    ))
                                 }
                                 (Ok(id1), Ok(id2)) => {
-                                    return if id1 < 0 || id2 < 0 {
+                                    if id1 < 0 || id2 < 0 {
                                         error!("first_part_desc get_part_id:{}, sub_part_desc get_part_id:{}", id1, id2);
                                         Err(CommonErr(
                                             CommonErrCode::PartitionError,
@@ -833,7 +834,7 @@ impl ObTableClientInner {
                                         Ok(generate_phy_part_id(id1, id2))
                                     }
                                 }
-                            }
+                            };
                         }
                     }
                 }
