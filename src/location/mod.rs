@@ -387,7 +387,19 @@ impl ObPartitionEntry {
         &self,
         part_id: i64,
     ) -> Option<&ObPartitionLocation> {
+        // logic_id = part_id in partition one
         self.parititon_location.get(&part_id)
+    }
+
+    pub fn get_sub_partition_location_with_part_id(
+        &self,
+        part_id: i64,
+        sub_part_nums: i32,
+    ) -> Option<&ObPartitionLocation> {
+        // only for template sub partition
+        let logic_id = ob_part_constants::extract_part_idx(part_id) * sub_part_nums as i64
+            + ob_part_constants::extract_subpart_idx(part_id);
+        self.parititon_location.get(&logic_id)
     }
 }
 

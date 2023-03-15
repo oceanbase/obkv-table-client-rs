@@ -43,9 +43,8 @@ use super::{
 use crate::{
     error::{self, CommonErrCode, Error::Common as CommonErr, Result},
     location::{
-        ob_part_constants::{MASK, PART_ID_SHIFT},
-        ObPartitionLevel, ObServerAddr, ObTableLocation, ReplicaLocation, TableEntry,
-        TableEntryKey,
+        ob_part_constants::generate_phy_part_id, ObPartitionLevel, ObServerAddr, ObTableLocation,
+        ReplicaLocation, TableEntry, TableEntryKey,
     },
     rpc::{
         conn_pool::{Builder as ConnPoolBuilder, ConnPool},
@@ -697,16 +696,43 @@ impl ObTableClientInner {
         table_entry: &Arc<TableEntry>,
         part_id: i64,
     ) -> Option<(i64, Option<ReplicaLocation>)> {
-        Some((
-            part_id,
-            match table_entry.partition_entry() {
-                Some(entry) => match entry.get_partition_location_with_part_id(part_id) {
-                    Some(v) => v.leader().to_owned(),
+        match table_entry.partition_info() {
+            Some(ref partition_info) => match partition_info.level() {
+                ObPartitionLevel::Two => Some((
+                    part_id,
+                    match table_entry.partition_entry() {
+                        Some(entry) => match entry.get_sub_partition_location_with_part_id(
+                            part_id,
+                            partition_info.sub_part_desc().as_ref()?.get_part_num(),
+                        ) {
+                            Some(v) => v.leader().to_owned(),
+                            None => None,
+                        },
+                        None => None,
+                    },
+                )),
+                _ => Some((
+                    part_id,
+                    match table_entry.partition_entry() {
+                        Some(entry) => match entry.get_partition_location_with_part_id(part_id) {
+                            Some(v) => v.leader().to_owned(),
+                            None => None,
+                        },
+                        None => None,
+                    },
+                )),
+            },
+            _ => Some((
+                part_id,
+                match table_entry.partition_entry() {
+                    Some(entry) => match entry.get_partition_location_with_part_id(part_id) {
+                        Some(v) => v.leader().to_owned(),
+                        None => None,
+                    },
                     None => None,
                 },
-                None => None,
-            },
-        ))
+            )),
+        }
     }
 
     fn get_partition(&self, table_entry: &Arc<TableEntry>, row_key: &[Value]) -> Result<i64> {
@@ -761,35 +787,54 @@ impl ObTableClientInner {
                             ));
                         }
                         (Some(first_part_desc), Some(sub_part_desc)) => {
-                            let part_id1 = first_part_desc.get_part_id(row_key);
+                            let first_part_len =
+                                first_part_desc.get_ordered_part_column_names().len();
+                            let sub_part_len = sub_part_desc.get_ordered_part_column_names().len();
+                            if first_part_len + sub_part_len > row_key.len() {
+                                return Err(CommonErr(
+                                    CommonErrCode::PartitionError,
+                                    "number of rowkey is less than the length of partition column"
+                                        .to_owned(),
+                                ));
+                            }
 
-                            let part_id2 = sub_part_desc.get_part_id(row_key);
-                            match (part_id1, part_id2) {
+                            let first_part_id =
+                                first_part_desc.get_part_id(&row_key[..first_part_len]);
+                            let sub_part_id = sub_part_desc.get_part_id(&row_key[first_part_len..]);
+                            return match (first_part_id, sub_part_id) {
                                 (Err(e1), Err(e2)) => {
                                     error!("first_part_desc get_part_id err:{:?}, sub_part_desc get_part_id err:{:?}", e1, e2);
-                                    return Err(CommonErr(
+                                    Err(CommonErr(
                                         CommonErrCode::PartitionError,
                                         "first_part_desc get_part_id err and sub_part_desc get_part_id err".to_owned(),
-                                    ));
+                                    ))
                                 }
                                 (Err(e1), Ok(_)) => {
                                     error!("first_part_desc get_part_id err:{:?}", e1);
-                                    return Err(CommonErr(
+                                    Err(CommonErr(
                                         CommonErrCode::PartitionError,
                                         "first_part_desc get_part_id err ".to_owned(),
-                                    ));
+                                    ))
                                 }
                                 (Ok(_), Err(e2)) => {
                                     error!("sub_part_desc get_part_id err:{:?}", e2);
-                                    return Err(CommonErr(
+                                    Err(CommonErr(
                                         CommonErrCode::PartitionError,
                                         "sub_part_desc get_part_id err".to_owned(),
-                                    ));
+                                    ))
                                 }
                                 (Ok(id1), Ok(id2)) => {
-                                    return Ok((id1 << PART_ID_SHIFT) | id2 | MASK);
+                                    if id1 < 0 || id2 < 0 {
+                                        error!("first_part_desc get_part_id:{}, sub_part_desc get_part_id:{}", id1, id2);
+                                        Err(CommonErr(
+                                            CommonErrCode::PartitionError,
+                                            "first_part_desc get_part_id or sub_part_desc get_part_id is less than 0".to_owned(),
+                                        ))
+                                    } else {
+                                        Ok(generate_phy_part_id(id1, id2))
+                                    }
                                 }
-                            }
+                            };
                         }
                     }
                 }

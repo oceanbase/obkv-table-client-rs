@@ -111,6 +111,7 @@ impl LocationUtil {
                             };
                         }
                     }
+
                     let part_key_extra: String = row.take("part_key_extra").unwrap();
                     let part_key_name: String = row.take("part_key_name").unwrap();
                     let part_key_idx: i32 = row.take("part_key_idx").unwrap();
@@ -130,6 +131,7 @@ impl LocationUtil {
                                  .expect("LocationUtil::fetch_partition_info fail to decode collation type"),
                         );
                         info.part_columns.push(Box::new(column));
+                        unimplemented!();
                     } else {
                         let column = ObSimpleColumn::new(
                             part_key_name,
@@ -192,8 +194,9 @@ impl LocationUtil {
         };
         let part_type =
             PartFuncType::from_i32(row.take(&*format!("{part_level_prefix}part_type")).unwrap());
-        let part_expr: String = row.take(&*format!("{part_level_prefix}part_expr")).unwrap();
-        let part_expr = part_expr.trim_matches('`');
+        let mut part_expr: String = row.take(&*format!("{part_level_prefix}part_expr")).unwrap();
+        part_expr = part_expr.replace('`', "");
+        part_expr.retain(|c| !c.is_whitespace());
 
         if part_type.is_range_part() {
             let mut range_desc = ObRangePartDesc::new();
@@ -519,9 +522,7 @@ impl ObPartIdCalculator {
         }
         if let Some(id1) = part_id1 {
             if let Some(id2) = part_id2 {
-                return Some(
-                    id1 << ob_part_constants::PART_ID_SHIFT | id2 | ob_part_constants::MASK,
-                );
+                return Some(ob_part_constants::generate_phy_part_id(id1, id2));
             }
         }
         None

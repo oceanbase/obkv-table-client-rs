@@ -96,6 +96,17 @@ impl ObPartDesc {
         }
     }
 
+    pub fn get_part_num(&self) -> i32 {
+        match &self {
+            ObPartDesc::Range(_v) => {
+                error!("Range unsupported get_part_num");
+                -1
+            }
+            ObPartDesc::Hash(v) => v.part_num,
+            ObPartDesc::Key(v) => v.part_num,
+        }
+    }
+
     pub fn set_part_columns(&mut self, part_columns: Vec<Box<dyn ObColumn>>) {
         match self {
             ObPartDesc::Range(ref mut v) => v.ob_part_desc_obj.part_columns = part_columns,
@@ -551,7 +562,7 @@ impl ObHashPartDesc {
 
     fn inner_hash(&self, value: i64) -> i64 {
         let hash_value = value.abs();
-        ((self.part_space as i64) << ob_part_constants::PART_ID_BITNUM)
+        ((self.part_space as i64) << ob_part_constants::OB_PART_IDS_BITNUM)
             | (hash_value % self.part_num as i64)
     }
 }
@@ -642,6 +653,7 @@ impl ObKeyPartDesc {
         let mut row_keys: Vec<Value> = Vec::with_capacity(2);
         row_keys.append(&mut start.to_vec());
         row_keys.append(&mut end.to_vec());
+
         let part_ids = vec![self.get_part_id(&row_keys)?];
         Ok(part_ids)
     }
@@ -676,7 +688,7 @@ impl ObKeyPartDesc {
         let mut hash_value = hash_value as i64;
         hash_value = hash_value.abs();
         Ok(
-            ((self.part_space as i64) << ob_part_constants::PART_ID_BITNUM)
+            ((self.part_space as i64) << ob_part_constants::OB_PART_IDS_BITNUM)
                 | (hash_value % (self.part_num as i64)),
         )
     }
