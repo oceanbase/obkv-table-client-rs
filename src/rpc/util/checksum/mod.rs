@@ -15,5 +15,5 @@
  * #L%
  */
 
-pub mod checksum;
-pub mod hash;
+#[rustfmt::skip]
+pub mod ob_crc64;

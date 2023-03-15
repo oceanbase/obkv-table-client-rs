@@ -49,7 +49,7 @@ use self::protocol::{
 };
 use crate::{
     error::{CommonErrCode, Error, Error::Common as CommonErr, Result},
-    rpc::protocol::TraceId,
+    rpc::{protocol::TraceId, util::checksum::ob_crc64::ObCrc64Sse42},
 };
 
 lazy_static! {
@@ -482,7 +482,8 @@ impl Connection {
         header.set_flag(payload.flag());
         header.set_trace_id(trace_id);
 
-        // TODO checksum
+        // compute checksum
+        header.set_checksum(ObCrc64Sse42::fast_crc64_sse42_manually(0, &payload_content));
 
         let packet = ObRpcPacket::new(header, payload_content);
 

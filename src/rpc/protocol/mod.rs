@@ -222,6 +222,7 @@ pub const RPC_PACKET_HEADER_SIZE: usize = HEADER_SIZE + COST_TIME_ENCODE_SIZE //
  * hlen           (1  byte) unsigned byte
  * priority       (1  byte) unsigned byte
  * flag           (2  byte) unsigned short
+ * checksum       (8  byte) long
  * tenantId       (8  byte) unsigned long
  * prvTenantId    (8  byte) unsigned long
  * sessionId      (8  byte) unsigned long
@@ -229,7 +230,6 @@ pub const RPC_PACKET_HEADER_SIZE: usize = HEADER_SIZE + COST_TIME_ENCODE_SIZE //
  * traceId1       (8  byte) unsigned long
  * timeout        (8  byte) unsigned long
  * timestamp      (8  byte) long
- * checksum       (8  byte) long
  */
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ObRpcPacketHeader {
@@ -237,6 +237,7 @@ pub struct ObRpcPacketHeader {
     hlen: u8,
     priority: u8,
     flag: u16,
+    checksum: i64,
     tenant_id: u64,
     prev_tenant_id: u64,
     session_id: u64,
@@ -244,7 +245,6 @@ pub struct ObRpcPacketHeader {
     trace_id1: u64,
     timeout: i64,
     timestamp: i64,
-    checksum: i64,
     rpc_cost_time: ObRpcCostTime,
     cluster_id: i64,
     compress_type: ObCompressType,
@@ -277,6 +277,7 @@ impl ObRpcPacketHeader {
             hlen: RPC_PACKET_HEADER_SIZE as u8,
             priority: 5,
             flag: DEFAULT_FLAG,
+            checksum: 0,
             tenant_id: 1,
             prev_tenant_id: 1,
             session_id: 0,
@@ -284,7 +285,6 @@ impl ObRpcPacketHeader {
             trace_id1: 0,
             timeout: OP_TIMEOUT * 1000, // OB server timeout(us)
             timestamp: u::current_time_millis() * 1000, //(us)
-            checksum: 0,
             rpc_cost_time: ObRpcCostTime::new(),
             cluster_id: -1,
             compress_type: ObCompressType::Invalid, //i32
@@ -316,6 +316,11 @@ impl ObRpcPacketHeader {
     #[inline]
     pub fn set_timeout(&mut self, timeout: i64) {
         self.timeout = timeout
+    }
+
+    #[inline]
+    pub fn set_checksum(&mut self, checksum: i64) {
+        self.checksum = checksum;
     }
 
     #[inline]
