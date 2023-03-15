@@ -548,3 +548,94 @@ fn test_partition_varbinary() {
         assert_eq!(1, result.len());
     }
 }
+
+#[test]
+fn test_partition_complex() {
+    let client = utils::common::build_normal_client();
+    const TABLE_NAME: &str = "TEST_TABLE_PARTITION_COMPLEX_KEY";
+    client.add_row_key_element(
+        TABLE_NAME,
+        vec!["c1".to_string(), "c2".to_string(), "c3".to_string()],
+    );
+
+    for i in 0..16 {
+        let rowkey_c2: String = thread_rng().sample_iter(&Alphanumeric).take(512).collect();
+        let rowkey_c3: String = thread_rng().sample_iter(&Alphanumeric).take(768).collect();
+        let sql_rowkeyc2 = format!("'{rowkey_c2}'");
+        let sql_rowkeyc3 = format!("'{rowkey_c3}'");
+        let result = client.delete(
+            TABLE_NAME,
+            vec![
+                Value::from(i as i64),
+                Value::from(rowkey_c2.to_owned()),
+                Value::from(rowkey_c3.to_owned()),
+            ],
+        );
+        assert!(result.is_ok());
+        let insert_sql = format!(
+            "insert into {TABLE_NAME} values({i}, {sql_rowkeyc2}, {sql_rowkeyc3}, 'value');"
+        );
+        client.execute_sql(&insert_sql).expect("fail to insert");
+        let result = client.get(
+            TABLE_NAME,
+            vec![
+                Value::from(i as i64),
+                Value::from(rowkey_c2.to_owned()),
+                Value::from(rowkey_c3.to_owned()),
+            ],
+            vec!["c4".to_owned()],
+        );
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(1, result.len());
+    }
+}
+
+#[test]
+fn test_sub_partition_complex() {
+    let client = utils::common::build_normal_client();
+    const TABLE_NAME: &str = "TEST_TABLE_SUB_PARTITION_COMPLEX_KEY";
+    client.add_row_key_element(
+        TABLE_NAME,
+        vec![
+            "c1".to_string(),
+            "c2".to_string(),
+            "c3".to_string(),
+            "c4".to_string(),
+        ],
+    );
+
+    for i in 0..16 {
+        let rowkey_c2: String = thread_rng().sample_iter(&Alphanumeric).take(1).collect();
+        let rowkey_c3: String = thread_rng().sample_iter(&Alphanumeric).take(2).collect();
+        let rowkey_c4: String = thread_rng().sample_iter(&Alphanumeric).take(3).collect();
+        let sql_rowkeyc2 = format!("'{rowkey_c2}'");
+        let sql_rowkeyc3 = format!("'{rowkey_c3}'");
+        let sql_rowkeyc4 = format!("'{rowkey_c4}'");
+        let result = client.delete(
+            TABLE_NAME,
+            vec![
+                Value::from(i as i64),
+                Value::from(rowkey_c2.to_owned()),
+                Value::from(rowkey_c3.to_owned()),
+                Value::from(rowkey_c4.to_owned()),
+            ],
+        );
+        assert!(result.is_ok());
+        let insert_sql =  format!("insert into {TABLE_NAME} values({i}, {sql_rowkeyc2}, {sql_rowkeyc3}, {sql_rowkeyc4}, 'value');");
+        client.execute_sql(&insert_sql).expect("fail to insert");
+        let result = client.get(
+            TABLE_NAME,
+            vec![
+                Value::from(i as i64),
+                Value::from(rowkey_c2.to_owned()),
+                Value::from(rowkey_c3.to_owned()),
+                Value::from(rowkey_c4.to_owned()),
+            ],
+            vec!["c5".to_owned()],
+        );
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(1, result.len());
+    }
+}
