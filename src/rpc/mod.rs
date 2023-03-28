@@ -36,7 +36,7 @@ use std::{
 
 use byteorder::{BigEndian, ByteOrder};
 use bytes::BytesMut;
-use crossbeam::{bounded, unbounded, Receiver, Sender};
+use crossbeam::channel::{bounded, unbounded, Receiver, Sender};
 use net2::{TcpBuilder, TcpStreamExt};
 use prometheus::*;
 use tokio_codec::{Decoder, Encoder};
