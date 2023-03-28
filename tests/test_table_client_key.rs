@@ -114,6 +114,7 @@ fn test_query() {
     let client = utils::common::build_normal_client();
     const TABLE_NAME: &str = "TEST_QUERY_TABLE_KEY";
     client.add_row_key_element(TABLE_NAME, vec!["c1".to_string()]);
+    insert_query_test_record(&client, TABLE_NAME, "123", "123c2");
     insert_query_test_record(&client, TABLE_NAME, "124", "124c2");
     insert_query_test_record(&client, TABLE_NAME, "234", "234c2");
     insert_query_test_record(&client, TABLE_NAME, "456", "456c2");
