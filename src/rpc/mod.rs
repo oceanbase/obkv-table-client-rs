@@ -483,7 +483,7 @@ impl Connection {
         header.set_trace_id(trace_id);
 
         // compute checksum
-        header.set_checksum(ObCrc64Sse42::fast_crc64_sse42_manually(0, &payload_content));
+        header.set_checksum(ObCrc64Sse42::fast_crc64_sse42(0, &payload_content));
 
         let packet = ObRpcPacket::new(header, payload_content);
 
