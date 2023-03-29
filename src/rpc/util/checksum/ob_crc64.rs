@@ -669,7 +669,7 @@ impl ObCrc64Sse42 {
         }
 
         while len > 0 {
-            local_crc = T8_0[((local_crc ^ data[offset as usize] as i64) & 0xff) as usize] ^ (local_crc >> 8);
+            local_crc = T8_0[((local_crc ^ data[offset] as i64) & 0xff) as usize] ^ (local_crc >> 8);
             len -=1;
             offset +=1;
         }
@@ -692,7 +692,7 @@ impl ObCrc64Sse42 {
             }
 
             while len > 0 {
-                local_crc = T8_0[((local_crc ^ data[offset as usize] as i64) & 0xff) as usize] ^ (local_crc >> 8);
+                local_crc = T8_0[((local_crc ^ data[offset] as i64) & 0xff) as usize] ^ (local_crc >> 8);
                 len -= 1;
                 offset += 1;
             }
