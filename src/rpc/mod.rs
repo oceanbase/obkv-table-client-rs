@@ -36,7 +36,7 @@ use std::{
 
 use byteorder::{BigEndian, ByteOrder};
 use bytes::BytesMut;
-use crossbeam::{bounded, unbounded, Receiver, Sender};
+use crossbeam::channel::{bounded, unbounded, Receiver, Sender};
 use net2::{TcpBuilder, TcpStreamExt};
 use prometheus::*;
 use tokio_codec::{Decoder, Encoder};
@@ -483,7 +483,7 @@ impl Connection {
         header.set_trace_id(trace_id);
 
         // compute checksum
-        header.set_checksum(ObCrc64Sse42::fast_crc64_sse42_manually(0, &payload_content));
+        header.set_checksum(ObCrc64Sse42::fast_crc64_sse42(0, &payload_content));
 
         let packet = ObRpcPacket::new(header, payload_content);
 

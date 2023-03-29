@@ -3209,6 +3209,11 @@ impl ObUnicaseInfo {
     }
 }
 
+pub const UNI_PLANE_UTF8_MB4: ObUnicaseInfo = ObUnicaseInfo {
+    maxchar: 0xFFFF,
+    page: OB_UNICASE_PAGES_DEFAULT,
+};
+
 pub struct ObHashSortUtf8mb4 {
 }
 
@@ -3220,7 +3225,6 @@ impl ObHashSortUtf8mb4 {
         let mut res: i32;
         let mut start = 0;
         let mut end = len;
-        let uni_plane = ObUnicaseInfo{ maxchar: 0xFFFF, page: OB_UNICASE_PAGES_DEFAULT};
         let mut data: [u8; Self::HASH_BUFFER_LENGTH] = [0; Self::HASH_BUFFER_LENGTH];
         let mut length: i32 = 0;
 
@@ -3233,18 +3237,18 @@ impl ObHashSortUtf8mb4 {
         if hash_algo {
             res = Self::ob_mb_wc_utf8mb4(&mut wc, s, start, end);
             while res > 0 {
-                Self::ob_tosort_unicode(&uni_plane, &mut wc, OB_UTF8MB4_GENERAL_CI_STATE);
+                Self::ob_tosort_unicode(&UNI_PLANE_UTF8_MB4, &mut wc, OB_UTF8MB4_GENERAL_CI_STATE);
                 if length > Self::HASH_BUFFER_LENGTH as i32 - 2 || (Self::HASH_BUFFER_LENGTH as i32 - 2 == length && wc > 0xFFFF) {
                     n1_tmp = murmur2::murmur64a(&data[..(length as usize)], n1_tmp);
                     length = 0;
                 }
 
-                data[length as usize] = (wc & 0xFF) as u8;
+                data[length as usize] = wc as u8;
                 length += 1;
-                data[length as usize] = ((wc >> 8) & 0xFF) as u8;
+                data[length as usize] = (wc >> 8) as u8;
                 length += 1;
                 if wc > 0xFFFF {
-                    data[length as usize] = ((wc >> 16) & 0xFF) as u8;
+                    data[length as usize] = (wc >> 16) as u8;
                     length += 1;
                 }
 
