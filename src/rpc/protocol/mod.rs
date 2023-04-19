@@ -209,27 +209,49 @@ impl ProtoDecoder for ObRpcCostTime {
     }
 }
 
-// cluster id
 pub const RPC_PACKET_HEADER_SIZE: usize = HEADER_SIZE + COST_TIME_ENCODE_SIZE //
-                                           + 8 // cluster id
-                                           + 4 // compress type
-                                           + 4 // original len
-                                           ;
+    + 8 // cluster id
+    + 4 // compress type
+    + 4 // original len
+;
+// version 227
+pub const RPC_PACKET_HEADER_SIZE_WITH_NEWSERVER: usize = RPC_PACKET_HEADER_SIZE
+    + 8 // src clusterId
+    + 8 // unis version
+    + 4 // request level
+    + 8 // seq no
+    + 4 // group id
+    + 8 // trace id2
+    + 8 // trace id3
+    + 8 //clusterNameHash
+;
 
 /*
  *
- * pcode          (4 bytes) {@code ObTablePacketCode}
- * hlen           (1  byte) unsigned byte
- * priority       (1  byte) unsigned byte
- * flag           (2  byte) unsigned short
- * checksum       (8  byte) long
- * tenantId       (8  byte) unsigned long
- * prvTenantId    (8  byte) unsigned long
- * sessionId      (8  byte) unsigned long
- * traceId0       (8  byte) unsigned long
- * traceId1       (8  byte) unsigned long
- * timeout        (8  byte) unsigned long
- * timestamp      (8  byte) long
+ * pcode              (4  bytes) {@code ObTablePacketCode}
+ * hlen               (1  byte)  unsigned byte
+ * priority           (1  byte)  unsigned byte
+ * flag               (2  bytes) unsigned short
+ * checksum           (8  bytes) long
+ * tenantId           (8  bytes) unsigned long
+ * prvTenantId        (8  bytes) unsigned long
+ * sessionId          (8  bytes) unsigned long
+ * traceId0           (8  bytes) unsigned long
+ * traceId1           (8  bytes) unsigned long
+ * timeout            (8  bytes) unsigned long
+ * timestamp          (8  bytes) long
+ * rpc_cost_time      (40 bytes) {@code ObRpcCostTime}
+ * cluster_id         (8  bytes) long
+ * compress_type      (4  bytes) long
+ * original_len       (4  bytes) long
+ * src_cluster_id     (8  bytes) long
+ * unis_version       (8  bytes) long
+ * request_level      (4  bytes) int
+ * seq_no             (8  bytes) long
+ * group_id           (4  bytes) long
+ * trace_id2          (8  bytes) long
+ * trace_id3          (8  bytes) long
+ * cluster_name_hash  (8  bytes) long
  */
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ObRpcPacketHeader {
@@ -247,9 +269,19 @@ pub struct ObRpcPacketHeader {
     timestamp: i64,
     rpc_cost_time: ObRpcCostTime,
     cluster_id: i64,
+    // dst cluster id
     compress_type: ObCompressType,
     // original length before compression.
     original_len: i32,
+    // new packet header for version 227
+    src_cluster_id: i64,
+    unis_version: i64,
+    request_level: i32,
+    seq_no: i64,
+    group_id: i32,
+    trace_id2: i64,
+    trace_id3: i64,
+    cluster_name_hash: i64,
 }
 
 impl Default for ObRpcPacketHeader {
@@ -274,7 +306,7 @@ impl ObRpcPacketHeader {
     pub fn new() -> ObRpcPacketHeader {
         ObRpcPacketHeader {
             pcode: 0_u32,
-            hlen: RPC_PACKET_HEADER_SIZE as u8,
+            hlen: RPC_PACKET_HEADER_SIZE_WITH_NEWSERVER as u8,
             priority: 5,
             flag: DEFAULT_FLAG,
             checksum: 0,
@@ -289,6 +321,15 @@ impl ObRpcPacketHeader {
             cluster_id: -1,
             compress_type: ObCompressType::Invalid, //i32
             original_len: 0,                        //original length before compression.
+            //new packet for version 227
+            src_cluster_id: -1,
+            unis_version: 0,
+            request_level: 0,
+            seq_no: 0,
+            group_id: 0,
+            trace_id2: 0,
+            trace_id3: 0,
+            cluster_name_hash: 0,
         }
     }
 
@@ -303,6 +344,7 @@ impl ObRpcPacketHeader {
         self.trace_id1 = id.1;
     }
 
+    // todo: need to add trace_id2 and trace_id3???
     #[inline]
     pub fn trace_id(&self) -> TraceId {
         TraceId(self.trace_id0, self.trace_id1)
@@ -379,6 +421,11 @@ impl ObRpcPacketHeader {
             + 4 // ob_compression_type
             + 4 // original_len
     }
+
+    #[inline]
+    fn get_encoded_size_with_newserver(&self) -> usize {
+        RPC_PACKET_HEADER_SIZE_WITH_NEWSERVER
+    }
 }
 
 /// Rpc packet
@@ -404,7 +451,7 @@ impl ProtoEncoder for ObRpcPacket {
 
 impl ProtoEncoder for ObRpcPacketHeader {
     fn encode(&self, buf: &mut BytesMut) -> Result<()> {
-        buf.reserve(RPC_PACKET_HEADER_SIZE);
+        buf.reserve(RPC_PACKET_HEADER_SIZE_WITH_NEWSERVER);
         buf.put_u32_be(self.pcode);
         buf.put_u8(self.hlen);
         buf.put_u8(self.priority);
@@ -421,6 +468,16 @@ impl ProtoEncoder for ObRpcPacketHeader {
         buf.put_i64_be(self.cluster_id);
         buf.put_i32_be(self.compress_type.clone() as i32);
         buf.put_i32_be(self.original_len);
+        //new packet for version 227
+        buf.put_i64_be(self.src_cluster_id);
+        buf.put_i64_be(self.unis_version);
+        buf.put_i32_be(self.request_level);
+        buf.put_i64_be(self.seq_no);
+        buf.put_i32_be(self.group_id);
+        buf.put_i64_be(self.trace_id2);
+        buf.put_i64_be(self.trace_id3);
+        buf.put_i64_be(self.cluster_name_hash);
+
         Ok(())
     }
 }
@@ -452,8 +509,33 @@ impl ProtoDecoder for ObRpcPacketHeader {
 
         let hlen = self.hlen as usize;
 
-        let ignore_len = if hlen >= self.get_encoded_size() {
-            // header with cost_time, cluster_id
+        let ignore_len = if hlen >= self.get_encoded_size_with_newserver() {
+            // decode header for version 227
+            // header with cost_time, cluster_id, compress_type, original_len,
+            // src_cluster_id(i64), unis_version(i64), request_level(i32),
+            // seq_no(i64), group_id(i32), trace_id2(i64), trace_id3(i64),
+            // cluster_name_hash(i64)
+            self.rpc_cost_time.decode(buf)?;
+            let mut src = util::split_buf_to(
+                buf,
+                self.get_encoded_size_with_newserver() - self.get_encoded_size_with_cost_time(),
+            )?
+            .into_buf();
+            self.cluster_id = src.get_i64_be();
+            self.compress_type = ObCompressType::from_i32(src.get_i32_be())?;
+            self.original_len = src.get_i32_be();
+            //  decode for version 227
+            self.src_cluster_id = src.get_i64_be();
+            self.unis_version = src.get_i64_be();
+            self.request_level = src.get_i32_be();
+            self.seq_no = src.get_i64_be();
+            self.group_id = src.get_i32_be();
+            self.trace_id2 = src.get_i64_be();
+            self.trace_id3 = src.get_i64_be();
+            self.cluster_name_hash = src.get_i64_be();
+            hlen - self.get_encoded_size_with_newserver()
+        } else if hlen >= self.get_encoded_size() {
+            // header with cost_time, cluster_id, compress_type, original_len
             self.rpc_cost_time.decode(buf)?;
             let mut src = util::split_buf_to(
                 buf,
@@ -591,6 +673,7 @@ pub struct DummyObRequest {
     base: BasePayLoad,
     _id: u32,
 }
+
 #[allow(dead_code)]
 impl DummyObRequest {
     pub fn new(id: u32) -> Self {
@@ -656,7 +739,8 @@ pub enum ObTablePacket {
 
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct ObTablePacketCodec {
-    dlen: i32, //data length
+    dlen: i32,
+    //data length
     chid: i32, //channel id
 }
 
@@ -821,7 +905,7 @@ mod test {
         let mut buf = BytesMut::new();
         let ret = header.encode(&mut buf);
         assert!(ret.is_ok());
-        assert_eq!(RPC_PACKET_HEADER_SIZE, buf.len());
+        assert_eq!(RPC_PACKET_HEADER_SIZE_WITH_NEWSERVER, buf.len());
         let mut buf = buf.clone();
 
         let mut new_header = ObRpcPacketHeader::new();
