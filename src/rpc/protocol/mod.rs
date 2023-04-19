@@ -214,8 +214,8 @@ pub const RPC_PACKET_HEADER_SIZE: usize = HEADER_SIZE + COST_TIME_ENCODE_SIZE //
     + 4 // compress type
     + 4 // original len
 ;
-// version 227
-pub const RPC_PACKET_HEADER_SIZE_WITH_NEWSERVER: usize = RPC_PACKET_HEADER_SIZE
+// version:V4
+pub const RPC_PACKET_HEADER_SIZE_V4: usize = RPC_PACKET_HEADER_SIZE
     + 8 // src clusterId
     + 8 // unis version
     + 4 // request level
@@ -273,7 +273,7 @@ pub struct ObRpcPacketHeader {
     compress_type: ObCompressType,
     // original length before compression.
     original_len: i32,
-    // new packet header for version 227
+    // new packet header for version: V4
     src_cluster_id: i64,
     unis_version: i64,
     request_level: i32,
@@ -306,7 +306,7 @@ impl ObRpcPacketHeader {
     pub fn new() -> ObRpcPacketHeader {
         ObRpcPacketHeader {
             pcode: 0_u32,
-            hlen: RPC_PACKET_HEADER_SIZE_WITH_NEWSERVER as u8,
+            hlen: RPC_PACKET_HEADER_SIZE_V4 as u8,
             priority: 5,
             flag: DEFAULT_FLAG,
             checksum: 0,
@@ -321,7 +321,7 @@ impl ObRpcPacketHeader {
             cluster_id: -1,
             compress_type: ObCompressType::Invalid, //i32
             original_len: 0,                        //original length before compression.
-            //new packet for version 227
+            //new packet for version: V4
             src_cluster_id: -1,
             unis_version: 0,
             request_level: 0,
@@ -344,7 +344,6 @@ impl ObRpcPacketHeader {
         self.trace_id1 = id.1;
     }
 
-    // todo: need to add trace_id2 and trace_id3???
     #[inline]
     pub fn trace_id(&self) -> TraceId {
         TraceId(self.trace_id0, self.trace_id1)
@@ -424,7 +423,7 @@ impl ObRpcPacketHeader {
 
     #[inline]
     fn get_encoded_size_with_newserver(&self) -> usize {
-        RPC_PACKET_HEADER_SIZE_WITH_NEWSERVER
+        RPC_PACKET_HEADER_SIZE_V4
     }
 }
 
@@ -451,7 +450,7 @@ impl ProtoEncoder for ObRpcPacket {
 
 impl ProtoEncoder for ObRpcPacketHeader {
     fn encode(&self, buf: &mut BytesMut) -> Result<()> {
-        buf.reserve(RPC_PACKET_HEADER_SIZE_WITH_NEWSERVER);
+        buf.reserve(RPC_PACKET_HEADER_SIZE_V4);
         buf.put_u32_be(self.pcode);
         buf.put_u8(self.hlen);
         buf.put_u8(self.priority);
@@ -468,7 +467,7 @@ impl ProtoEncoder for ObRpcPacketHeader {
         buf.put_i64_be(self.cluster_id);
         buf.put_i32_be(self.compress_type.clone() as i32);
         buf.put_i32_be(self.original_len);
-        //new packet for version 227
+        // TODO: check observer 4.x is ok
         buf.put_i64_be(self.src_cluster_id);
         buf.put_i64_be(self.unis_version);
         buf.put_i32_be(self.request_level);
@@ -510,7 +509,7 @@ impl ProtoDecoder for ObRpcPacketHeader {
         let hlen = self.hlen as usize;
 
         let ignore_len = if hlen >= self.get_encoded_size_with_newserver() {
-            // decode header for version 227
+            // decode header for version: V4
             // header with cost_time, cluster_id, compress_type, original_len,
             // src_cluster_id(i64), unis_version(i64), request_level(i32),
             // seq_no(i64), group_id(i32), trace_id2(i64), trace_id3(i64),
@@ -524,7 +523,7 @@ impl ProtoDecoder for ObRpcPacketHeader {
             self.cluster_id = src.get_i64_be();
             self.compress_type = ObCompressType::from_i32(src.get_i32_be())?;
             self.original_len = src.get_i32_be();
-            //  decode for version 227
+            //  decode for version:V4
             self.src_cluster_id = src.get_i64_be();
             self.unis_version = src.get_i64_be();
             self.request_level = src.get_i32_be();
@@ -905,7 +904,7 @@ mod test {
         let mut buf = BytesMut::new();
         let ret = header.encode(&mut buf);
         assert!(ret.is_ok());
-        assert_eq!(RPC_PACKET_HEADER_SIZE_WITH_NEWSERVER, buf.len());
+        assert_eq!(RPC_PACKET_HEADER_SIZE_V4, buf.len());
         let mut buf = buf.clone();
 
         let mut new_header = ObRpcPacketHeader::new();
