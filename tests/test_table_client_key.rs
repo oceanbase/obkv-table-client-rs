@@ -388,6 +388,11 @@ fn test_batch() {
     assert!(result.is_ok());
 }
 
+fn clean_table(table_name: &str, client: &ObTableClient) {
+    let sql = format!("DELETE FROM {table_name}");
+    client.execute_sql(&sql).expect("clean table failed");
+}
+
 #[test]
 fn test_partition_bigint() {
     let client = utils::common::build_normal_client();
@@ -445,7 +450,7 @@ fn test_partition_varchar_bin() {
         assert_eq!(1, result.len());
     }
     for _i in 0..64 {
-        let rowkey: String = thread_rng().sample_iter(&Alphanumeric).take(512).collect();
+        let rowkey: String = thread_rng().sample_iter(&Alphanumeric).map(|c| std::char::from_u32(c as u32).unwrap()).take(512).collect();
         let sql_rowkey = format!("'{rowkey}'");
         let result = client.delete(VARCHAR_BIN_TABLE_NAME, vec![Value::from(rowkey.to_owned())]);
         assert!(result.is_ok());
@@ -489,7 +494,7 @@ fn test_partition_varchar_general_ci() {
         assert_eq!(1, result.len());
     }
     for _i in 0..64 {
-        let rowkey: String = thread_rng().sample_iter(&Alphanumeric).take(512).collect();
+        let rowkey: String = thread_rng().sample_iter(&Alphanumeric).map(|c| std::char::from_u32(c as u32).unwrap()).take(512).collect();
         let sql_rowkey = format!("'{rowkey}'");
         let result = client.delete(VARCHAR_TABLE_NAME, vec![Value::from(rowkey.to_owned())]);
         assert!(result.is_ok());
@@ -532,7 +537,7 @@ fn test_partition_varbinary() {
         assert_eq!(1, result.len());
     }
     for _i in 0..64 {
-        let rowkey: String = thread_rng().sample_iter(&Alphanumeric).take(512).collect();
+        let rowkey: String = thread_rng().sample_iter(&Alphanumeric).map(|c| std::char::from_u32(c as u32).unwrap()).take(512).collect();
         let sql_rowkey = format!("'{rowkey}'");
         let result = client.delete(VARBINARY_TABLE_NAME, vec![Value::from(rowkey.to_owned())]);
         assert!(result.is_ok());
@@ -560,8 +565,8 @@ fn test_partition_complex() {
     );
 
     for i in 0..16 {
-        let rowkey_c2: String = thread_rng().sample_iter(&Alphanumeric).take(512).collect();
-        let rowkey_c3: String = thread_rng().sample_iter(&Alphanumeric).take(768).collect();
+        let rowkey_c2: String = thread_rng().sample_iter(&Alphanumeric).map(|c| std::char::from_u32(c as u32).unwrap()).take(512).collect();
+        let rowkey_c3: String = thread_rng().sample_iter(&Alphanumeric).map(|c| std::char::from_u32(c as u32).unwrap()).take(768).collect();
         let sql_rowkeyc2 = format!("'{rowkey_c2}'");
         let sql_rowkeyc3 = format!("'{rowkey_c3}'");
         let result = client.delete(
@@ -607,9 +612,9 @@ fn test_sub_partition_complex() {
     );
 
     for i in 0..16 {
-        let rowkey_c2: String = thread_rng().sample_iter(&Alphanumeric).take(1).collect();
-        let rowkey_c3: String = thread_rng().sample_iter(&Alphanumeric).take(2).collect();
-        let rowkey_c4: String = thread_rng().sample_iter(&Alphanumeric).take(3).collect();
+        let rowkey_c2: String = thread_rng().sample_iter(&Alphanumeric).map(|c| std::char::from_u32(c as u32).unwrap()).take(512).collect();
+        let rowkey_c3: String = thread_rng().sample_iter(&Alphanumeric).map(|c| std::char::from_u32(c as u32).unwrap()).take(768).collect();
+        let rowkey_c4: String = thread_rng().sample_iter(&Alphanumeric).map(|c| std::char::from_u32(c as u32).unwrap()).take(768).collect();
         let sql_rowkeyc2 = format!("'{rowkey_c2}'");
         let sql_rowkeyc3 = format!("'{rowkey_c3}'");
         let sql_rowkeyc4 = format!("'{rowkey_c4}'");

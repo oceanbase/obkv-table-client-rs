@@ -37,6 +37,11 @@ pub static OB_MAX: &[u64] = &[
 ];
 
 //TODO refactor
+pub fn encoded_length_i8(_v: i8) -> usize {
+    return 1;
+}
+
+//TODO refactor
 pub fn encoded_length_vi8(v: i8) -> usize {
     let v = v as u64;
     if v <= OB_MAX_V1B {

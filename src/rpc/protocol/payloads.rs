@@ -395,11 +395,11 @@ impl ObPayload for ObTableOperationRequest {
             + util::encoded_length_vstring(&self.table_name)
             + util::encoded_length_vi64(self.table_id)
             + util::encoded_length_vi64(self.partition_id)
-            + util::encoded_length_vi8(self.entity_type as i8)
-            + util::encoded_length_vi8(self.consistency_level as i8)
-            + util::encoded_length_vi8(self.return_row_key as i8)
-            + util::encoded_length_vi8(self.return_affected_entity as i8)
-            + util::encoded_length_vi8(self.return_affected_rows as i8)
+            + util::encoded_length_i8(self.entity_type as i8)
+            + util::encoded_length_i8(self.consistency_level as i8)
+            + util::encoded_length_i8(self.return_row_key as i8)
+            + util::encoded_length_i8(self.return_affected_entity as i8)
+            + util::encoded_length_i8(self.return_affected_rows as i8)
             + self.table_operation.len()?)
     }
 }
@@ -765,12 +765,12 @@ impl ObPayload for ObTableBatchOperationRequest {
             + util::encoded_length_vi64(self.table_id)
             + util::encoded_length_vi64(self.partition_id)
             + self.batch_operation.len()?
-            + util::encoded_length_vi8(self.entity_type as i8)
-            + util::encoded_length_vi8(self.consistency_level as i8)
-            + util::encoded_length_vi8(self.return_row_key as i8)
-            + util::encoded_length_vi8(self.return_affected_entity as i8)
-            + util::encoded_length_vi8(self.return_affected_rows as i8)
-            + util::encoded_length_vi8(self.atomic_op as i8))
+            + util::encoded_length_i8(self.entity_type as i8)
+            + util::encoded_length_i8(self.consistency_level as i8)
+            + util::encoded_length_i8(self.return_row_key as i8)
+            + util::encoded_length_i8(self.return_affected_entity as i8)
+            + util::encoded_length_i8(self.return_affected_rows as i8)
+            + util::encoded_length_i8(self.atomic_op as i8))
     }
 }
 

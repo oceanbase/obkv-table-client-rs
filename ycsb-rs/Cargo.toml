@@ -1,0 +1,19 @@
+[package]
+name = "obkv-ycsb"
+version = "0.1.0"
+authors = ["OceanBase OBKV Developers"]
+
+[package.edition]
+workspace = true
+
+[dependencies]
+obkv-table-client-rs = { path = ".." }
+anyhow = { workspace = true }
+log = { workspace = true }
+rand = {version = "0.8", features = ["small_rng"]}
+serde = { version = "1.0.130", features = ["derive"] }
+sql-builder = "3.1"
+sqlite = "0.26.0"
+structopt = "0.3.23"
+toml = { workspace = true }
+prometheus = { workspace = true }

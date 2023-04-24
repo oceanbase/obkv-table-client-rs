@@ -1,0 +1,55 @@
+# OBKV Table Client Framework
+# %%
+# Copyright (C) 2023 OceanBase
+# %%
+# OBKV Table Client Framework is licensed under Mulan PSL v2.
+# You can use this software according to the terms and conditions of the
+# Mulan PSL v2. You may obtain a copy of Mulan PSL v2 at:
+#          http://license.coscl.org.cn/MulanPSL2
+# THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY
+# KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+# NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+# See the Mulan PSL v2 for more details.
+
+# insertcount should be equal to n * threadcount
+operationcount = 1000000
+insert_start = 0
+recordcount = 1000000
+workload = "core"
+
+measurementtype = "histogram"
+
+# insertcount or recordcount - insert_start
+# insertcount = 10000
+
+readallfields = true
+
+insertproportion = 0
+readproportion = 1.0
+scanproportion = 0
+updateproportion = 0
+
+requestdistribution = "uniform"
+
+# For OBKV Client
+full_user_name = ""
+param_url = ""
+test_password = ""
+test_sys_user_name = ""
+test_sys_password = ""
+
+# How may YCSB Client will use a OBKV Client
+obkv_client_reuse = 50
+
+rpc_connect_timeout = 5000
+rpc_read_timeout = 3000
+rpc_login_timeout = 3000
+rpc_operation_timeout = 3000
+rpc_retry_limit = 3
+rpc_retry_interval = 0
+refresh_workers_num = 1
+max_conns_per_server = 1
+min_idle_conns_per_server = 1
+conn_init_thread_num = 1
+
+

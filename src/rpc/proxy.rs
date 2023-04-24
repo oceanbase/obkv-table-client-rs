@@ -27,7 +27,7 @@ lazy_static! {
         "obkv_rpc_proxy_metric_distribution",
         "Bucketed histogram of metric distribution",
         &["type"],
-        linear_buckets(5.0, 20.0, 20).unwrap()
+        linear_buckets(5.0, 10.0, 5).unwrap()
     )
     .unwrap();
 }

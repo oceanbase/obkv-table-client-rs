@@ -25,6 +25,7 @@ use std::{
     thread,
     time::Duration,
 };
+use std::time::SystemTime;
 
 use obkv::{error::CommonErrCode, ObTableClient, ResultCodes, Table, TableQuery, Value};
 use time::PreciseTime;
@@ -34,6 +35,8 @@ pub struct BaseTest {
 }
 
 impl BaseTest {
+    const THREAD_NUM: usize = 10;
+    const ROW_NUM: usize = 500;
     pub fn new(client: ObTableClient) -> BaseTest {
         BaseTest {
             client: Arc::new(client),
@@ -44,11 +47,11 @@ impl BaseTest {
         let mut handles = vec![];
         let start = PreciseTime::now();
         let counter = Arc::new(AtomicUsize::new(0));
-        for _ in 0..10 {
+        for _ in 0..BaseTest::THREAD_NUM {
             let client = self.client.clone();
             let counter = counter.clone();
             handles.push(thread::spawn(move || {
-                for i in 0..100 {
+                for i in 0..BaseTest::ROW_NUM {
                     let key = format!("foo{i}");
                     let value = format!("bar{i}");
                     let result = client
@@ -61,9 +64,14 @@ impl BaseTest {
                         .expect("fail to insert_or update");
                     assert_eq!(1, result);
 
+                    let start_time = SystemTime::now();
                     let mut result = client
                         .get(table_name, vec![Value::from(key)], vec!["c2".to_owned()])
                         .expect("fail to get");
+                    let end_time = SystemTime::now();
+                    if end_time.duration_since(start_time).unwrap().as_millis() > 500 {
+                        println!("get time: {:?}", end_time.duration_since(start_time).unwrap().as_millis());
+                    }
                     assert_eq!(1, result.len());
                     let v = result.remove("c2").unwrap();
                     assert!(v.is_string());
@@ -78,11 +86,11 @@ impl BaseTest {
             handle.join().expect("should succeed to join");
         }
         let end = PreciseTime::now();
-        assert_eq!(1000, counter.load(Ordering::SeqCst));
+        assert_eq!(BaseTest::ROW_NUM * BaseTest::THREAD_NUM, counter.load(Ordering::SeqCst));
         println!(
             "{} seconds for insert_or_update {} rows.",
             start.to(end),
-            1000
+            BaseTest::ROW_NUM * BaseTest::THREAD_NUM
         );
     }
 
