@@ -51,5 +51,3 @@ refresh_workers_num = 1
 max_conns_per_server = 1
 min_idle_conns_per_server = 1
 conn_init_thread_num = 1
-
-

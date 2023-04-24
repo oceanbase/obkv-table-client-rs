@@ -13,4 +13,3 @@ Contributions are warmly welcomed and greatly appreciated. Here are a few ways y
 
 ## Licencing
 obkv-table-client-rs is under [MulanPSL - 2.0](http://license.coscl.org.cn/MulanPSL2) licence. You can freely copy and use the source code. When you modify or distribute the source code, please obey the MulanPSL - 2.0 licence.
-

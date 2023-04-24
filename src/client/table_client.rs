@@ -2381,7 +2381,7 @@ impl Builder {
             refresh_thread_pool: Arc::new(
                 ScheduledThreadPool::builder()
                     .num_threads(2)
-                    .thread_name_pattern("ObTableClient-RefreshMetadata-Thread-")
+                    .thread_name_pattern("RefreshMetaThread-")
                     .build(),
             ),
         })

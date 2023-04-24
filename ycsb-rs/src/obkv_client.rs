@@ -79,18 +79,19 @@ pub struct OBKVClient {
 
 impl OBKVClient {
     pub fn build_client(config: Arc<OBKVClientInitStruct>, mode: RunningMode) -> Result<Self> {
-        let mut client_config = ClientConfig::default();
-        client_config
-            .set_rpc_connect_timeout(config.rpc_connect_timeout)
-            .set_rpc_read_timeout(config.rpc_read_timeout)
-            .set_rpc_operation_timeout(config.rpc_operation_timeout)
-            .set_rpc_login_timeout(config.rpc_login_timeout)
-            .set_rpc_retry_limit(config.rpc_retry_limit)
-            .set_rpc_retry_interval(config.rpc_retry_interval)
-            .set_refresh_workers_num(config.refresh_workers_num)
-            .set_max_conns_per_server(config.max_conns_per_server)
-            .set_min_idle_conns_per_server(config.min_idle_conns_per_server)
-            .set_conn_init_thread_num(config.conn_init_thread_num);
+        let client_config = ClientConfig {
+            rpc_connect_timeout: config.rpc_connect_timeout,
+            rpc_read_timeout: config.rpc_read_timeout,
+            rpc_operation_timeout: config.rpc_operation_timeout,
+            rpc_login_timeout: config.rpc_login_timeout,
+            rpc_retry_limit: config.rpc_retry_limit,
+            rpc_retry_interval: config.rpc_retry_interval,
+            refresh_workers_num: config.refresh_workers_num,
+            max_conns_per_server: config.max_conns_per_server,
+            min_idle_conns_per_server: config.min_idle_conns_per_server,
+            conn_init_thread_num: config.conn_init_thread_num,
+            ..Default::default()
+        };
         let builder = Builder::new()
             .config(client_config)
             .full_user_name(config.full_user_name.as_str())

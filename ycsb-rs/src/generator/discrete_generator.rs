@@ -23,10 +23,7 @@ pub struct DiscreteGenerator<T: Clone + Send> {
 
 impl<T: ToString + Clone + Send> DiscreteGenerator<T> {
     pub fn new(values: Vec<WeightPair<T>>) -> Self {
-        let mut sum = 0.0;
-        for WeightPair { weight, .. } in &values {
-            sum += *weight;
-        }
+        let sum: f64 = values.iter().map(|v| v.weight).sum();
         Self { values, sum }
     }
 }

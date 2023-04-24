@@ -65,14 +65,6 @@ fn run_ob(
 fn main() -> Result<()> {
     let opt = Opt::from_args();
 
-    // for analyze
-    // let opt = Opt {
-    //     commands: vec!["run".to_string()],
-    //     database: "obkv".to_string(),
-    //     workload: "/ycsb-rs/workloads/workload_obkv.toml".to_string(),
-    //     threads: 40,
-    // };
-
     let raw_props = fs::read_to_string(&opt.workload)?;
 
     let props: Properties = toml::from_str(&raw_props)?;
@@ -84,7 +76,6 @@ fn main() -> Result<()> {
     let config = Arc::new(OBKVClientInitStruct::new(&props));
 
     if opt.commands.is_empty() {
-        // print commands
         bail!("no command specified");
     }
 
