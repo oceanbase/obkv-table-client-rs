@@ -1,5 +1,6 @@
-use super::{Generator, NumberGenerator};
 use rand::prelude::*;
+
+use super::{Generator, NumberGenerator};
 
 pub const ZIPFIAN_CONSTANT: f64 = 0.99;
 

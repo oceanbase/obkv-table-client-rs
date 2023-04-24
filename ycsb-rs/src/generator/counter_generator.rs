@@ -1,6 +1,8 @@
-use super::Generator;
-use rand::prelude::*;
 use std::sync::atomic::AtomicU64;
+
+use rand::prelude::*;
+
+use super::Generator;
 
 pub struct CounterGenerator {
     counter: AtomicU64,

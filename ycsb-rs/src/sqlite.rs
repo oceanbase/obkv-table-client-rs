@@ -1,9 +1,10 @@
-use crate::db::DB;
+use std::collections::HashMap;
 
 use anyhow::Result;
 use sql_builder::SqlBuilder;
 use sqlite::{Connection, OpenFlags, State};
-use std::collections::HashMap;
+
+use crate::db::DB;
 
 const PRIMARY_KEY: &str = "ycsb_key";
 

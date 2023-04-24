@@ -288,7 +288,12 @@ impl ObTableClientInner {
             refresh_metadata_mutex: Mutex::new(0),
             last_refresh_metadata_ts: AtomicUsize::new(0),
 
-            conn_init_thread_pool: Arc::new(ScheduledThreadPool::builder().num_threads(conn_init_thread_num).thread_name_pattern("conn_init_{}").build()),
+            conn_init_thread_pool: Arc::new(
+                ScheduledThreadPool::builder()
+                    .num_threads(conn_init_thread_num)
+                    .thread_name_pattern("conn_init_{}")
+                    .build(),
+            ),
             table_batch_op_thread_pools: Arc::new(RwLock::new(HashMap::new())),
             query_permits,
         })
@@ -2373,7 +2378,12 @@ impl Builder {
                 self.running_mode,
                 self.config,
             )?),
-            refresh_thread_pool: Arc::new(ScheduledThreadPool::builder().num_threads(2).thread_name_pattern("ObTableClient-RefreshMetadata-Thread-").build()),
+            refresh_thread_pool: Arc::new(
+                ScheduledThreadPool::builder()
+                    .num_threads(2)
+                    .thread_name_pattern("ObTableClient-RefreshMetadata-Thread-")
+                    .build(),
+            ),
         })
     }
 }

@@ -1,27 +1,24 @@
-use std::cell::RefCell;
-use crate::db::DB;
-use crate::workload::Workload;
+use std::{cell::RefCell, fs, rc::Rc, sync::Arc, thread, time::Instant};
+
 use anyhow::{bail, Result};
 use properties::Properties;
-use std::fs;
-use std::rc::Rc;
-use std::sync::Arc;
-use std::thread;
-use std::time::Instant;
-use rand::rngs::SmallRng;
-use rand::SeedableRng;
+use rand::{rngs::SmallRng, SeedableRng};
 use structopt::StructOpt;
-
 use workload::CoreWorkload;
-use crate::obkv_client::{OBKVClient, OBKVClientInitStruct};
+
+use crate::{
+    db::DB,
+    obkv_client::{OBKVClient, OBKVClientInitStruct},
+    workload::Workload,
+};
 
 pub mod db;
 pub mod generator;
+pub mod monitor;
+pub mod obkv_client;
 pub mod properties;
 pub mod sqlite;
 pub mod workload;
-pub mod obkv_client;
-pub mod monitor;
 
 #[derive(StructOpt, Debug)]
 #[structopt(name = "ycsb")]
@@ -54,7 +51,12 @@ fn load_ob(wl: Arc<CoreWorkload>, db: Arc<OBKVClient>, operation_count: usize) {
     }
 }
 
-fn run_ob(wl: Arc<CoreWorkload>, db: Arc<OBKVClient>, rng: Rc<RefCell<SmallRng>>, operation_count: usize) {
+fn run_ob(
+    wl: Arc<CoreWorkload>,
+    db: Arc<OBKVClient>,
+    rng: Rc<RefCell<SmallRng>>,
+    operation_count: usize,
+) {
     for _ in 0..operation_count {
         wl.ob_transaction(rng.clone(), db.clone());
     }
@@ -92,8 +94,13 @@ fn main() -> Result<()> {
     for cmd in opt.commands {
         let start = Instant::now();
         let mut threads = vec![];
-        println!("Database: {database}, Command: {cmd}, Counts Per Threads: {thread_operation_count}");
-        println!("Actual Client Count: {actual_client_count}, Client Reuse Count: {}", props.obkv_client_reuse);
+        println!(
+            "Database: {database}, Command: {cmd}, Counts Per Threads: {thread_operation_count}"
+        );
+        println!(
+            "Actual Client Count: {actual_client_count}, Client Reuse Count: {}",
+            props.obkv_client_reuse
+        );
         if database.eq_ignore_ascii_case("obkv") {
             for _client_idx in 0..actual_client_count {
                 let database = database.clone();

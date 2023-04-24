@@ -15,21 +15,20 @@
  * #L%
  */
 
-use crate::db::DB;
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use anyhow::Result;
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::time::Duration;
-
 #[allow(unused)]
 use obkv::error::CommonErrCode;
 use obkv::{Builder, ClientConfig, ObTableClient, RunningMode, Table, Value};
-use crate::properties::Properties;
+
+use crate::{db::DB, properties::Properties};
 
 const PRIMARY_KEY: &str = "ycsb_key";
-const COLUMN_NAMES: [&str; 10] = ["field0", "field1", "field2", "field3", "field4", "field5", "field6", "field7", "field8", "field9"];
-
+const COLUMN_NAMES: [&str; 10] = [
+    "field0", "field1", "field2", "field3", "field4", "field5", "field6", "field7", "field8",
+    "field9",
+];
 
 pub struct OBKVClientInitStruct {
     pub full_user_name: String,
@@ -134,7 +133,8 @@ impl DB for OBKVClient {
             columns.push(key.parse()?);
             properties.push(Value::from(value.to_owned()));
         }
-        let result = self.client
+        let result = self
+            .client
             .insert(
                 table,
                 vec![Value::from(key.to_owned())],
@@ -166,7 +166,8 @@ impl DB for OBKVClient {
             columns.push(key.parse()?);
             properties.push(Value::from(value.to_owned()));
         }
-        let result = self.client
+        let result = self
+            .client
             .update(
                 table,
                 vec![Value::from(key.to_owned())],

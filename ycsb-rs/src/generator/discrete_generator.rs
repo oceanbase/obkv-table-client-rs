@@ -1,5 +1,6 @@
-use super::Generator;
 use rand::prelude::*;
+
+use super::Generator;
 
 pub struct WeightPair<T: Clone + Send> {
     weight: f64,

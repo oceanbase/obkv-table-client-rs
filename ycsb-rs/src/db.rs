@@ -1,9 +1,11 @@
-use crate::sqlite::SQLite;
-use crate::obkv_client::{OBKVClient, OBKVClientInitStruct};
+use std::{collections::HashMap, rc::Rc, sync::Arc};
+
 use anyhow::{anyhow, Result};
-use std::collections::HashMap;
-use std::rc::Rc;
-use std::sync::Arc;
+
+use crate::{
+    obkv_client::{OBKVClient, OBKVClientInitStruct},
+    sqlite::SQLite,
+};
 
 pub trait DB {
     fn init(&self) -> Result<()>;

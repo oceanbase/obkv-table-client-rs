@@ -209,42 +209,52 @@ impl ClientConfig {
     pub fn new() -> Self {
         Self::default()
     }
+
     pub fn set_rpc_connect_timeout(&mut self, rpc_connect_timeout: Duration) -> &mut Self {
         self.rpc_connect_timeout = rpc_connect_timeout;
         self
     }
+
     pub fn set_rpc_read_timeout(&mut self, rpc_read_timeout: Duration) -> &mut Self {
         self.rpc_read_timeout = rpc_read_timeout;
         self
     }
+
     pub fn set_rpc_operation_timeout(&mut self, rpc_operation_timeout: Duration) -> &mut Self {
         self.rpc_operation_timeout = rpc_operation_timeout;
         self
     }
+
     pub fn set_rpc_login_timeout(&mut self, rpc_login_timeout: Duration) -> &mut Self {
         self.rpc_login_timeout = rpc_login_timeout;
         self
     }
+
     pub fn set_rpc_retry_limit(&mut self, rpc_retry_limit: usize) -> &mut Self {
         self.rpc_retry_limit = rpc_retry_limit;
         self
     }
+
     pub fn set_rpc_retry_interval(&mut self, rpc_retry_interval: Duration) -> &mut Self {
         self.rpc_retry_interval = rpc_retry_interval;
         self
     }
+
     pub fn set_refresh_workers_num(&mut self, refresh_workers_num: usize) -> &mut Self {
         self.refresh_workers_num = refresh_workers_num;
         self
     }
+
     pub fn set_max_conns_per_server(&mut self, max_conns_per_server: usize) -> &mut Self {
         self.max_conns_per_server = max_conns_per_server;
         self
     }
+
     pub fn set_min_idle_conns_per_server(&mut self, min_idle_conns_per_server: usize) -> &mut Self {
         self.min_idle_conns_per_server = min_idle_conns_per_server;
         self
     }
+
     pub fn set_conn_init_thread_num(&mut self, conn_init_thread_num: usize) -> &mut Self {
         self.conn_init_thread_num = conn_init_thread_num;
         self

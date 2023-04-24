@@ -5,6 +5,8 @@ mod discrete_generator;
 mod uniform_long_generator;
 mod zipfian_generator;
 
+use std::string::ToString;
+
 pub use acknowledged_counter_generator::AcknowledgedCounterGenerator;
 pub use constant_generator::ConstantGenerator;
 pub use counter_generator::CounterGenerator;
@@ -12,8 +14,6 @@ pub use discrete_generator::{DiscreteGenerator, WeightPair};
 use rand::prelude::SmallRng;
 pub use uniform_long_generator::UniformLongGenerator;
 pub use zipfian_generator::ZipfianGenerator;
-
-use std::string::ToString;
 
 pub trait Generator<T: ToString + Clone + Send> {
     fn next_value(&self, rng: &mut SmallRng) -> T;

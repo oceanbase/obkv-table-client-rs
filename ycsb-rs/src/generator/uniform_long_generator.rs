@@ -1,5 +1,6 @@
-use super::{Generator, NumberGenerator};
 use rand::prelude::*;
+
+use super::{Generator, NumberGenerator};
 
 pub struct UniformLongGenerator {
     lower_bound: u64,

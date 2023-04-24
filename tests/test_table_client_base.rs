@@ -15,6 +15,7 @@
  * #L%
  */
 
+use std::time::SystemTime;
 #[allow(unused_imports)]
 #[allow(unused)]
 use std::{
@@ -25,7 +26,6 @@ use std::{
     thread,
     time::Duration,
 };
-use std::time::SystemTime;
 
 use obkv::{error::CommonErrCode, ObTableClient, ResultCodes, Table, TableQuery, Value};
 use time::PreciseTime;
@@ -35,8 +35,9 @@ pub struct BaseTest {
 }
 
 impl BaseTest {
-    const THREAD_NUM: usize = 10;
     const ROW_NUM: usize = 500;
+    const THREAD_NUM: usize = 10;
+
     pub fn new(client: ObTableClient) -> BaseTest {
         BaseTest {
             client: Arc::new(client),
@@ -70,7 +71,10 @@ impl BaseTest {
                         .expect("fail to get");
                     let end_time = SystemTime::now();
                     if end_time.duration_since(start_time).unwrap().as_millis() > 500 {
-                        println!("get time: {:?}", end_time.duration_since(start_time).unwrap().as_millis());
+                        println!(
+                            "get time: {:?}",
+                            end_time.duration_since(start_time).unwrap().as_millis()
+                        );
                     }
                     assert_eq!(1, result.len());
                     let v = result.remove("c2").unwrap();
@@ -86,7 +90,10 @@ impl BaseTest {
             handle.join().expect("should succeed to join");
         }
         let end = PreciseTime::now();
-        assert_eq!(BaseTest::ROW_NUM * BaseTest::THREAD_NUM, counter.load(Ordering::SeqCst));
+        assert_eq!(
+            BaseTest::ROW_NUM * BaseTest::THREAD_NUM,
+            counter.load(Ordering::SeqCst)
+        );
         println!(
             "{} seconds for insert_or_update {} rows.",
             start.to(end),

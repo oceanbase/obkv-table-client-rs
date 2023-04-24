@@ -53,7 +53,6 @@ mod location;
 mod rpc;
 pub mod serde_obkv;
 mod util;
-use crate::rpc::proxy;
 pub use self::{
     client::{
         query::{QueryResultSet, TableQuery},
@@ -61,8 +60,11 @@ pub use self::{
         table_client::{Builder, ObTableClient, RunningMode},
         ClientConfig, Table, TableOpResult,
     },
-    rpc::protocol::{codes::ResultCodes, payloads, query},
-    serde_obkv::value::{ObjType, Value},
     proxy::OBKV_PROXY_HISTOGRAM_NUM_VEC,
-    rpc::{OBKV_RPC_HISTOGRAM_VEC, OBKV_RPC_HISTOGRAM_NUM_VEC},
+    rpc::{
+        protocol::{codes::ResultCodes, payloads, query},
+        OBKV_RPC_HISTOGRAM_NUM_VEC, OBKV_RPC_HISTOGRAM_VEC,
+    },
+    serde_obkv::value::{ObjType, Value},
 };
+use crate::rpc::proxy;

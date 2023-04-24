@@ -38,7 +38,7 @@ pub static OB_MAX: &[u64] = &[
 
 //TODO refactor
 pub fn encoded_length_i8(_v: i8) -> usize {
-    return 1;
+    1
 }
 
 //TODO refactor

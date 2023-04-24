@@ -15,11 +15,11 @@
  * #L%
  */
 
-use prometheus::core::Collector;
-use prometheus::proto::{MetricFamily};
-use obkv::client::table_client::{OBKV_CLIENT_OPERATION_HISTOGRAM_VEC};
-use obkv::{OBKV_PROXY_HISTOGRAM_NUM_VEC, OBKV_RPC_HISTOGRAM_VEC, OBKV_RPC_HISTOGRAM_NUM_VEC};
-
+use obkv::{
+    client::table_client::OBKV_CLIENT_OPERATION_HISTOGRAM_VEC, OBKV_PROXY_HISTOGRAM_NUM_VEC,
+    OBKV_RPC_HISTOGRAM_NUM_VEC, OBKV_RPC_HISTOGRAM_VEC,
+};
+use prometheus::{core::Collector, proto::MetricFamily};
 
 pub fn print_matric_family_detail(metric_family: MetricFamily) {
     let metric_name = metric_family.get_name();

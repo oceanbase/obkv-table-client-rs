@@ -1,9 +1,11 @@
-use super::{CounterGenerator, Generator};
-use rand::prelude::*;
 use std::sync::{
     atomic::{AtomicBool, AtomicU64, Ordering},
     Mutex,
 };
+
+use rand::prelude::*;
+
+use super::{CounterGenerator, Generator};
 
 const WINDOW_SIZE: u64 = 1 << 20;
 const WINDOW_MASK: u64 = WINDOW_SIZE - 1;

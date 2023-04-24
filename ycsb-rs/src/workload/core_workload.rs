@@ -1,20 +1,27 @@
-use std::cell::RefCell;
-use crate::db::DB;
-use crate::workload::Workload;
-use rand::distributions::{Alphanumeric, DistString};
-use rand::rngs::SmallRng;
-use rand::SeedableRng;
-use std::collections::HashMap;
-use std::ops::DerefMut;
-use std::rc::Rc;
-use std::sync::{Arc, Mutex};
-
-use crate::generator::{
-    AcknowledgedCounterGenerator, ConstantGenerator, CounterGenerator, DiscreteGenerator,
-    Generator, UniformLongGenerator, WeightPair, ZipfianGenerator,
+use std::{
+    cell::RefCell,
+    collections::HashMap,
+    ops::DerefMut,
+    rc::Rc,
+    sync::{Arc, Mutex},
 };
-use crate::obkv_client::OBKVClient;
-use crate::properties::Properties;
+
+use rand::{
+    distributions::{Alphanumeric, DistString},
+    rngs::SmallRng,
+    SeedableRng,
+};
+
+use crate::{
+    db::DB,
+    generator::{
+        AcknowledgedCounterGenerator, ConstantGenerator, CounterGenerator, DiscreteGenerator,
+        Generator, UniformLongGenerator, WeightPair, ZipfianGenerator,
+    },
+    obkv_client::OBKVClient,
+    properties::Properties,
+    workload::Workload,
+};
 
 #[derive(Copy, Clone, Debug)]
 pub enum CoreOperation {
@@ -170,10 +177,10 @@ impl CoreWorkload {
         db.update(&self.table, &dbkey, &values).unwrap();
     }
 
-
     fn next_key_num(&self) -> u64 {
         // FIXME: Handle case where keychooser is an ExponentialGenerator.
-        // FIXME: Handle case where keynum is > transactioninsertkeysequence's last value
+        // FIXME: Handle case where keynum is > transactioninsertkeysequence's last
+        // value
         self.key_chooser
             .lock()
             .unwrap()
