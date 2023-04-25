@@ -1,8 +1,18 @@
 [package]
 name = "obkv-table-client-rs"
 version = "0.1.0"
-authors = ["OceanBase OBKV Developers", "CeresDB Authors <ceresdb@service.alipay.com>"]
+authors = ["OceanBase OBKV Developers", "CeresDB Authors <ceresdbservice@gmail.com>"]
 edition = "2021"
+
+[workspace.package]
+version = "0.1.0"
+authors = ["OceanBase OBKV Developers", "CeresDB Authors <ceresdbservice@gmail.com>"]
+edition = "2021"
+
+[workspace]
+members = [
+    "ycsb-rs",
+]
 
 [lib]
 name = "obkv"
@@ -12,7 +22,14 @@ name = "concurrent_insert"
 harness = false
 path = "benches/concurrent_insert/mod.rs"
 
+[workspace.dependencies]
+anyhow = "1.0"
+log = "0.4"
+toml = "0.7.3"
+prometheus = "0.13"
+
 [dependencies]
+anyhow = { workspace = true }
 byteorder = "1.2"
 bytes = "0.4"
 chrono = "0.4"
@@ -20,14 +37,14 @@ crossbeam = "0.8.2"
 futures = "0.1"
 futures-cpupool = "0.1"
 lazy_static = "1.3"
-log = "0.4"
+log = { workspace = true }
 murmur2 = "0.1"
 mysql = "16.1"
 net2 = "0.2"
-prometheus = "0.7"
+prometheus = { workspace = true }
 quick-error = "1.2"
 r2d2 = "0.8.3"
-rand = "0.6"
+rand = "0.8"
 reqwest = { version = "0.11.13", default-features = false, features = ["rustls-tls", "blocking"] }
 rust-crypto = "0.2"
 scheduled-thread-pool = "0.2"
@@ -48,3 +65,6 @@ serial_test_derive = "0.2"
 tempfile = "3.0"
 test-log = "0.2"
 time = "0.1"
+
+[profile.release]
+debug = true

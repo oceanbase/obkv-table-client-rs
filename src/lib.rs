@@ -60,6 +60,10 @@ pub use self::{
         table_client::{Builder, ObTableClient, RunningMode},
         ClientConfig, Table, TableOpResult,
     },
-    rpc::protocol::{codes::ResultCodes, payloads, query},
+    proxy::OBKV_PROXY_HISTOGRAM_NUM_VEC,
+    rpc::{
+        protocol::{codes::ResultCodes, payloads, query},
+        proxy, OBKV_RPC_HISTOGRAM_NUM_VEC, OBKV_RPC_HISTOGRAM_VEC,
+    },
     serde_obkv::value::{ObjType, Value},
 };

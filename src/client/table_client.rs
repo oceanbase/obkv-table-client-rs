@@ -78,11 +78,24 @@ lazy_static! {
         exponential_buckets(0.0005, 2.0, 18).unwrap()
     )
     .unwrap();
+    pub static ref OBKV_CLIENT_OPERATION_HISTOGRAM_VEC: HistogramVec = register_histogram_vec!(
+        "obkv_client_operation_duration_seconds",
+        "Bucketed histogram of client operations.",
+        &["type"],
+        exponential_buckets(0.001, 2.0, 8).unwrap()
+    )
+    .unwrap();
     pub static ref OBKV_CLIENT_HISTOGRAM_NUM_VEC: HistogramVec = register_histogram_vec!(
         "obkv_client_metric_distribution",
         "Bucketed histogram of metric distribution",
         &["type"],
         linear_buckets(5.0, 20.0, 20).unwrap()
+    )
+    .unwrap();
+    pub static ref OBKV_CLIENT_OPERATION_COUNTER_VEC: CounterVec = register_counter_vec!(
+        "obkv_client_operations_counter",
+        "Counter of client operations.",
+        &["type"]
     )
     .unwrap();
 }
@@ -275,10 +288,12 @@ impl ObTableClientInner {
             refresh_metadata_mutex: Mutex::new(0),
             last_refresh_metadata_ts: AtomicUsize::new(0),
 
-            conn_init_thread_pool: Arc::new(ScheduledThreadPool::with_name(
-                "conn_init_{}",
-                conn_init_thread_num,
-            )),
+            conn_init_thread_pool: Arc::new(
+                ScheduledThreadPool::builder()
+                    .num_threads(conn_init_thread_num)
+                    .thread_name_pattern("conn_init_{}")
+                    .build(),
+            ),
             table_batch_op_thread_pools: Arc::new(RwLock::new(HashMap::new())),
             query_permits,
         })
@@ -1387,7 +1402,7 @@ impl ObTableClientInner {
 
         let (part_id, table) = self.get_table(table_name, &row_keys, false)?;
 
-        let _timer = OBKV_CLIENT_HISTOGRAM_VEC
+        let _timer = OBKV_CLIENT_OPERATION_HISTOGRAM_VEC
             .with_label_values(&[operation_type.as_str()])
             .start_timer();
 
@@ -1566,7 +1581,7 @@ impl ObTableClient {
     ) -> Result<Vec<TableOpResult>> {
         self.inner.check_status()?;
 
-        let _timer = OBKV_CLIENT_HISTOGRAM_VEC
+        let _timer = OBKV_CLIENT_OPERATION_HISTOGRAM_VEC
             .with_label_values(&["execute_batch"])
             .start_timer();
 
@@ -1870,7 +1885,7 @@ impl Drop for ObTableClientStreamQuerier {
 
         if start_ts > 0 {
             let cost_secs = millis_to_secs(current_time_millis() - start_ts);
-            OBKV_CLIENT_HISTOGRAM_VEC
+            OBKV_CLIENT_OPERATION_HISTOGRAM_VEC
                 .with_label_values(&["stream_querier_total_time"])
                 .observe(cost_secs as f64);
         }
@@ -1886,7 +1901,7 @@ impl StreamQuerier for ObTableClientStreamQuerier {
     ) -> Result<i64> {
         self.client.acquire_query_permit()?;
 
-        let _timer = OBKV_CLIENT_HISTOGRAM_VEC
+        let _timer = OBKV_CLIENT_OPERATION_HISTOGRAM_VEC
             .with_label_values(&["execute_query"])
             .start_timer();
 
@@ -1921,7 +1936,7 @@ impl StreamQuerier for ObTableClientStreamQuerier {
         (part_id, ob_table): (i64, Arc<ObTable>),
         payload: &mut ObTableStreamRequest,
     ) -> Result<i64> {
-        let _timer = OBKV_CLIENT_HISTOGRAM_VEC
+        let _timer = OBKV_CLIENT_OPERATION_HISTOGRAM_VEC
             .with_label_values(&["execute_stream"])
             .start_timer();
 
@@ -1979,7 +1994,7 @@ impl ObTableClientQueryImpl {
 
 impl TableQuery for ObTableClientQueryImpl {
     fn execute(&self) -> Result<QueryResultSet> {
-        let _timer = OBKV_CLIENT_HISTOGRAM_VEC
+        let _timer = OBKV_CLIENT_OPERATION_HISTOGRAM_VEC
             .with_label_values(&["query_execute"])
             .start_timer();
 
@@ -2363,10 +2378,12 @@ impl Builder {
                 self.running_mode,
                 self.config,
             )?),
-            refresh_thread_pool: Arc::new(ScheduledThreadPool::with_name(
-                "ObTableClient-RefreshMetadata-Thread-",
-                2,
-            )),
+            refresh_thread_pool: Arc::new(
+                ScheduledThreadPool::builder()
+                    .num_threads(2)
+                    .thread_name_pattern("RefreshMetaThread-")
+                    .build(),
+            ),
         })
     }
 }

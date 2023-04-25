@@ -57,14 +57,14 @@ lazy_static! {
         "obkv_rpc_duration_seconds",
         "Bucketed histogram of rpc execution.",
         &["type"],
-        exponential_buckets(0.0005, 2.0, 18).unwrap()
+        exponential_buckets(0.0005, 2.0, 8).unwrap()
     )
     .unwrap();
     pub static ref OBKV_RPC_HISTOGRAM_NUM_VEC: HistogramVec = register_histogram_vec!(
         "obkv_rpc_metric_distribution",
         "Bucketed histogram of metric distribution",
         &["type"],
-        linear_buckets(5.0, 20.0, 20).unwrap()
+        linear_buckets(5.0, 5.0, 10).unwrap()
     )
     .unwrap();
 }
@@ -99,9 +99,12 @@ impl ConnectionSender {
                     OBKV_RPC_HISTOGRAM_NUM_VEC
                         .with_label_values(&["request_queue_size"])
                         .observe(receiver.len() as f64);
-
+                    let timer = OBKV_RPC_HISTOGRAM_VEC
+                        .with_label_values(&["reveiver_recv_time"])
+                        .start_timer();
                     match receiver.recv() {
                         Ok(packet) => {
+                            timer.stop_and_record();
                             if packet.is_close_poison() {
                                 break;
                             }
@@ -317,7 +320,7 @@ impl Connection {
 
             match read_stream.read(&mut read_buf) {
                 Ok(size) => {
-                    drop(timer);
+                    timer.stop_and_record();
                     OBKV_RPC_HISTOGRAM_NUM_VEC
                         .with_label_values(&["read_bytes"])
                         .observe(size as f64);

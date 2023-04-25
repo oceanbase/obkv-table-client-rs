@@ -189,7 +189,7 @@ impl Default for ClientConfig {
             rpc_connect_timeout: Duration::from_secs(5),
             rpc_read_timeout: Duration::from_secs(3),
             rpc_login_timeout: Duration::from_secs(3),
-            rpc_operation_timeout: Duration::from_secs(10),
+            rpc_operation_timeout: Duration::from_secs(3),
             rpc_retry_limit: 3,
             rpc_retry_interval: Duration::from_secs(0),
 
