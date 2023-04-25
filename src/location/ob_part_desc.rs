@@ -551,6 +551,9 @@ impl ObHashPartDesc {
             Value::Int64(v, _meta) => *v,
             Value::Int32(v, _meta) => *v as i64,
             Value::Int8(v, _meta) => *v as i64,
+            Value::UInt64(v, _meta) => *v as i64,
+            Value::UInt32(v, _meta) => *v as i64,
+            Value::UInt8(v, _meta) => *v as i64,
             // TODO: support value bytes
             Value::Bytes(_v, _meta) => unimplemented!(),
             _ => 0,
@@ -722,6 +725,9 @@ impl ObKeyPartDesc {
             Value::Int64(v, _meta) => ObKeyPartDesc::long_hash(*v, hash_code),
             Value::Int32(v, _meta) => ObKeyPartDesc::long_hash(*v as i64, hash_code),
             Value::Int8(v, _meta) => ObKeyPartDesc::long_hash(*v as i64, hash_code),
+            Value::UInt64(v, _meta) => ObKeyPartDesc::long_hash(*v as i64, hash_code),
+            Value::UInt32(v, _meta) => ObKeyPartDesc::long_hash(*v as i64, hash_code),
+            Value::UInt8(v, _meta) => ObKeyPartDesc::long_hash(*v as i64, hash_code),
             Value::Bytes(v, meta) => ObKeyPartDesc::varchar_hash(
                 Value::Bytes(v.clone(), meta.clone()),
                 ref_column.get_ob_collation_type(),

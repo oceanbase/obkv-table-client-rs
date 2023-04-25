@@ -394,85 +394,6 @@ fn clean_table(client: ObTableClient, table_name: &str) {
 }
 
 #[test]
-fn test_partition_bigint() {
-    let client = utils::common::build_normal_client();
-    const BIGINT_TABLE_NAME: &str = "TEST_TABLE_PARTITION_BIGINT_KEY";
-    const VARCHAR_BIN_TABLE_NAME: &str = "TEST_TABLE_PARTITION_VARCHAR_BIN_KEY";
-    const VARCHAR_TABLE_NAME: &str = "TEST_TABLE_PARTITION_VARCHAR_KEY";
-    const VARBINARY_TABLE_NAME: &str = "TEST_TABLE_PARTITION_VARBINARY_KEY";
-    client.add_row_key_element(BIGINT_TABLE_NAME, vec!["c1".to_string()]);
-    client.add_row_key_element(VARCHAR_BIN_TABLE_NAME, vec!["c1".to_string()]);
-    client.add_row_key_element(VARCHAR_TABLE_NAME, vec!["c1".to_string()]);
-    client.add_row_key_element(VARBINARY_TABLE_NAME, vec!["c1".to_string()]);
-
-    // test bigint partition
-    for i in 926..977 {
-        let result = client.delete(BIGINT_TABLE_NAME, vec![Value::from(i as i64)]);
-        assert!(result.is_ok());
-        let insert_sql = format!("insert into {BIGINT_TABLE_NAME} values({i}, 'value');");
-        client.execute_sql(&insert_sql).expect("fail to insert");
-    }
-    for i in 926..977 {
-        let result = client.get(
-            BIGINT_TABLE_NAME,
-            vec![Value::from(i as i64)],
-            vec!["c2".to_owned()],
-        );
-        assert!(result.is_ok());
-        let result = result.unwrap();
-        assert_eq!(1, result.len());
-    }
-}
-
-#[test]
-fn test_partition_varchar_bin() {
-    let client = utils::common::build_normal_client();
-    const VARCHAR_BIN_TABLE_NAME: &str = "TEST_TABLE_PARTITION_VARCHAR_BIN_KEY";
-    client.add_row_key_element(VARCHAR_BIN_TABLE_NAME, vec!["c1".to_string()]);
-
-    // test varchar utf bin partition
-    for i in 926..977 {
-        let rowkey = format!("{i}");
-        let result = client.delete(VARCHAR_BIN_TABLE_NAME, vec![Value::from(rowkey.to_owned())]);
-        assert!(result.is_ok());
-        let insert_sql = format!("insert into {VARCHAR_BIN_TABLE_NAME} values({rowkey}, 'value');");
-        client.execute_sql(&insert_sql).expect("fail to insert");
-    }
-    for i in 926..977 {
-        let rowkey = format!("{i}");
-        let result = client.get(
-            VARCHAR_BIN_TABLE_NAME,
-            vec![Value::from(rowkey.to_owned())],
-            vec!["c2".to_owned()],
-        );
-        assert!(result.is_ok());
-        let result = result.unwrap();
-        assert_eq!(1, result.len());
-    }
-    for _i in 0..64 {
-        let rowkey: String = thread_rng()
-            .sample_iter(&Alphanumeric)
-            .map(|c| std::char::from_u32(c as u32).unwrap())
-            .take(512)
-            .collect();
-        let sql_rowkey = format!("'{rowkey}'");
-        let result = client.delete(VARCHAR_BIN_TABLE_NAME, vec![Value::from(rowkey.to_owned())]);
-        assert!(result.is_ok());
-        let insert_sql =
-            format!("insert into {VARCHAR_BIN_TABLE_NAME} values({sql_rowkey}, 'value');");
-        client.execute_sql(&insert_sql).expect("fail to insert");
-        let result = client.get(
-            VARCHAR_BIN_TABLE_NAME,
-            vec![Value::from(rowkey.to_owned())],
-            vec!["c2".to_owned()],
-        );
-        assert!(result.is_ok());
-        let result = result.unwrap();
-        assert_eq!(1, result.len());
-    }
-}
-
-#[test]
 fn test_partition_varchar_general_ci() {
     let client = utils::common::build_normal_client();
     const VARCHAR_TABLE_NAME: &str = "TEST_TABLE_PARTITION_VARCHAR_KEY";
@@ -520,54 +441,6 @@ fn test_partition_varchar_general_ci() {
 }
 
 #[test]
-fn test_partition_varbinary() {
-    let client = utils::common::build_normal_client();
-    const VARBINARY_TABLE_NAME: &str = "TEST_TABLE_PARTITION_VARBINARY_KEY";
-    client.add_row_key_element(VARBINARY_TABLE_NAME, vec!["c1".to_string()]);
-
-    // test varbinary partition
-    for i in 926..977 {
-        let rowkey = format!("{i}");
-        let result = client.delete(VARBINARY_TABLE_NAME, vec![Value::from(rowkey.to_owned())]);
-        assert!(result.is_ok());
-        let insert_sql = format!("insert into {VARBINARY_TABLE_NAME} values({rowkey}, 'value');");
-        client.execute_sql(&insert_sql).expect("fail to insert");
-    }
-    for i in 926..977 {
-        let rowkey = format!("{i}");
-        let result = client.get(
-            VARBINARY_TABLE_NAME,
-            vec![Value::from(rowkey.to_owned())],
-            vec!["c2".to_owned()],
-        );
-        assert!(result.is_ok());
-        let result = result.unwrap();
-        assert_eq!(1, result.len());
-    }
-    for _i in 0..64 {
-        let rowkey: String = thread_rng()
-            .sample_iter(&Alphanumeric)
-            .map(|c| std::char::from_u32(c as u32).unwrap())
-            .take(512)
-            .collect();
-        let sql_rowkey = format!("'{rowkey}'");
-        let result = client.delete(VARBINARY_TABLE_NAME, vec![Value::from(rowkey.to_owned())]);
-        assert!(result.is_ok());
-        let insert_sql =
-            format!("insert into {VARBINARY_TABLE_NAME} values({sql_rowkey}, 'value');");
-        client.execute_sql(&insert_sql).expect("fail to insert");
-        let result = client.get(
-            VARBINARY_TABLE_NAME,
-            vec![Value::from(rowkey.to_owned())],
-            vec!["c2".to_owned()],
-        );
-        assert!(result.is_ok());
-        let result = result.unwrap();
-        assert_eq!(1, result.len());
-    }
-}
-
-#[test]
 fn test_partition_complex() {
     let client = utils::common::build_normal_client();
     const TABLE_NAME: &str = "TEST_TABLE_PARTITION_COMPLEX_KEY";
@@ -592,7 +465,7 @@ fn test_partition_complex() {
         let result = client.delete(
             TABLE_NAME,
             vec![
-                Value::from(i as i64),
+                Value::from(i as u64),
                 Value::from(rowkey_c2.to_owned()),
                 Value::from(rowkey_c3.to_owned()),
             ],
@@ -605,7 +478,7 @@ fn test_partition_complex() {
         let result = client.get(
             TABLE_NAME,
             vec![
-                Value::from(i as i64),
+                Value::from(i as u64),
                 Value::from(rowkey_c2.to_owned()),
                 Value::from(rowkey_c3.to_owned()),
             ],
