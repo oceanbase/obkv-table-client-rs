@@ -490,7 +490,7 @@ impl Value {
             ObjType::USmallInt => Ok(Value::UInt32(decode_vi32(buf)? as u32, meta)),
             ObjType::UMediumInt => Ok(Value::UInt32(decode_vi32(buf)? as u32, meta)),
             ObjType::UInt32 => Ok(Value::UInt32(decode_vi32(buf)? as u32, meta)),
-            ObjType::UInt64 => Ok(Value::UInt64(decode_vi32(buf)? as u64, meta)),
+            ObjType::UInt64 => Ok(Value::UInt64(decode_vi64(buf)? as u64, meta)),
             ObjType::Float => Ok(Value::Float(decode_f32(buf)?, meta)),
             ObjType::Double => Ok(Value::Double(decode_f64(buf)?, meta)),
             ObjType::UFloat => Ok(Value::Float(decode_f32(buf)?, meta)),
