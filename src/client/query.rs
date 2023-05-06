@@ -22,8 +22,6 @@ use std::{
     time::Duration,
 };
 
-use prometheus::*;
-
 /// Query API for ob table
 use super::ObTable;
 use crate::{
@@ -38,22 +36,7 @@ use crate::{
     },
     serde_obkv::value::Value,
 };
-
-lazy_static! {
-    pub static ref OBKV_CLIENT_STREAM_HISTOGRAM_VEC: HistogramVec = register_histogram_vec!(
-        "obkv_client_stream_metric_distribution",
-        "Bucketed histogram of stream metric distribution",
-        &["type"],
-        exponential_buckets(0.0005, 2.0, 18).unwrap()
-    )
-    .unwrap();
-    pub static ref OBKV_CLIENT_STREAM_COUNTER_VEC: IntCounterVec = register_int_counter_vec!(
-        "obkv_client_stream_command_total",
-        "Total number of commands group by type.",
-        &["type", "tag"]
-    )
-    .unwrap();
-}
+use crate::client::table_client::OBKV_CLIENT_METRICS;
 
 // const CLOSE_STREAM_MIN_TIMEOUT_MS: Duration = Duration::from_millis(500);
 // Zero timeout means no-wait request.
@@ -238,9 +221,6 @@ impl QueryStreamResult {
         self.closed = true;
 
         let last_result_num = self.partition_last_result.len();
-        let _timer = OBKV_CLIENT_STREAM_HISTOGRAM_VEC
-            .with_label_values(&["close_stream"])
-            .start_timer();
 
         let mut loop_cnt = 0;
         loop {
@@ -321,9 +301,7 @@ impl QueryStreamResult {
                 e
             );
         }
-        OBKV_CLIENT_STREAM_COUNTER_VEC
-            .with_label_values(&["close_eagerly", tag])
-            .inc();
+        OBKV_CLIENT_METRICS.inc_stream_query_counter("close_eagerly", tag)
     }
 
     pub fn row_index(&self) -> i32 {

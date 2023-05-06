@@ -23,7 +23,6 @@ use crate::{
     serde_obkv::value::Value,
 };
 
-mod metrics;
 mod ocp;
 pub mod query;
 pub mod table;

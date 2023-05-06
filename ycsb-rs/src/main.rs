@@ -6,6 +6,10 @@ use rand::{rngs::SmallRng, SeedableRng};
 use structopt::StructOpt;
 use workload::CoreWorkload;
 
+use obkv::{
+    monitors::prometheus::OBKV_CLIENT_REGISTRY,
+};
+
 use crate::{
     db::DB,
     obkv_client::{OBKVClient, OBKVClientInitStruct},
@@ -14,7 +18,6 @@ use crate::{
 
 pub mod db;
 pub mod generator;
-pub mod monitor;
 pub mod obkv_client;
 pub mod properties;
 pub mod sqlite;
@@ -141,10 +144,7 @@ fn main() -> Result<()> {
         println!("[OVERALL], Throughput(ops/sec), {throughput}\n");
     }
 
-    monitor::print_client_matrics();
-    // monitor::print_proxy_matrics();
-    monitor::print_rpc_matrics();
-    monitor::print_rpc_num_matrics();
+    OBKV_CLIENT_REGISTRY.lock().unwrap().print_registry();
 
     Ok(())
 }

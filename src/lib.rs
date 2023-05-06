@@ -37,7 +37,6 @@ extern crate crypto;
 extern crate futures_cpupool;
 #[macro_use]
 extern crate lazy_static;
-extern crate prometheus;
 extern crate r2d2;
 extern crate scheduled_thread_pool;
 extern crate spin;
@@ -51,6 +50,7 @@ mod constant;
 pub mod error;
 mod location;
 mod rpc;
+pub mod monitors;
 pub mod serde_obkv;
 mod util;
 pub use self::{
@@ -60,10 +60,9 @@ pub use self::{
         table_client::{Builder, ObTableClient, RunningMode},
         ClientConfig, Table, TableOpResult,
     },
-    proxy::OBKV_PROXY_HISTOGRAM_NUM_VEC,
     rpc::{
         protocol::{codes::ResultCodes, payloads, query},
-        proxy, OBKV_RPC_HISTOGRAM_NUM_VEC, OBKV_RPC_HISTOGRAM_VEC,
+        proxy,
     },
     serde_obkv::value::{ObjType, Value},
 };

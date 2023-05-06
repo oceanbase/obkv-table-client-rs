@@ -26,15 +26,13 @@ use std::{
     thread,
     time::Duration,
 };
-
+use std::time::Instant;
 use futures::{future, Future};
 use futures_cpupool::{Builder as CpuPoolBuilder, CpuPool};
-use prometheus::*;
 use rand::{seq::SliceRandom, thread_rng};
 use scheduled_thread_pool::ScheduledThreadPool;
 
 use super::{
-    metrics::OBKV_CLIENT_RETRY_COUNTER_VEC,
     ocp::{ObOcpModelManager, OcpModel},
     query::{QueryResultSet, QueryStreamResult, StreamQuerier, TableQuery},
     table::{self, ObTable},
@@ -67,37 +65,20 @@ use crate::{
         permit::{PermitGuard, Permits},
         HandyRwLock,
     },
+    monitors::{
+        client_metrics::{ClientMetrics, ObClientOpRecordType},
+        prometheus::{OBKV_CLIENT_REGISTRY},
+    },
     ResultCodes,
 };
+use crate::monitors::client_metrics::ObClientOpRetryType;
 
 lazy_static! {
-    pub static ref OBKV_CLIENT_HISTOGRAM_VEC: HistogramVec = register_histogram_vec!(
-        "obkv_client_duration_seconds",
-        "Bucketed histogram of client operations.",
-        &["type"],
-        exponential_buckets(0.0005, 2.0, 18).unwrap()
-    )
-    .unwrap();
-    pub static ref OBKV_CLIENT_OPERATION_HISTOGRAM_VEC: HistogramVec = register_histogram_vec!(
-        "obkv_client_operation_duration_seconds",
-        "Bucketed histogram of client operations.",
-        &["type"],
-        exponential_buckets(0.001, 2.0, 8).unwrap()
-    )
-    .unwrap();
-    pub static ref OBKV_CLIENT_HISTOGRAM_NUM_VEC: HistogramVec = register_histogram_vec!(
-        "obkv_client_metric_distribution",
-        "Bucketed histogram of metric distribution",
-        &["type"],
-        linear_buckets(5.0, 20.0, 20).unwrap()
-    )
-    .unwrap();
-    pub static ref OBKV_CLIENT_OPERATION_COUNTER_VEC: CounterVec = register_counter_vec!(
-        "obkv_client_operations_counter",
-        "Counter of client operations.",
-        &["type"]
-    )
-    .unwrap();
+    pub static ref OBKV_CLIENT_METRICS: ClientMetrics = {
+        let client_metrics = ClientMetrics::default();
+        client_metrics.register(&mut OBKV_CLIENT_REGISTRY.lock().unwrap().registry);
+        client_metrics
+    };
 }
 
 const MAX_PRIORITY: isize = 50;
@@ -303,9 +284,7 @@ impl ObTableClientInner {
     fn acquire_query_permit(&self) -> Result<Option<PermitGuard>> {
         if let Some(permits) = &self.query_permits {
             let guard = permits.acquire()?;
-            OBKV_CLIENT_HISTOGRAM_NUM_VEC
-                .with_label_values(&["query_concurrency"])
-                .observe(guard.permit() as f64);
+            OBKV_CLIENT_METRICS.observe_misc("query_concurrency", guard.permit() as f64);
 
             Ok(Some(guard))
         } else {
@@ -369,9 +348,7 @@ impl ObTableClientInner {
         table_name: &str,
         table_entry: Option<&Arc<TableEntry>>,
     ) -> Result<Arc<TableEntry>> {
-        let _timer = OBKV_CLIENT_HISTOGRAM_VEC
-            .with_label_values(&["refresh_table"])
-            .start_timer();
+        let start = Instant::now();
 
         let table_entry_key = TableEntryKey::new(
             &self.cluster_name,
@@ -424,11 +401,13 @@ impl ObTableClientInner {
                 }
                 table_entry.prepare()?;
             }
+            OBKV_CLIENT_METRICS.observe_sys_operation_rt("refresh_table", start.elapsed());
             Ok(table_entry)
         }?;
 
         self.table_entry_refresh_continuous_failure_count
             .store(0, Ordering::SeqCst);
+        OBKV_CLIENT_METRICS.observe_sys_operation_rt("refresh_table", start.elapsed());
         Ok(Arc::new(result))
     }
 
@@ -639,11 +618,11 @@ impl ObTableClientInner {
     }
 
     fn add_ob_table(&self, addr: &ObServerAddr) -> Result<Arc<ObTable>> {
-        let _timer = OBKV_CLIENT_HISTOGRAM_VEC
-            .with_label_values(&["add_table"])
-            .start_timer();
+        let start = Instant::now();
         let mut table_roster = self.table_roster.wl();
-        self.add_ob_table_to_roster(addr, &mut table_roster)
+        let result = self.add_ob_table_to_roster(addr, &mut table_roster);
+        OBKV_CLIENT_METRICS.observe_sys_operation_rt("add_table", start.elapsed());
+        result
     }
 
     fn add_ob_table_to_roster(
@@ -651,9 +630,7 @@ impl ObTableClientInner {
         addr: &ObServerAddr,
         table_roster: &mut HashMap<ObServerAddr, Arc<ObTable>>,
     ) -> Result<Arc<ObTable>> {
-        let _timer = OBKV_CLIENT_HISTOGRAM_VEC
-            .with_label_values(&["add_ob_table_to_roster"])
-            .start_timer();
+        let start = Instant::now();
 
         // check whether exists
         if let Some(table) = table_roster.get(addr) {
@@ -673,6 +650,7 @@ impl ObTableClientInner {
                 .build(),
         );
         table_roster.insert(addr.clone(), ob_table.clone());
+        OBKV_CLIENT_METRICS.observe_sys_operation_rt("add_ob_table_to_roster", start.elapsed());
         Ok(ob_table)
     }
 
@@ -1163,9 +1141,7 @@ impl ObTableClientInner {
     }
 
     fn refresh_all_table_entries(&self) {
-        let _timer = OBKV_CLIENT_HISTOGRAM_VEC
-            .with_label_values(&["refresh_all_tables"])
-            .start_timer();
+        let start = Instant::now();
 
         let tables: Vec<String> = self
             .table_locations
@@ -1180,6 +1156,7 @@ impl ObTableClientInner {
                                  table_name, e);
             }
         }
+        OBKV_CLIENT_METRICS.observe_sys_operation_rt("refresh_all_tables", start.elapsed());
     }
 
     fn init(&self) -> Result<()> {
@@ -1223,9 +1200,8 @@ impl ObTableClientInner {
     }
 
     fn sync_refresh_metadata(&self) -> Result<()> {
-        let _timer = OBKV_CLIENT_HISTOGRAM_VEC
-            .with_label_values(&["refresh_metadata"])
-            .start_timer();
+        // only record real refreshing
+        let start = Instant::now();
 
         if self.is_already_refreshed() {
             warn!("ObTableClientInner::sync_refresh_metadata try to lock metadata refreshing, it has refresh  at: {}, dataSourceName: {}, url: {}",
@@ -1307,6 +1283,8 @@ impl ObTableClientInner {
         self.server_roster.reset(servers);
         self.last_refresh_metadata_ts
             .store(current_time_millis() as usize, Ordering::Release);
+
+        OBKV_CLIENT_METRICS.observe_sys_operation_rt("refresh_metadata", start.elapsed());
 
         Ok(())
     }
@@ -1402,9 +1380,7 @@ impl ObTableClientInner {
 
         let (part_id, table) = self.get_table(table_name, &row_keys, false)?;
 
-        let _timer = OBKV_CLIENT_OPERATION_HISTOGRAM_VEC
-            .with_label_values(&[operation_type.as_str()])
-            .start_timer();
+        let start = Instant::now();
 
         let mut payload = ObTableOperationRequest::new(
             table_name,
@@ -1418,6 +1394,9 @@ impl ObTableClientInner {
         payload.set_partition_id(part_id);
         let mut result = ObTableOperationResult::new();
         table.execute_payload(&mut payload, &mut result)?;
+
+        OBKV_CLIENT_METRICS.observe_operation_opt_rt(operation_type, start.elapsed());
+
         Ok(result)
     }
 
@@ -1471,9 +1450,7 @@ impl ObTableClientInner {
                         return Err(e);
                     }
                     if retry_num < self.config.rpc_retry_limit && e.need_retry() {
-                        OBKV_CLIENT_RETRY_COUNTER_VEC
-                            .with_label_values(&["execute"])
-                            .inc();
+                        OBKV_CLIENT_METRICS.inc_retry_times(ObClientOpRetryType::Execute);
 
                         if self.config.rpc_retry_interval.as_secs() > 0 {
                             thread::sleep(self.config.rpc_retry_interval);
@@ -1581,16 +1558,10 @@ impl ObTableClient {
     ) -> Result<Vec<TableOpResult>> {
         self.inner.check_status()?;
 
-        let _timer = OBKV_CLIENT_OPERATION_HISTOGRAM_VEC
-            .with_label_values(&["execute_batch"])
-            .start_timer();
-
         assert!(batch_op.is_raw());
         let mut batch_op = batch_op;
 
-        OBKV_CLIENT_HISTOGRAM_NUM_VEC
-            .with_label_values(&["batch_ops"])
-            .observe(batch_op.get_raw_ops().len() as f64);
+        OBKV_CLIENT_METRICS.observe_misc("batch_ops", batch_op.get_raw_ops().len() as f64);
 
         let table_entry = self.inner.get_or_refresh_table_entry(table_name, false)?;
 
@@ -1606,9 +1577,9 @@ impl ObTableClient {
             return Ok(Vec::new());
         }
 
-        OBKV_CLIENT_HISTOGRAM_NUM_VEC
-            .with_label_values(&["partitioned_batch_ops"])
-            .observe(part_batch_ops.len() as f64);
+        let start = Instant::now();
+
+        OBKV_CLIENT_METRICS.observe_misc("partitioned_batch_ops", part_batch_ops.len() as f64);
 
         // fast path: to process batch operations involving only one partition
         if part_batch_ops.len() == 1 {
@@ -1655,6 +1626,9 @@ impl ObTableClient {
 
         // wait for all futures done
         let results = put_all.wait()?;
+
+        OBKV_CLIENT_METRICS.observe_operation_ort_rt(ObClientOpRecordType::Batch, start.elapsed());
+
         Ok(results.into_iter().flatten().collect())
     }
 }
@@ -1842,9 +1816,7 @@ impl Table for ObTableClient {
                     };
                     if retry_num < self.inner.config.rpc_retry_limit && e.need_retry() {
                         // TODO: add error type as label
-                        OBKV_CLIENT_RETRY_COUNTER_VEC
-                            .with_label_values(&["execute_batch"])
-                            .inc();
+                        OBKV_CLIENT_METRICS.inc_retry_times(ObClientOpRetryType::ExecuteBatch);
 
                         if self.inner.config.rpc_retry_interval.as_secs() > 0 {
                             thread::sleep(self.inner.config.rpc_retry_interval);
@@ -1885,9 +1857,7 @@ impl Drop for ObTableClientStreamQuerier {
 
         if start_ts > 0 {
             let cost_secs = millis_to_secs(current_time_millis() - start_ts);
-            OBKV_CLIENT_OPERATION_HISTOGRAM_VEC
-                .with_label_values(&["stream_querier_total_time"])
-                .observe(cost_secs as f64);
+            OBKV_CLIENT_METRICS.observe_operation_ort_rt(ObClientOpRecordType::StreamQuery, Duration::from_secs(cost_secs as u64));
         }
     }
 }
@@ -1900,10 +1870,6 @@ impl StreamQuerier for ObTableClientStreamQuerier {
         payload: &mut ObTableQueryRequest,
     ) -> Result<i64> {
         self.client.acquire_query_permit()?;
-
-        let _timer = OBKV_CLIENT_OPERATION_HISTOGRAM_VEC
-            .with_label_values(&["execute_query"])
-            .start_timer();
 
         self.start_execute_ts
             .store(current_time_millis(), Ordering::Relaxed);
@@ -1922,10 +1888,7 @@ impl StreamQuerier for ObTableClientStreamQuerier {
             }
         }
         let row_count = result.row_count();
-        OBKV_CLIENT_HISTOGRAM_NUM_VEC
-            .with_label_values(&["query_rows"])
-            .observe(row_count as f64);
-
+        OBKV_CLIENT_METRICS.observe_misc("query_rows", row_count as f64);
         stream_result.cache_stream_next((part_id, ob_table), result);
         Ok(row_count)
     }
@@ -1936,10 +1899,6 @@ impl StreamQuerier for ObTableClientStreamQuerier {
         (part_id, ob_table): (i64, Arc<ObTable>),
         payload: &mut ObTableStreamRequest,
     ) -> Result<i64> {
-        let _timer = OBKV_CLIENT_OPERATION_HISTOGRAM_VEC
-            .with_label_values(&["execute_stream"])
-            .start_timer();
-
         let is_stream_next = payload.is_stream_next();
 
         let mut result = ObTableQueryResult::new();
@@ -1956,9 +1915,7 @@ impl StreamQuerier for ObTableClientStreamQuerier {
             }
         }
         let row_count = result.row_count();
-        OBKV_CLIENT_HISTOGRAM_NUM_VEC
-            .with_label_values(&["query_rows"])
-            .observe(row_count as f64);
+        OBKV_CLIENT_METRICS.observe_misc("query_rows", row_count as f64);
 
         if is_stream_next {
             stream_result.cache_stream_next((part_id, ob_table), result);
@@ -1994,10 +1951,6 @@ impl ObTableClientQueryImpl {
 
 impl TableQuery for ObTableClientQueryImpl {
     fn execute(&self) -> Result<QueryResultSet> {
-        let _timer = OBKV_CLIENT_OPERATION_HISTOGRAM_VEC
-            .with_label_values(&["query_execute"])
-            .start_timer();
-
         let mut partition_table: HashMap<i64, (i64, Arc<ObTable>)> = HashMap::new();
 
         self.table_query.verify()?;
@@ -2018,6 +1971,8 @@ impl TableQuery for ObTableClientQueryImpl {
             }
         }
 
+        let start = Instant::now();
+
         let mut stream_result = QueryStreamResult::new(
             Arc::new(ObTableClientStreamQuerier::new(
                 &self.table_name,
@@ -2033,7 +1988,11 @@ impl TableQuery for ObTableClientQueryImpl {
         stream_result.set_flag(self.client.config.log_level_flag);
         stream_result.init()?;
 
-        Ok(QueryResultSet::from_stream_result(stream_result))
+        let result = QueryResultSet::from_stream_result(stream_result);
+
+        OBKV_CLIENT_METRICS.observe_operation_ort_rt(ObClientOpRecordType::Query, start.elapsed());
+
+        Ok(result)
     }
 
     #[inline]

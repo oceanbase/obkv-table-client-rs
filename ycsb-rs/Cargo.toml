@@ -10,7 +10,6 @@ workspace = true
 anyhow = { workspace = true }
 log = { workspace = true }
 obkv-table-client-rs = { path = ".." }
-prometheus = { workspace = true }
 rand = { version = "0.8", features = ["small_rng"] }
 serde = { version = "1.0.130", features = ["derive"] }
 sql-builder = "3.1"
