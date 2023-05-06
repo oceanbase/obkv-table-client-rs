@@ -1,14 +1,11 @@
 use std::{cell::RefCell, fs, rc::Rc, sync::Arc, thread, time::Instant};
 
 use anyhow::{bail, Result};
+use obkv::monitors::prometheus::OBKV_CLIENT_REGISTRY;
 use properties::Properties;
 use rand::{rngs::SmallRng, SeedableRng};
 use structopt::StructOpt;
 use workload::CoreWorkload;
-
-use obkv::{
-    monitors::prometheus::OBKV_CLIENT_REGISTRY,
-};
 
 use crate::{
     db::DB,

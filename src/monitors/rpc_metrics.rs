@@ -16,10 +16,12 @@
  */
 
 use std::time::Duration;
-use prometheus_client::encoding::{EncodeLabelSet};
-use prometheus_client::metrics::family::Family;
-use prometheus_client::registry::Registry;
-use prometheus_client::metrics::histogram;
+
+use prometheus_client::{
+    encoding::EncodeLabelSet,
+    metrics::{family::Family, histogram},
+    registry::Registry,
+};
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
 pub struct RpcMiscLabels {
@@ -34,9 +36,10 @@ pub struct RpcMetrics {
 impl Default for RpcMetrics {
     fn default() -> Self {
         RpcMetrics {
-            rpc_operation_duration: Family::<RpcMiscLabels, histogram::Histogram>::new_with_constructor(|| {
-                histogram::Histogram::new(histogram::exponential_buckets(0.0005, 2.0, 8))
-            }),
+            rpc_operation_duration:
+                Family::<RpcMiscLabels, histogram::Histogram>::new_with_constructor(|| {
+                    histogram::Histogram::new(histogram::exponential_buckets(0.0005, 2.0, 8))
+                }),
             rpc_misc: Family::<RpcMiscLabels, histogram::Histogram>::new_with_constructor(|| {
                 histogram::Histogram::new(histogram::linear_buckets(5.0, 5.0, 10))
             }),
@@ -61,7 +64,9 @@ impl RpcMetrics {
 
     pub fn observe_rpc_duration(&self, misc_type: &str, duration: Duration) {
         self.rpc_operation_duration
-            .get_or_create(&RpcMiscLabels { misc_type : misc_type.to_string() })
+            .get_or_create(&RpcMiscLabels {
+                misc_type: misc_type.to_string(),
+            })
             .observe(duration.as_secs_f64());
     }
 
@@ -71,7 +76,9 @@ impl RpcMetrics {
 
     pub fn observe_rpc_misc(&self, misc_type: &str, times: f64) {
         self.rpc_misc
-            .get_or_create(&RpcMiscLabels { misc_type : misc_type.to_string() })
+            .get_or_create(&RpcMiscLabels {
+                misc_type: misc_type.to_string(),
+            })
             .observe(times);
     }
 

@@ -16,10 +16,13 @@
  */
 
 use std::time::Duration;
-use prometheus_client::encoding::{EncodeLabelSet, EncodeLabelValue};
-use prometheus_client::metrics::family::Family;
-use prometheus_client::registry::Registry;
-use prometheus_client::metrics::{counter, histogram};
+
+use prometheus_client::{
+    encoding::{EncodeLabelSet, EncodeLabelValue},
+    metrics::{counter, family::Family, histogram},
+    registry::Registry,
+};
+
 use crate::payloads::ObTableOperationType;
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelValue)]
@@ -90,16 +93,18 @@ pub struct ClientMetrics {
 impl Default for ClientMetrics {
     fn default() -> Self {
         ClientMetrics {
-            client_operation_rt: Family::<OperationLabels, histogram::Histogram>::new_with_constructor(|| {
-                histogram::Histogram::new(histogram::exponential_buckets(0.0005, 2.0, 8))
-            }),
-            client_sys_op_rt: Family::<ClientStringLabels, histogram::Histogram>::new_with_constructor(|| {
-                histogram::Histogram::new(histogram::exponential_buckets(0.001, 2.0, 10))
-            }),
+            client_operation_rt:
+                Family::<OperationLabels, histogram::Histogram>::new_with_constructor(|| {
+                    histogram::Histogram::new(histogram::exponential_buckets(0.0005, 2.0, 8))
+                }),
+            client_sys_op_rt:
+                Family::<ClientStringLabels, histogram::Histogram>::new_with_constructor(|| {
+                    histogram::Histogram::new(histogram::exponential_buckets(0.001, 2.0, 10))
+                }),
             client_retry: Default::default(),
-            client_misc: Family::<ClientStringLabels, histogram::Histogram>::new_with_constructor(|| {
-                histogram::Histogram::new(histogram::exponential_buckets(5.0, 2.0, 8))
-            }),
+            client_misc: Family::<ClientStringLabels, histogram::Histogram>::new_with_constructor(
+                || histogram::Histogram::new(histogram::exponential_buckets(5.0, 2.0, 8)),
+            ),
             client_stream_query_counter: Default::default(),
         }
     }
@@ -135,13 +140,23 @@ impl ClientMetrics {
         );
     }
 
-    pub fn observe_operation_opt_rt(&self, operation_type: ObTableOperationType, duration: Duration) {
+    pub fn observe_operation_opt_rt(
+        &self,
+        operation_type: ObTableOperationType,
+        duration: Duration,
+    ) {
         self.client_operation_rt
-            .get_or_create(&OperationLabels { operation_type: operation_type.into() })
+            .get_or_create(&OperationLabels {
+                operation_type: operation_type.into(),
+            })
             .observe(duration.as_secs_f64());
     }
 
-    pub fn observe_operation_ort_rt(&self, operation_type: ObClientOpRecordType, duration: Duration) {
+    pub fn observe_operation_ort_rt(
+        &self,
+        operation_type: ObClientOpRecordType,
+        duration: Duration,
+    ) {
         self.client_operation_rt
             .get_or_create(&OperationLabels { operation_type })
             .observe(duration.as_secs_f64());
@@ -153,7 +168,9 @@ impl ClientMetrics {
 
     pub fn observe_sys_operation_rt(&self, sys_operation: &str, duration: Duration) {
         self.client_sys_op_rt
-            .get_or_create(&ClientStringLabels { string_type: sys_operation.to_string() })
+            .get_or_create(&ClientStringLabels {
+                string_type: sys_operation.to_string(),
+            })
             .observe(duration.as_secs_f64());
     }
 
@@ -163,13 +180,17 @@ impl ClientMetrics {
 
     pub fn inc_retry_times(&self, retry_type: ObClientOpRetryType) {
         self.client_retry
-            .get_or_create(&OperationRetryLabels { operation_retry_type: retry_type })
+            .get_or_create(&OperationRetryLabels {
+                operation_retry_type: retry_type,
+            })
             .inc();
     }
 
     pub fn inc_by_retry_times(&self, retry_type: ObClientOpRetryType, times: u64) {
         self.client_retry
-            .get_or_create(&OperationRetryLabels { operation_retry_type: retry_type })
+            .get_or_create(&OperationRetryLabels {
+                operation_retry_type: retry_type,
+            })
             .inc_by(times);
     }
 
@@ -179,7 +200,9 @@ impl ClientMetrics {
 
     pub fn observe_misc(&self, misc_type: &str, times: f64) {
         self.client_misc
-            .get_or_create(&ClientStringLabels { string_type : misc_type.to_string() })
+            .get_or_create(&ClientStringLabels {
+                string_type: misc_type.to_string(),
+            })
             .observe(times);
     }
 
@@ -189,13 +212,19 @@ impl ClientMetrics {
 
     pub fn inc_stream_query_counter(&self, string_type: &str, string_tag: &str) {
         self.client_stream_query_counter
-            .get_or_create(&ClientStreamQueryLabels { string_type: string_type.to_string(), string_tag: string_tag.to_string() })
+            .get_or_create(&ClientStreamQueryLabels {
+                string_type: string_type.to_string(),
+                string_tag: string_tag.to_string(),
+            })
             .inc();
     }
 
     pub fn inc_by_stream_query_counter(&self, string_type: &str, string_tag: &str, times: u64) {
         self.client_stream_query_counter
-            .get_or_create(&ClientStreamQueryLabels { string_type: string_type.to_string(), string_tag: string_tag.to_string() })
+            .get_or_create(&ClientStreamQueryLabels {
+                string_type: string_type.to_string(),
+                string_tag: string_tag.to_string(),
+            })
             .inc_by(times);
     }
 

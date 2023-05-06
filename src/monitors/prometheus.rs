@@ -16,30 +16,23 @@
  */
 
 use std::sync::Mutex;
-use prometheus_client::encoding::text::encode;
-use prometheus_client::registry::Registry;
 
+use prometheus_client::{encoding::text::encode, registry::Registry};
 
 lazy_static! {
-    pub static ref OBKV_CLIENT_REGISTRY: Mutex<ObClientRegistry> = {
-       Mutex::new(ObClientRegistry::default())
-    };
+    pub static ref OBKV_CLIENT_REGISTRY: Mutex<ObClientRegistry> =
+        Mutex::new(ObClientRegistry::default());
 }
 
+#[derive(Default)]
 pub struct ObClientRegistry {
     pub registry: Registry,
 }
 
 impl ObClientRegistry {
-    pub fn default() -> Self {
-        ObClientRegistry {
-            registry: Registry::default(),
-        }
-    }
-
     pub fn print_registry(&self) {
         let mut buffer = String::new();
         encode(&mut buffer, &self.registry).unwrap();
-        println!("{}", buffer);
+        println!("{buffer}");
     }
 }

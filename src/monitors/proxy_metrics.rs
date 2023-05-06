@@ -16,10 +16,12 @@
  */
 
 use std::time::Duration;
-use prometheus_client::encoding::{EncodeLabelSet};
-use prometheus_client::metrics::family::Family;
-use prometheus_client::registry::Registry;
-use prometheus_client::metrics::histogram;
+
+use prometheus_client::{
+    encoding::EncodeLabelSet,
+    metrics::{family::Family, histogram},
+    registry::Registry,
+};
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
 pub struct ProxyMiscLabels {
@@ -34,12 +36,12 @@ pub struct ProxyMetrics {
 impl Default for ProxyMetrics {
     fn default() -> Self {
         ProxyMetrics {
-            proxy_misc: Family::<ProxyMiscLabels, histogram::Histogram>::new_with_constructor(|| {
-                histogram::Histogram::new(histogram::linear_buckets(5.0, 10.0, 5))
-            }),
-            conn_pool: Family::<ProxyMiscLabels, histogram::Histogram>::new_with_constructor(|| {
-                histogram::Histogram::new(histogram::exponential_buckets(0.0001, 2.0, 5))
-            }),
+            proxy_misc: Family::<ProxyMiscLabels, histogram::Histogram>::new_with_constructor(
+                || histogram::Histogram::new(histogram::linear_buckets(5.0, 10.0, 5)),
+            ),
+            conn_pool: Family::<ProxyMiscLabels, histogram::Histogram>::new_with_constructor(
+                || histogram::Histogram::new(histogram::exponential_buckets(0.0001, 2.0, 5)),
+            ),
         }
     }
 }
@@ -61,7 +63,9 @@ impl ProxyMetrics {
 
     pub fn observe_proxy_misc(&self, misc_type: &str, times: f64) {
         self.proxy_misc
-            .get_or_create(&ProxyMiscLabels { misc_type : misc_type.to_string() })
+            .get_or_create(&ProxyMiscLabels {
+                misc_type: misc_type.to_string(),
+            })
             .observe(times);
     }
 
@@ -71,7 +75,9 @@ impl ProxyMetrics {
 
     pub fn observe_conn_pool_duration(&self, misc_type: &str, duration: Duration) {
         self.conn_pool
-            .get_or_create(&ProxyMiscLabels { misc_type : misc_type.to_string() })
+            .get_or_create(&ProxyMiscLabels {
+                misc_type: misc_type.to_string(),
+            })
             .observe(duration.as_secs_f64());
     }
 

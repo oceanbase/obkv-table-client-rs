@@ -31,9 +31,8 @@ use std::{
         Arc, Mutex,
     },
     thread::{self, JoinHandle},
-    time::Duration,
+    time::{Duration, Instant},
 };
-use std::time::Instant;
 
 use byteorder::{BigEndian, ByteOrder};
 use bytes::BytesMut;
@@ -49,11 +48,8 @@ use self::protocol::{
 };
 use crate::{
     error::{CommonErrCode, Error, Error::Common as CommonErr, Result},
+    monitors::{prometheus::OBKV_CLIENT_REGISTRY, rpc_metrics::RpcMetrics},
     rpc::{protocol::TraceId, util::checksum::ob_crc64::ObCrc64Sse42},
-    monitors::{
-        prometheus::{OBKV_CLIENT_REGISTRY},
-        rpc_metrics::{RpcMetrics},
-    },
 };
 
 lazy_static! {

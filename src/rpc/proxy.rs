@@ -18,12 +18,9 @@
 use std::sync::Arc;
 
 use super::{conn_pool::ConnPool, protocol::ObPayload};
-use crate::error::Result;
 use crate::{
-    monitors::{
-        proxy_metrics::{ProxyMetrics},
-        prometheus::{OBKV_CLIENT_REGISTRY},
-    },
+    error::Result,
+    monitors::{prometheus::OBKV_CLIENT_REGISTRY, proxy_metrics::ProxyMetrics},
 };
 
 lazy_static! {

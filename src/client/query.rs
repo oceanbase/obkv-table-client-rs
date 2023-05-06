@@ -25,6 +25,7 @@ use std::{
 /// Query API for ob table
 use super::ObTable;
 use crate::{
+    client::table_client::OBKV_CLIENT_METRICS,
     error::{CommonErrCode, Error::Common as CommonErr, Result},
     rpc::protocol::{
         payloads::ObTableEntityType,
@@ -36,7 +37,6 @@ use crate::{
     },
     serde_obkv::value::Value,
 };
-use crate::client::table_client::OBKV_CLIENT_METRICS;
 
 // const CLOSE_STREAM_MIN_TIMEOUT_MS: Duration = Duration::from_millis(500);
 // Zero timeout means no-wait request.

@@ -24,9 +24,9 @@ use std::{
         Arc, Mutex, RwLock,
     },
     thread,
-    time::Duration,
+    time::{Duration, Instant},
 };
-use std::time::Instant;
+
 use futures::{future, Future};
 use futures_cpupool::{Builder as CpuPoolBuilder, CpuPool};
 use rand::{seq::SliceRandom, thread_rng};
@@ -43,6 +43,10 @@ use crate::{
     location::{
         ob_part_constants::generate_phy_part_id, ObPartitionLevel, ObServerAddr, ObTableLocation,
         ReplicaLocation, TableEntry, TableEntryKey,
+    },
+    monitors::{
+        client_metrics::{ClientMetrics, ObClientOpRecordType, ObClientOpRetryType},
+        prometheus::OBKV_CLIENT_REGISTRY,
     },
     rpc::{
         conn_pool::{Builder as ConnPoolBuilder, ConnPool},
@@ -65,13 +69,8 @@ use crate::{
         permit::{PermitGuard, Permits},
         HandyRwLock,
     },
-    monitors::{
-        client_metrics::{ClientMetrics, ObClientOpRecordType},
-        prometheus::{OBKV_CLIENT_REGISTRY},
-    },
     ResultCodes,
 };
-use crate::monitors::client_metrics::ObClientOpRetryType;
 
 lazy_static! {
     pub static ref OBKV_CLIENT_METRICS: ClientMetrics = {
@@ -1857,7 +1856,10 @@ impl Drop for ObTableClientStreamQuerier {
 
         if start_ts > 0 {
             let cost_secs = millis_to_secs(current_time_millis() - start_ts);
-            OBKV_CLIENT_METRICS.observe_operation_ort_rt(ObClientOpRecordType::StreamQuery, Duration::from_secs(cost_secs as u64));
+            OBKV_CLIENT_METRICS.observe_operation_ort_rt(
+                ObClientOpRecordType::StreamQuery,
+                Duration::from_secs(cost_secs as u64),
+            );
         }
     }
 }

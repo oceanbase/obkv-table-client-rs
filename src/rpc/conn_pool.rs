@@ -25,8 +25,10 @@ use std::{
 use scheduled_thread_pool::ScheduledThreadPool;
 
 use super::{Builder as ConnBuilder, Connection};
-use crate::error::{CommonErrCode, Error::Common as CommonErr, Result};
-use crate::proxy::OBKV_PROXY_METRICS;
+use crate::{
+    error::{CommonErrCode, Error::Common as CommonErr, Result},
+    proxy::OBKV_PROXY_METRICS,
+};
 
 const MIN_BUILD_RETRY_INTERVAL_MS: u64 = 50 * 1000;
 const BUILD_RETRY_LIMIT: usize = 3;
@@ -267,7 +269,7 @@ impl ConnPool {
                             self.build_retry_limit,
                         );
                     }
-                    OBKV_PROXY_METRICS.observe_conn_pool_duration("get_conn",start.elapsed());
+                    OBKV_PROXY_METRICS.observe_conn_pool_duration("get_conn", start.elapsed());
                     return Ok(conn);
                 }
                 (None, removed) => {

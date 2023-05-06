@@ -15,8 +15,7 @@
  * #L%
  */
 
-
 pub mod client_metrics;
+pub mod prometheus;
 pub mod proxy_metrics;
 pub mod rpc_metrics;
-pub mod prometheus;

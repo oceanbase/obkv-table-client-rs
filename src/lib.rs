@@ -49,8 +49,8 @@ pub mod client;
 mod constant;
 pub mod error;
 mod location;
-mod rpc;
 pub mod monitors;
+mod rpc;
 pub mod serde_obkv;
 mod util;
 pub use self::{
