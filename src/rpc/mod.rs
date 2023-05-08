@@ -31,14 +31,13 @@ use std::{
         Arc, Mutex,
     },
     thread::{self, JoinHandle},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use byteorder::{BigEndian, ByteOrder};
 use bytes::BytesMut;
 use crossbeam::channel::{bounded, unbounded, Receiver, Sender};
 use net2::{TcpBuilder, TcpStreamExt};
-use prometheus::*;
 use tokio_codec::{Decoder, Encoder};
 use uuid::Uuid;
 
@@ -49,24 +48,16 @@ use self::protocol::{
 };
 use crate::{
     error::{CommonErrCode, Error, Error::Common as CommonErr, Result},
+    monitors::{prometheus::OBKV_CLIENT_REGISTRY, rpc_metrics::RpcMetrics},
     rpc::{protocol::TraceId, util::checksum::ob_crc64::ObCrc64Sse42},
 };
 
 lazy_static! {
-    pub static ref OBKV_RPC_HISTOGRAM_VEC: HistogramVec = register_histogram_vec!(
-        "obkv_rpc_duration_seconds",
-        "Bucketed histogram of rpc execution.",
-        &["type"],
-        exponential_buckets(0.0005, 2.0, 8).unwrap()
-    )
-    .unwrap();
-    pub static ref OBKV_RPC_HISTOGRAM_NUM_VEC: HistogramVec = register_histogram_vec!(
-        "obkv_rpc_metric_distribution",
-        "Bucketed histogram of metric distribution",
-        &["type"],
-        linear_buckets(5.0, 5.0, 10).unwrap()
-    )
-    .unwrap();
+    pub static ref OBKV_RPC_METRICS: RpcMetrics = {
+        let rpc_metrics = RpcMetrics::default();
+        rpc_metrics.register(&mut OBKV_CLIENT_REGISTRY.lock().unwrap().registry);
+        rpc_metrics
+    };
 }
 
 type RequestsMap = Arc<Mutex<HashMap<i32, Sender<Result<ObTablePacket>>>>>;
@@ -96,15 +87,14 @@ impl ConnectionSender {
                 let mut write_stream = write_stream;
                 let addr = write_stream.peer_addr()?;
                 loop {
-                    OBKV_RPC_HISTOGRAM_NUM_VEC
-                        .with_label_values(&["request_queue_size"])
-                        .observe(receiver.len() as f64);
-                    let timer = OBKV_RPC_HISTOGRAM_VEC
-                        .with_label_values(&["reveiver_recv_time"])
-                        .start_timer();
+                    OBKV_RPC_METRICS.observe_rpc_misc("request_queue_size", receiver.len() as f64);
+                    let start = Instant::now();
                     match receiver.recv() {
                         Ok(packet) => {
-                            timer.stop_and_record();
+                            OBKV_RPC_METRICS.observe_rpc_duration(
+                                "reveiver_recv_time",
+                                start.elapsed(),
+                            );
                             if packet.is_close_poison() {
                                 break;
                             }
@@ -113,14 +103,15 @@ impl ConnectionSender {
                             let channel_id = packet.channel_id();
                             match codec.encode(packet, &mut buf) {
                                 Ok(()) => {
-                                    OBKV_RPC_HISTOGRAM_NUM_VEC
-                                        .with_label_values(&["write_bytes"])
-                                        .observe(buf.len() as f64);
-                                    let _timer = OBKV_RPC_HISTOGRAM_VEC
-                                        .with_label_values(&["socket_write"])
-                                        .start_timer();
+                                    OBKV_RPC_METRICS.observe_rpc_misc("write_bytes", buf.len() as f64);
+                                    let start = Instant::now();
                                     match write_stream.write_all(&buf) {
-                                        Ok(()) => (),
+                                        Ok(()) => {
+                                            OBKV_RPC_METRICS.observe_rpc_duration(
+                                                "socket_write",
+                                                start.elapsed()
+                                            );
+                                        }
                                         Err(e) => {
                                             error!(
                                                 "Fail to write packet into stream connected to {}, err: {}",
@@ -314,23 +305,17 @@ impl Connection {
                 break;
             }
 
-            let timer = OBKV_RPC_HISTOGRAM_VEC
-                .with_label_values(&["socket_read"])
-                .start_timer();
+            let start = Instant::now();
 
             match read_stream.read(&mut read_buf) {
                 Ok(size) => {
-                    timer.stop_and_record();
-                    OBKV_RPC_HISTOGRAM_NUM_VEC
-                        .with_label_values(&["read_bytes"])
-                        .observe(size as f64);
+                    OBKV_RPC_METRICS.observe_rpc_duration("socket_read", start.elapsed());
+                    OBKV_RPC_METRICS.observe_rpc_misc("read_bytes", size as f64);
 
                     if size > 0 {
                         buf.extend_from_slice(&read_buf[0..size]);
 
-                        OBKV_RPC_HISTOGRAM_NUM_VEC
-                            .with_label_values(&["read_buf_bytes"])
-                            .observe(buf.len() as f64);
+                        OBKV_RPC_METRICS.observe_rpc_misc("read_buf_bytes", buf.len() as f64);
 
                         if buf.len() > OB_MYSQL_MAX_PACKET_LENGTH {
                             debug!(
@@ -340,13 +325,12 @@ impl Connection {
                             );
                         }
 
-                        let _timer = OBKV_RPC_HISTOGRAM_VEC
-                            .with_label_values(&["decode_responses"])
-                            .start_timer();
+                        let start = Instant::now();
 
                         if !Self::decode_packets(&mut codec, &mut buf, &read_requests, addr) {
                             break;
                         }
+                        OBKV_RPC_METRICS.observe_rpc_duration("decode_responses", start.elapsed());
                     } else {
                         info!(
                             "Connection::process_reading_data read zero bytes, \
@@ -357,10 +341,9 @@ impl Connection {
                     }
                 }
                 Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
-                    let _timer = OBKV_RPC_HISTOGRAM_VEC
-                        .with_label_values(&["yield_thread"])
-                        .start_timer();
+                    let start = Instant::now();
                     thread::yield_now();
+                    OBKV_RPC_METRICS.observe_rpc_duration("yield_thread", start.elapsed());
                     continue;
                 }
                 Err(e) => {
@@ -404,9 +387,7 @@ impl Connection {
     ) -> bool {
         let mut decoded = 0;
         loop {
-            let _timer = OBKV_RPC_HISTOGRAM_VEC
-                .with_label_values(&["decode_response"])
-                .start_timer();
+            let start = Instant::now();
 
             match codec.decode(buf) {
                 Ok(Some(response)) => match response {
@@ -426,6 +407,7 @@ impl Connection {
                         };
                         Self::notify_sender(read_requests, id, server_packet);
                         decoded += 1;
+                        OBKV_RPC_METRICS.observe_rpc_duration("decode_response", start.elapsed());
                     }
 
                     error_packet => {
@@ -435,9 +417,7 @@ impl Connection {
                     }
                 },
                 Ok(None) => {
-                    OBKV_RPC_HISTOGRAM_NUM_VEC
-                        .with_label_values(&["decoded_responses"])
-                        .observe(decoded as f64);
+                    OBKV_RPC_METRICS.observe_rpc_misc("decode_responses", decoded as f64);
 
                     if decoded > 0 {
                         trace!("Connection::decode_packets decoded {} packets.", decoded);
@@ -467,9 +447,8 @@ impl Connection {
     }
 
     fn encode_payload<T: ObPayload>(&self, payload: &T, trace_id: TraceId) -> Result<BytesMut> {
-        let _timer = OBKV_RPC_HISTOGRAM_VEC
-            .with_label_values(&["encode_payload"])
-            .start_timer();
+        let start = Instant::now();
+
         let payload_len = payload.len()?;
         let mut payload_content = BytesMut::with_capacity(payload_len);
 
@@ -493,6 +472,8 @@ impl Connection {
         let mut content = BytesMut::with_capacity(HEADER_SIZE + payload_len);
 
         packet.encode(&mut content)?;
+
+        OBKV_RPC_METRICS.observe_rpc_duration("encode_payload", start.elapsed());
 
         Ok(content)
     }
@@ -526,9 +507,7 @@ impl Connection {
     ) -> Result<()> {
         let _load_counter = LoadCounter::new(&self.load);
 
-        let _timer = OBKV_RPC_HISTOGRAM_VEC
-            .with_label_values(&["execute_payload"])
-            .start_timer();
+        let start = Instant::now();
 
         let timeout = Duration::from_millis(payload.timeout_millis() as u64);
 
@@ -620,6 +599,7 @@ impl Connection {
                 }
 
                 response.decode(&mut content)?;
+                OBKV_RPC_METRICS.observe_rpc_duration("execute_payload", start.elapsed());
                 Ok(())
             }
             ObTablePacket::TransportPacket { error, code } => Err(CommonErr(
@@ -649,9 +629,8 @@ impl Connection {
         database_name: &str,
         password: &str,
     ) -> Result<()> {
-        let _timer = OBKV_RPC_HISTOGRAM_VEC
-            .with_label_values(&["login"])
-            .start_timer();
+        let start = Instant::now();
+
         let mut payload = ObTableLoginRequest::new(tenant_name, user_name, database_name, password);
 
         let mut login_result = ObTableLoginResult::new();
@@ -664,6 +643,9 @@ impl Connection {
         self.tenant_id = Some(login_result.tenant_id());
 
         self.set_active(true);
+
+        OBKV_RPC_METRICS.observe_rpc_duration("login", start.elapsed());
+
         Ok(())
     }
 
@@ -885,9 +867,7 @@ impl Builder {
         let addr = (&self.ip[..], self.port).to_socket_addrs()?.next();
 
         if let Some(addr) = addr {
-            let _timer = OBKV_RPC_HISTOGRAM_VEC
-                .with_label_values(&["connect"])
-                .start_timer();
+            let start = Instant::now();
 
             let tcp = TcpBuilder::new_v4().unwrap();
             // Set socket connect timeout
@@ -906,7 +886,11 @@ impl Builder {
             stream.set_send_buffer_size(READ_BUF_SIZE)?;
             stream.set_recv_buffer_size(2 * READ_BUF_SIZE)?;
 
-            Connection::internal_new(id, addr, stream)
+            let result = Connection::internal_new(id, addr, stream);
+
+            OBKV_RPC_METRICS.observe_rpc_duration("connect", start.elapsed());
+
+            result
         } else {
             Err(CommonErr(
                 CommonErrCode::InvalidServerAddr,

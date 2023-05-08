@@ -17,19 +17,18 @@
 
 use std::sync::Arc;
 
-use prometheus::*;
-
 use super::{conn_pool::ConnPool, protocol::ObPayload};
-use crate::error::Result;
+use crate::{
+    error::Result,
+    monitors::{prometheus::OBKV_CLIENT_REGISTRY, proxy_metrics::ProxyMetrics},
+};
 
 lazy_static! {
-    pub static ref OBKV_PROXY_HISTOGRAM_NUM_VEC: HistogramVec = register_histogram_vec!(
-        "obkv_rpc_proxy_metric_distribution",
-        "Bucketed histogram of metric distribution",
-        &["type"],
-        linear_buckets(5.0, 10.0, 5).unwrap()
-    )
-    .unwrap();
+    pub static ref OBKV_PROXY_METRICS: ProxyMetrics = {
+        let proxy_metrics = ProxyMetrics::default();
+        proxy_metrics.register(&mut OBKV_CLIENT_REGISTRY.lock().unwrap().registry);
+        proxy_metrics
+    };
 }
 
 #[derive(Clone)]
@@ -49,9 +48,7 @@ impl Proxy {
         // but it may be actually broken already.
         let conn = self.0.get()?;
 
-        OBKV_PROXY_HISTOGRAM_NUM_VEC
-            .with_label_values(&["conn_load"])
-            .observe(conn.load() as f64);
+        OBKV_PROXY_METRICS.observe_proxy_misc("conn_load", conn.load() as f64);
 
         let res = conn.execute(payload, response);
         if res.is_ok() || conn.is_active() {
@@ -63,19 +60,15 @@ impl Proxy {
         // connection is built or an intact connection is taken because all the
         // connections may be broken together
         let retry_limit = self.0.idle_conn_num() + 1;
-        OBKV_PROXY_HISTOGRAM_NUM_VEC
-            .with_label_values(&["retry_idle_conns"])
-            .observe((retry_limit - 1) as f64);
+
+        OBKV_PROXY_METRICS.observe_proxy_misc("retry_idle_conns", (retry_limit - 1) as f64);
 
         let mut err = res.err().unwrap();
 
         loop {
             retry_cnt += 1;
             if retry_cnt > retry_limit {
-                OBKV_PROXY_HISTOGRAM_NUM_VEC
-                    .with_label_values(&["retry_times"])
-                    .observe(retry_cnt as f64);
-
+                OBKV_PROXY_METRICS.observe_proxy_misc("retry_times", retry_cnt as f64);
                 error!(
                     "Proxy::execute reach the retry limit:{}, err:{}",
                     retry_limit, err
@@ -90,9 +83,7 @@ impl Proxy {
             let conn = self.0.get()?;
             let res = conn.execute(payload, response);
             if res.is_ok() || conn.is_active() {
-                OBKV_PROXY_HISTOGRAM_NUM_VEC
-                    .with_label_values(&["retry_times"])
-                    .observe(retry_cnt as f64);
+                OBKV_PROXY_METRICS.observe_proxy_misc("retry_times", retry_cnt as f64);
                 return res;
             }
             err = res.err().unwrap();

@@ -15,13 +15,7 @@
  * #L%
  */
 
-use prometheus::*;
-
-lazy_static! {
-    pub static ref OBKV_CLIENT_RETRY_COUNTER_VEC: IntCounterVec = register_int_counter_vec!(
-        "obkv_client_retry_total",
-        "Total number of do retrying",
-        &["type"]
-    )
-    .unwrap();
-}
+pub mod client_metrics;
+pub mod prometheus;
+pub mod proxy_metrics;
+pub mod rpc_metrics;

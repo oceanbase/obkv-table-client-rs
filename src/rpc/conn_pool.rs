@@ -22,21 +22,13 @@ use std::{
     u32,
 };
 
-use prometheus::*;
 use scheduled_thread_pool::ScheduledThreadPool;
 
 use super::{Builder as ConnBuilder, Connection};
-use crate::error::{CommonErrCode, Error::Common as CommonErr, Result};
-
-lazy_static! {
-    pub static ref OBKV_CONN_POOL_HISTOGRAM_VEC: HistogramVec = register_histogram_vec!(
-        "obkv_conn_pool_seconds",
-        "Bucketed histogram of connection pool operations.",
-        &["type"],
-        exponential_buckets(0.0005, 2.0, 18).unwrap()
-    )
-    .unwrap();
-}
+use crate::{
+    error::{CommonErrCode, Error::Common as CommonErr, Result},
+    proxy::OBKV_PROXY_METRICS,
+};
 
 const MIN_BUILD_RETRY_INTERVAL_MS: u64 = 50 * 1000;
 const BUILD_RETRY_LIMIT: usize = 3;
@@ -258,9 +250,7 @@ impl ConnPool {
     }
 
     pub fn get(&self) -> Result<Arc<Connection>> {
-        let _timer = OBKV_CONN_POOL_HISTOGRAM_VEC
-            .with_label_values(&["get_conn"])
-            .start_timer();
+        let start = Instant::now();
         let pool = &self.shared_pool;
 
         // TODO: may use better name for the timeout here
@@ -279,6 +269,7 @@ impl ConnPool {
                             self.build_retry_limit,
                         );
                     }
+                    OBKV_PROXY_METRICS.observe_conn_pool_duration("get_conn", start.elapsed());
                     return Ok(conn);
                 }
                 (None, removed) => {
