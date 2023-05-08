@@ -1,7 +1,7 @@
 use std::{cell::RefCell, fs, rc::Rc, sync::Arc, thread, time::Instant};
 
 use anyhow::{bail, Result};
-use obkv::obkv_get_registry;
+use obkv::dump_metrics;
 use properties::Properties;
 use rand::{rngs::SmallRng, SeedableRng};
 use structopt::StructOpt;
@@ -141,7 +141,7 @@ fn main() -> Result<()> {
         println!("[OVERALL], Throughput(ops/sec), {throughput}\n");
     }
 
-    obkv_get_registry().print_registry();
+    println!("{}", dump_metrics().expect("dump metrics failed"));
 
     Ok(())
 }

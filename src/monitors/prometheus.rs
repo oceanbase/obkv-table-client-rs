@@ -15,7 +15,7 @@
  * #L%
  */
 
-use std::sync::{Mutex, MutexGuard};
+use std::sync::Mutex;
 
 use prometheus_client::{encoding::text::encode, registry::Registry};
 
@@ -24,8 +24,9 @@ lazy_static! {
         Mutex::new(ObClientRegistry::default());
 }
 
-pub fn obkv_get_registry() -> MutexGuard<'static, ObClientRegistry> {
-    OBKV_CLIENT_REGISTRY.lock().unwrap()
+pub fn dump_metrics() -> Result<String, std::fmt::Error> {
+    let registry = OBKV_CLIENT_REGISTRY.lock().unwrap();
+    registry.dump_metrics()
 }
 
 #[derive(Default)]
@@ -34,9 +35,9 @@ pub struct ObClientRegistry {
 }
 
 impl ObClientRegistry {
-    pub fn print_registry(&self) {
+    pub fn dump_metrics(&self) -> Result<String, std::fmt::Error> {
         let mut buffer = String::new();
         encode(&mut buffer, &self.registry).unwrap();
-        println!("{buffer}");
+        Ok(buffer)
     }
 }

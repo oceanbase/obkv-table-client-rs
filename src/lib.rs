@@ -60,7 +60,7 @@ pub use self::{
         table_client::{Builder, ObTableClient, RunningMode},
         ClientConfig, Table, TableOpResult,
     },
-    monitors::prometheus::obkv_get_registry,
+    monitors::prometheus::dump_metrics,
     rpc::{
         protocol::{codes::ResultCodes, payloads, query},
         proxy,
