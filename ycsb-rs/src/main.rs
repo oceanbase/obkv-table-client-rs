@@ -1,7 +1,7 @@
 use std::{cell::RefCell, fs, rc::Rc, sync::Arc, thread, time::Instant};
 
 use anyhow::{bail, Result};
-use obkv::monitors::prometheus::OBKV_CLIENT_REGISTRY;
+use obkv::obkv_get_registry;
 use properties::Properties;
 use rand::{rngs::SmallRng, SeedableRng};
 use structopt::StructOpt;
@@ -141,7 +141,7 @@ fn main() -> Result<()> {
         println!("[OVERALL], Throughput(ops/sec), {throughput}\n");
     }
 
-    OBKV_CLIENT_REGISTRY.lock().unwrap().print_registry();
+    obkv_get_registry().print_registry();
 
     Ok(())
 }

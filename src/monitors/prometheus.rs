@@ -15,13 +15,17 @@
  * #L%
  */
 
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard};
 
 use prometheus_client::{encoding::text::encode, registry::Registry};
 
 lazy_static! {
     pub static ref OBKV_CLIENT_REGISTRY: Mutex<ObClientRegistry> =
         Mutex::new(ObClientRegistry::default());
+}
+
+pub fn obkv_get_registry() -> MutexGuard<'static, ObClientRegistry> {
+    OBKV_CLIENT_REGISTRY.lock().unwrap()
 }
 
 #[derive(Default)]
