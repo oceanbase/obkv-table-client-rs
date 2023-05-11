@@ -12,6 +12,7 @@ pub trait DB {
     fn insert(&self, table: &str, key: &str, values: &HashMap<&str, String>) -> Result<()>;
     fn read(&self, table: &str, key: &str, result: &mut HashMap<String, String>) -> Result<()>;
     fn update(&self, table: &str, key: &str, values: &HashMap<&str, String>) -> Result<()>;
+    fn scan(&self, table: &str, startkey: &str, endkey: &str, values: &mut HashMap<String, String>) -> Result<()>;
 }
 
 pub fn create_db(db: &str, config: Arc<OBKVClientInitStruct>) -> Result<Rc<dyn DB>> {

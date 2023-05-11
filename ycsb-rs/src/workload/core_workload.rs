@@ -177,6 +177,14 @@ impl CoreWorkload {
         db.update(&self.table, &dbkey, &values).unwrap();
     }
 
+    fn ob_transaction_scan(&self, db: Arc<OBKVClient>) {
+        let start = self.next_key_num();
+        let dbstart = format!("{}", fnvhash64(start));
+        let dbend = format!("{}", fnvhash64(start));
+        let mut result = HashMap::new();
+        db.scan(&self.table, &dbstart, &dbend, &mut result).unwrap();
+    }
+
     fn next_key_num(&self) -> u64 {
         // FIXME: Handle case where keychooser is an ExponentialGenerator.
         // FIXME: Handle case where keynum is > transactioninsertkeysequence's last
@@ -267,6 +275,9 @@ impl Workload for CoreWorkload {
             CoreOperation::Update => {
                 self.ob_transaction_update(db);
             }
+            CoreOperation::Scan => {
+                self.ob_transaction_scan(db);
+            },
             _ => todo!(),
         }
     }

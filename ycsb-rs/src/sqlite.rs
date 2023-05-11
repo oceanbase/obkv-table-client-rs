@@ -76,4 +76,9 @@ impl DB for SQLite {
     fn update(&self, table: &str, key: &str, values: &HashMap<&str, String>) -> Result<()> {
         todo!()
     }
+
+    #[allow(unused_variables)]
+    fn scan(&self, table: &str, startkey: &str, endkey: &str, values: &mut HashMap<String, String>) -> Result<()> {
+        todo!()
+    }
 }
