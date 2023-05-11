@@ -650,7 +650,12 @@ impl ObKeyPartDesc {
             .len();
         // Note: Java / ODP may not query all the partitions, and will return an error
         // instead
-        if is_min_max || !self.is_equal_keys(&start[0..part_ref_column_size], &end[0..part_ref_column_size]) {
+        if is_min_max
+            || !self.is_equal_keys(
+                &start[0..part_ref_column_size],
+                &end[0..part_ref_column_size],
+            )
+        {
             let mut part_ids: Vec<i64> = Vec::with_capacity(self.part_num as usize);
             for i in 0..self.part_num as i64 {
                 part_ids.push(i);

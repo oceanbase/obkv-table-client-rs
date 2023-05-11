@@ -277,7 +277,7 @@ impl Workload for CoreWorkload {
             }
             CoreOperation::Scan => {
                 self.ob_transaction_scan(db);
-            },
+            }
             _ => todo!(),
         }
     }

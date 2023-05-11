@@ -78,7 +78,13 @@ impl DB for SQLite {
     }
 
     #[allow(unused_variables)]
-    fn scan(&self, table: &str, startkey: &str, endkey: &str, values: &mut HashMap<String, String>) -> Result<()> {
+    fn scan(
+        &self,
+        table: &str,
+        startkey: &str,
+        endkey: &str,
+        values: &mut HashMap<String, String>,
+    ) -> Result<()> {
         todo!()
     }
 }
