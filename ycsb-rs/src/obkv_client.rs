@@ -20,7 +20,7 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 use anyhow::Result;
 #[allow(unused)]
 use obkv::error::CommonErrCode;
-use obkv::{Builder, ClientConfig, ObTableClient, RunningMode, Table, Value};
+use obkv::{Builder, ClientConfig, ObTableClient, RunningMode, Table, TableQuery, Value};
 
 use crate::{db::DB, properties::Properties};
 
@@ -178,6 +178,30 @@ impl DB for OBKVClient {
             .expect("fail to insert_or update");
         assert_eq!(10, result);
 
+        Ok(())
+    }
+
+    #[allow(unused)]
+    fn scan(
+        &self,
+        table: &str,
+        startkey: &str,
+        endkey: &str,
+        result: &mut HashMap<String, String>,
+    ) -> Result<()> {
+        let result = self
+            .client
+            .query(table)
+            .select(COLUMN_NAMES.iter().map(|s| s.to_string()).collect())
+            .primary_index()
+            .add_scan_range(
+                vec![Value::from(startkey)],
+                true,
+                vec![Value::from(endkey)],
+                true,
+            )
+            .execute();
+        assert!(result.is_ok());
         Ok(())
     }
 }

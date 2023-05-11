@@ -643,9 +643,19 @@ impl ObKeyPartDesc {
             is_min_max &= v.is_max();
         }
 
+        // For partition key, the first part of the row key is the partition key
+        let part_ref_column_size = self
+            .ob_part_desc_obj
+            .ordered_part_ref_column_row_key_relations
+            .len();
         // Note: Java / ODP may not query all the partitions, and will return an error
         // instead
-        if is_min_max || !self.is_equal_keys(start, end) {
+        if is_min_max
+            || !self.is_equal_keys(
+                &start[0..part_ref_column_size],
+                &end[0..part_ref_column_size],
+            )
+        {
             let mut part_ids: Vec<i64> = Vec::with_capacity(self.part_num as usize);
             for i in 0..self.part_num as i64 {
                 part_ids.push(i);
