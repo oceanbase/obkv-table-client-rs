@@ -779,8 +779,8 @@ impl ObTablePacketCodec {
 }
 
 impl Encoder for ObTablePacketCodec {
-    type Error = io::Error;
     type Item = ObTablePacket;
+    type Error = io::Error;
 
     fn encode(&mut self, packet: ObTablePacket, buf: &mut BytesMut) -> Result<()> {
         match packet {

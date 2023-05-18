@@ -32,6 +32,7 @@ prometheus-client = "0.20"
 anyhow = { workspace = true }
 byteorder = "1.2"
 bytes = "0.4"
+tokio = { version = "1", features = ["full"] }
 chrono = "0.4"
 crossbeam = "0.8.2"
 futures = "0.1"
