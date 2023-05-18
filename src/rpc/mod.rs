@@ -38,7 +38,7 @@ use byteorder::{BigEndian, ByteOrder};
 use bytes::BytesMut;
 use crossbeam::channel::{bounded, unbounded, Receiver, Sender};
 use net2::{TcpBuilder, TcpStreamExt};
-use tokio_codec::{Decoder, Encoder};
+use tokio_util::codec::{Decoder, Encoder};
 use uuid::Uuid;
 
 use self::protocol::{

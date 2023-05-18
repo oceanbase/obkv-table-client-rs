@@ -28,7 +28,6 @@ use std::{
 };
 
 use obkv::{error::CommonErrCode, ObTableClient, ResultCodes, Table, TableQuery, Value};
-use time::PreciseTime;
 
 pub struct BaseTest {
     client: Arc<ObTableClient>,
@@ -46,7 +45,8 @@ impl BaseTest {
 
     pub fn test_varchar_concurrent(&self, table_name: &'static str) {
         let mut handles = vec![];
-        let start = PreciseTime::now();
+        let start = SystemTime::now();
+
         let counter = Arc::new(AtomicUsize::new(0));
         for _ in 0..BaseTest::THREAD_NUM {
             let client = self.client.clone();
@@ -89,21 +89,20 @@ impl BaseTest {
         for handle in handles {
             handle.join().expect("should succeed to join");
         }
-        let end = PreciseTime::now();
         assert_eq!(
             BaseTest::ROW_NUM * BaseTest::THREAD_NUM,
             counter.load(Ordering::SeqCst)
         );
         println!(
             "{} seconds for insert_or_update {} rows.",
-            start.to(end),
+            start.elapsed().unwrap().as_secs(),
             BaseTest::ROW_NUM * BaseTest::THREAD_NUM
         );
     }
 
     pub fn test_bigint_concurrent(&self, table_name: &'static str) {
         let mut handles = vec![];
-        let start = PreciseTime::now();
+        let start = SystemTime::now();
         let counter = Arc::new(AtomicUsize::new(0));
         for _ in 0..10 {
             let client = self.client.clone();
@@ -138,11 +137,10 @@ impl BaseTest {
         for handle in handles {
             handle.join().expect("should succeed to join");
         }
-        let end = PreciseTime::now();
         assert_eq!(1000, counter.load(Ordering::SeqCst));
         println!(
             "{} seconds for insert_or_update {} rows.",
-            start.to(end),
+            start.elapsed().unwrap().as_secs(),
             1000
         );
     }

@@ -14,9 +14,3 @@
  * See the Mulan PSL v2 for more details.
  * #L%
  */
-
-pub mod client_metrics;
-pub mod prometheus;
-pub mod proxy_metrics;
-pub mod rpc_metrics;
-pub mod runtime_metrics;

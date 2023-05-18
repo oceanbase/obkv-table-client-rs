@@ -24,7 +24,7 @@
 pub mod from;
 use std::hash::{Hash, Hasher};
 
-use bytes::{Buf, BufMut, BytesMut, IntoBuf};
+use bytes::{Buf, BufMut, BytesMut};
 use serde::ser::{Serialize, Serializer};
 
 use super::{
@@ -214,7 +214,7 @@ impl ObjMeta {
 
     pub fn decode(buf: &mut BytesMut) -> Result<ObjMeta> {
         if buf.len() >= 4 {
-            let mut buf = split_buf_to(buf, 4)?.into_buf();
+            let mut buf = split_buf_to(buf, 4)?;
             let obj_type = ObjType::from_u8(buf.get_u8())?;
             let cs_level = CollationLevel::from_u8(buf.get_u8())?;
             let cs_type = CollationType::from_u8(buf.get_u8())?;

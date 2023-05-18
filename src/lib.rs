@@ -23,7 +23,7 @@ extern crate mysql;
 #[macro_use]
 extern crate serde;
 extern crate serde_bytes;
-extern crate tokio_codec;
+extern crate tokio_util;
 #[macro_use]
 extern crate serde_derive;
 #[macro_use]
@@ -51,6 +51,7 @@ pub mod error;
 mod location;
 pub mod monitors;
 mod rpc;
+mod runtime;
 pub mod serde_obkv;
 mod util;
 pub use self::{

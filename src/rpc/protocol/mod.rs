@@ -21,8 +21,8 @@ use std::{
     sync::atomic::{AtomicI32, Ordering},
 };
 
-use bytes::{Buf, BufMut, BytesMut, IntoBuf};
-use tokio_codec::{Decoder, Encoder};
+use bytes::{Buf, BufMut, BytesMut};
+use tokio_util::codec::{Decoder, Encoder};
 
 use crate::{error::Error, serde_obkv::util, util as u};
 
@@ -167,14 +167,14 @@ impl ProtoEncoder for ObRpcCostTime {
     fn encode(&self, buf: &mut BytesMut) -> Result<()> {
         buf.reserve(COST_TIME_ENCODE_SIZE);
 
-        buf.put_i32_be(self.len);
-        buf.put_i32_be(self.arrival_push_diff);
-        buf.put_i32_be(self.push_pop_diff);
-        buf.put_i32_be(self.pop_process_start_diff);
-        buf.put_i32_be(self.process_start_end_diff);
-        buf.put_i32_be(self.process_end_response_diff);
-        buf.put_i64_be(self.packet_id);
-        buf.put_i64_be(self.request_arrive_time);
+        buf.put_i32(self.len);
+        buf.put_i32(self.arrival_push_diff);
+        buf.put_i32(self.push_pop_diff);
+        buf.put_i32(self.pop_process_start_diff);
+        buf.put_i32(self.process_start_end_diff);
+        buf.put_i32(self.process_end_response_diff);
+        buf.put_i64(self.packet_id);
+        buf.put_i64(self.request_arrive_time);
 
         Ok(())
     }
@@ -195,14 +195,14 @@ impl ProtoDecoder for ObRpcCostTime {
 
         {
             let mut buf = Cursor::new(&mut *buf);
-            self.len = buf.get_i32_be();
-            self.arrival_push_diff = buf.get_i32_be();
-            self.push_pop_diff = buf.get_i32_be();
-            self.pop_process_start_diff = buf.get_i32_be();
-            self.process_start_end_diff = buf.get_i32_be();
-            self.process_end_response_diff = buf.get_i32_be();
-            self.packet_id = buf.get_i64_be();
-            self.request_arrive_time = buf.get_i64_be();
+            self.len = buf.get_i32();
+            self.arrival_push_diff = buf.get_i32();
+            self.push_pop_diff = buf.get_i32();
+            self.pop_process_start_diff = buf.get_i32();
+            self.process_start_end_diff = buf.get_i32();
+            self.process_end_response_diff = buf.get_i32();
+            self.packet_id = buf.get_i64();
+            self.request_arrive_time = buf.get_i64();
         }
         buf.advance(COST_TIME_ENCODE_SIZE);
         Ok(())
@@ -451,31 +451,31 @@ impl ProtoEncoder for ObRpcPacket {
 impl ProtoEncoder for ObRpcPacketHeader {
     fn encode(&self, buf: &mut BytesMut) -> Result<()> {
         buf.reserve(RPC_PACKET_HEADER_SIZE_V4);
-        buf.put_u32_be(self.pcode);
+        buf.put_u32(self.pcode);
         buf.put_u8(self.hlen);
         buf.put_u8(self.priority);
-        buf.put_u16_be(self.flag);
-        buf.put_i64_be(self.checksum);
-        buf.put_u64_be(self.tenant_id);
-        buf.put_u64_be(self.prev_tenant_id);
-        buf.put_u64_be(self.session_id);
-        buf.put_u64_be(self.trace_id0);
-        buf.put_u64_be(self.trace_id1);
-        buf.put_i64_be(self.timeout);
-        buf.put_i64_be(self.timestamp);
+        buf.put_u16(self.flag);
+        buf.put_i64(self.checksum);
+        buf.put_u64(self.tenant_id);
+        buf.put_u64(self.prev_tenant_id);
+        buf.put_u64(self.session_id);
+        buf.put_u64(self.trace_id0);
+        buf.put_u64(self.trace_id1);
+        buf.put_i64(self.timeout);
+        buf.put_i64(self.timestamp);
         self.rpc_cost_time.encode(buf)?;
-        buf.put_i64_be(self.cluster_id);
-        buf.put_i32_be(self.compress_type.clone() as i32);
-        buf.put_i32_be(self.original_len);
+        buf.put_i64(self.cluster_id);
+        buf.put_i32(self.compress_type.clone() as i32);
+        buf.put_i32(self.original_len);
         // TODO: check observer 4.x is ok
-        buf.put_i64_be(self.src_cluster_id);
-        buf.put_i64_be(self.unis_version);
-        buf.put_i32_be(self.request_level);
-        buf.put_i64_be(self.seq_no);
-        buf.put_i32_be(self.group_id);
-        buf.put_i64_be(self.trace_id2);
-        buf.put_i64_be(self.trace_id3);
-        buf.put_i64_be(self.cluster_name_hash);
+        buf.put_i64(self.src_cluster_id);
+        buf.put_i64(self.unis_version);
+        buf.put_i32(self.request_level);
+        buf.put_i64(self.seq_no);
+        buf.put_i32(self.group_id);
+        buf.put_i64(self.trace_id2);
+        buf.put_i64(self.trace_id3);
+        buf.put_i64(self.cluster_name_hash);
 
         Ok(())
     }
@@ -483,28 +483,26 @@ impl ProtoEncoder for ObRpcPacketHeader {
 
 impl ProtoDecoder for ObRpcPacketHeader {
     fn decode(&mut self, buf: &mut BytesMut) -> Result<()> {
-        let mut src = util::split_buf_to(buf, HEADER_SIZE)
-            .map_err(|e| {
-                error!(
-                    "ObRpcPacketHeader::decode fail to split basic header, err:{}",
-                    e
-                );
+        let mut src = util::split_buf_to(buf, HEADER_SIZE).map_err(|e| {
+            error!(
+                "ObRpcPacketHeader::decode fail to split basic header, err:{}",
                 e
-            })?
-            .into_buf();
+            );
+            e
+        })?;
 
-        self.pcode = src.get_u32_be();
+        self.pcode = src.get_u32();
         self.hlen = src.get_u8();
         self.priority = src.get_u8();
-        self.flag = src.get_u16_be();
-        self.checksum = src.get_i64_be();
-        self.tenant_id = src.get_u64_be();
-        self.prev_tenant_id = src.get_u64_be();
-        self.session_id = src.get_u64_be();
-        self.trace_id0 = src.get_u64_be();
-        self.trace_id1 = src.get_u64_be();
-        self.timeout = src.get_i64_be();
-        self.timestamp = src.get_i64_be();
+        self.flag = src.get_u16();
+        self.checksum = src.get_i64();
+        self.tenant_id = src.get_u64();
+        self.prev_tenant_id = src.get_u64();
+        self.session_id = src.get_u64();
+        self.trace_id0 = src.get_u64();
+        self.trace_id1 = src.get_u64();
+        self.timeout = src.get_i64();
+        self.timestamp = src.get_i64();
 
         let hlen = self.hlen as usize;
 
@@ -518,20 +516,19 @@ impl ProtoDecoder for ObRpcPacketHeader {
             let mut src = util::split_buf_to(
                 buf,
                 self.get_encoded_size_with_newserver() - self.get_encoded_size_with_cost_time(),
-            )?
-            .into_buf();
-            self.cluster_id = src.get_i64_be();
-            self.compress_type = ObCompressType::from_i32(src.get_i32_be())?;
-            self.original_len = src.get_i32_be();
+            )?;
+            self.cluster_id = src.get_i64();
+            self.compress_type = ObCompressType::from_i32(src.get_i32())?;
+            self.original_len = src.get_i32();
             //  decode for version:V4
-            self.src_cluster_id = src.get_i64_be();
-            self.unis_version = src.get_i64_be();
-            self.request_level = src.get_i32_be();
-            self.seq_no = src.get_i64_be();
-            self.group_id = src.get_i32_be();
-            self.trace_id2 = src.get_i64_be();
-            self.trace_id3 = src.get_i64_be();
-            self.cluster_name_hash = src.get_i64_be();
+            self.src_cluster_id = src.get_i64();
+            self.unis_version = src.get_i64();
+            self.request_level = src.get_i32();
+            self.seq_no = src.get_i64();
+            self.group_id = src.get_i32();
+            self.trace_id2 = src.get_i64();
+            self.trace_id3 = src.get_i64();
+            self.cluster_name_hash = src.get_i64();
             hlen - self.get_encoded_size_with_newserver()
         } else if hlen >= self.get_encoded_size() {
             // header with cost_time, cluster_id, compress_type, original_len
@@ -539,11 +536,10 @@ impl ProtoDecoder for ObRpcPacketHeader {
             let mut src = util::split_buf_to(
                 buf,
                 self.get_encoded_size() - self.get_encoded_size_with_cost_time(),
-            )?
-            .into_buf();
-            self.cluster_id = src.get_i64_be();
-            self.compress_type = ObCompressType::from_i32(src.get_i32_be())?;
-            self.original_len = src.get_i32_be();
+            )?;
+            self.cluster_id = src.get_i64();
+            self.compress_type = ObCompressType::from_i32(src.get_i32())?;
+            self.original_len = src.get_i32();
             hlen - self.get_encoded_size()
         } else if hlen >= self.get_encoded_size_with_cost_time_and_cluster_id() {
             // header with cost_time, cluster_id
@@ -552,9 +548,8 @@ impl ProtoDecoder for ObRpcPacketHeader {
                 buf,
                 self.get_encoded_size_with_cost_time_and_cluster_id()
                     - self.get_encoded_size_with_cost_time(),
-            )?
-            .into_buf();
-            self.cluster_id = src.get_i64_be();
+            )?;
+            self.cluster_id = src.get_i64();
             hlen - self.get_encoded_size_with_cost_time_and_cluster_id()
         } else if hlen >= self.get_encoded_size_with_cost_time() {
             self.rpc_cost_time.decode(buf)?;
@@ -778,9 +773,8 @@ impl ObTablePacketCodec {
     }
 }
 
-impl Encoder for ObTablePacketCodec {
+impl Encoder<ObTablePacket> for ObTablePacketCodec {
     type Error = io::Error;
-    type Item = ObTablePacket;
 
     fn encode(&mut self, packet: ObTablePacket, buf: &mut BytesMut) -> Result<()> {
         match packet {
@@ -794,8 +788,8 @@ impl Encoder for ObTablePacketCodec {
                 let content_len = content.len();
                 buf.reserve(4 + 4 + 4 + 4 + content_len);
                 buf.put_slice(MAGIC_HEADER_FLAG);
-                buf.put_i32_be(content_len as i32);
-                buf.put_i32_be(id);
+                buf.put_i32(content_len as i32);
+                buf.put_i32(id);
                 buf.put_slice(RESERVED);
                 buf.extend_from_slice(&content[..]);
 
@@ -879,10 +873,10 @@ impl Decoder for ObTablePacketCodec {
                 {
                     let mut src = Cursor::new(&mut *buf);
 
-                    let dlen = src.get_i32_be();
-                    let chid = src.get_i32_be();
+                    let dlen = src.get_i32();
+                    let chid = src.get_i32();
                     //reserved
-                    let _reserved = src.get_i32_be();
+                    let _reserved = src.get_i32();
                     self.dlen = dlen;
                     self.chid = chid;
                     trace!("ObTablePacketCodec::decode chid={}, dlen={}", chid, dlen);

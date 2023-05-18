@@ -23,7 +23,7 @@ use std::{
     time::Duration,
 };
 
-use bytes::{Buf, BufMut, BytesMut, IntoBuf};
+use bytes::{Buf, BufMut, BytesMut};
 
 use super::{BasePayLoad, ObPayload, ObTablePacketCode, ProtoDecoder, ProtoEncoder, Result};
 use crate::{
@@ -1272,8 +1272,7 @@ impl ProtoDecoder for ObTableOperationResult {
         self.decode_base(src)?;
 
         self.header.decode(src)?;
-        self.operation_type =
-            ObTableOperationType::from_i8(util::split_buf_to(src, 1)?.into_buf().get_i8())?;
+        self.operation_type = ObTableOperationType::from_i8(util::split_buf_to(src, 1)?.get_i8())?;
         self.entity.decode(src)?;
         self.affected_rows = util::decode_vi64(src)?;
         Ok(())
