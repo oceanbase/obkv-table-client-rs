@@ -17,7 +17,7 @@
 
 use prometheus_client::{
     encoding::{EncodeLabelSet, EncodeLabelValue},
-    metrics::{gauge, family::Family},
+    metrics::{family::Family, gauge},
     registry::Registry,
 };
 
@@ -33,18 +33,10 @@ pub struct RuntimeThreadLabels {
     pub rt_type: ObClientRuntimeGaugeType,
 }
 
+#[derive(Default)]
 pub struct RuntimeGaugeMetrics {
     runtime_thread_alive_gauges: Family<RuntimeThreadLabels, gauge::Gauge>,
     runtime_thread_idle_gauges: Family<RuntimeThreadLabels, gauge::Gauge>,
-}
-
-impl Default for RuntimeGaugeMetrics {
-    fn default() -> Self {
-        RuntimeGaugeMetrics {
-            runtime_thread_alive_gauges: Default::default(),
-            runtime_thread_idle_gauges: Default::default(),
-        }
-    }
 }
 
 impl RuntimeGaugeMetrics {
@@ -62,37 +54,25 @@ impl RuntimeGaugeMetrics {
         );
     }
 
-    pub fn on_thread_start(
-        &self,
-        rt_type: ObClientRuntimeGaugeType,
-    ) {
+    pub fn on_thread_start(&self, rt_type: ObClientRuntimeGaugeType) {
         self.runtime_thread_alive_gauges
             .get_or_create(&RuntimeThreadLabels { rt_type })
             .inc();
     }
 
-    pub fn on_thread_stop(
-        &self,
-        rt_type: ObClientRuntimeGaugeType,
-    ) {
+    pub fn on_thread_stop(&self, rt_type: ObClientRuntimeGaugeType) {
         self.runtime_thread_alive_gauges
             .get_or_create(&RuntimeThreadLabels { rt_type })
             .dec();
     }
 
-    pub fn on_thread_park(
-        &self,
-        rt_type: ObClientRuntimeGaugeType,
-    ) {
+    pub fn on_thread_park(&self, rt_type: ObClientRuntimeGaugeType) {
         self.runtime_thread_alive_gauges
             .get_or_create(&RuntimeThreadLabels { rt_type })
             .inc();
     }
 
-    pub fn on_thread_unpark(
-        &self,
-        rt_type: ObClientRuntimeGaugeType,
-    ) {
+    pub fn on_thread_unpark(&self, rt_type: ObClientRuntimeGaugeType) {
         self.runtime_thread_alive_gauges
             .get_or_create(&RuntimeThreadLabels { rt_type })
             .dec();

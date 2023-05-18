@@ -17,7 +17,7 @@
 
 use std::{f32, f64, io::Cursor, str};
 
-use bytes::{Buf, BufMut, BytesMut, IntoBuf};
+use bytes::{Buf, BufMut, BytesMut};
 
 use super::error::{Error, Result};
 
@@ -222,7 +222,7 @@ pub fn encode_bytes_string(v: &[u8], buf: &mut BytesMut) -> Result<()> {
     buf.reserve(encoded_length_bytes_string(v));
     encode_vi32(v.len() as i32, buf)?;
     buf.put_slice(v);
-    buf.put(END);
+    buf.put_u8(END);
     Ok(())
 }
 
@@ -283,14 +283,14 @@ pub fn decode_i8(buf: &mut BytesMut) -> Result<i8> {
     if buf.is_empty() {
         return Err(Error::Custom("buf EOF".into()));
     }
-    Ok(split_buf_to(buf, 1)?.into_buf().get_i8())
+    Ok(split_buf_to(buf, 1)?.get_i8())
 }
 
 pub fn decode_u8(buf: &mut BytesMut) -> Result<u8> {
     if buf.is_empty() {
         return Err(Error::Custom("buf EOF".into()));
     }
-    Ok(split_buf_to(buf, 1)?.into_buf().get_u8())
+    Ok(split_buf_to(buf, 1)?.get_u8())
 }
 
 #[cfg(test)]
