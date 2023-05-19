@@ -97,6 +97,12 @@ quick_error! {
             display("Query database error, err:{}", e)
             cause(e)
         }
+        JoinTask(e: tokio::task::JoinError) {
+            from()
+            description("Tokio join error")
+            display("Tokio join error, err:{}", e)
+            cause(e)
+        }
     }
 }
 
