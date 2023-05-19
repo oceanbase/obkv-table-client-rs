@@ -67,8 +67,8 @@ serial_test = "2.0"
 serial_test_derive = "2.0"
 tempfile = "3.0"
 test-log = "0.2"
-tokio-test = "0.4"
 time = "0.3"
+tokio-test = "0.4"
 
 [profile.release]
 debug = true
