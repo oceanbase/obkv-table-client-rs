@@ -203,8 +203,8 @@ impl Default for ClientConfig {
             conn_init_thread_num: 2,
             query_concurrency_limit: None,
 
-            conn_reader_threads: 2,
-            conn_writer_threads: 2,
+            conn_reader_threads: 6,
+            conn_writer_threads: 4,
             default_threads_num: 2,
 
             log_level_flag: DEFAULT_FLAG,

@@ -22,22 +22,28 @@ pub mod util;
 
 use std::{
     collections::HashMap,
-    io::{ErrorKind, Read, Write},
     mem,
-    net::{Shutdown, SocketAddr, TcpStream, ToSocketAddrs},
+    net::{SocketAddr, ToSocketAddrs},
     ops::Drop,
     sync::{
         atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering},
         Arc, Mutex,
     },
-    thread::{self, JoinHandle},
     time::{Duration, Instant},
 };
 
 use byteorder::{BigEndian, ByteOrder};
 use bytes::BytesMut;
-use crossbeam::channel::{bounded, unbounded, Receiver, Sender};
-use net2::{TcpBuilder, TcpStreamExt};
+use socket2::{Domain, Protocol, Socket, TcpKeepalive, Type};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::{
+        tcp::{OwnedReadHalf, OwnedWriteHalf},
+        TcpSocket, TcpStream,
+    },
+    sync::{mpsc, oneshot},
+    time::{timeout as TokioTimeout, Duration as TokioDuration},
+};
 use tokio_util::codec::{Decoder, Encoder};
 use uuid::Uuid;
 
@@ -47,9 +53,11 @@ use self::protocol::{
     ProtoEncoder, TransportCode, HEADER_SIZE,
 };
 use crate::{
+    client::table_client::RuntimesRef,
     error::{CommonErrCode, Error, Error::Common as CommonErr, Result},
     monitors::{prometheus::OBKV_CLIENT_REGISTRY, rpc_metrics::RpcMetrics},
     rpc::{protocol::TraceId, util::checksum::ob_crc64::ObCrc64Sse42},
+    runtime::{AbortOnDropMany, JoinHandle, RuntimeRef},
 };
 
 lazy_static! {
@@ -60,37 +68,38 @@ lazy_static! {
     };
 }
 
-type RequestsMap = Arc<Mutex<HashMap<i32, Sender<Result<ObTablePacket>>>>>;
+type RequestsMap = Arc<Mutex<HashMap<i32, oneshot::Sender<Result<ObTablePacket>>>>>;
 
 const CONN_CONTINUOUS_TIMEOUT_CEILING: usize = 10;
 
 ///Send component of OBKV connection.
 #[derive(Debug)]
 pub struct ConnectionSender {
-    sender: Sender<ObTablePacket>,
+    sender: mpsc::Sender<ObTablePacket>,
     writer: Option<JoinHandle<Result<()>>>,
+    default_runtime: RuntimeRef, // TODO: remove this
 }
 
 impl ConnectionSender {
     fn new(
-        write_stream: TcpStream,
+        write_stream: OwnedWriteHalf,
         requests: RequestsMap,
         active: Arc<AtomicBool>,
+        sender_runtime: RuntimeRef,
+        default_runtime: RuntimeRef,
     ) -> ConnectionSender {
-        let (sender, receiver): (Sender<ObTablePacket>, Receiver<ObTablePacket>) = unbounded();
+        let (sender, mut receiver): (mpsc::Sender<ObTablePacket>, mpsc::Receiver<ObTablePacket>) =
+            mpsc::channel(100);
         let mut codec = ObTablePacketCodec::new();
 
-        let writer = thread::Builder::new()
-            .name("conn_writer".to_owned())
-            .spawn(move || {
+        let writer = sender_runtime.spawn(async move {
                 let mut buf = BytesMut::with_capacity(1024);
                 let mut write_stream = write_stream;
                 let addr = write_stream.peer_addr()?;
                 loop {
-                    OBKV_RPC_METRICS.observe_rpc_misc("request_queue_size", receiver.len() as f64);
                     let start = Instant::now();
-                    match receiver.recv() {
-                        Ok(packet) => {
+                    match receiver.recv().await {
+                        Some(packet) => {
                             OBKV_RPC_METRICS.observe_rpc_duration(
                                 "reveiver_recv_time",
                                 start.elapsed(),
@@ -105,7 +114,7 @@ impl ConnectionSender {
                                 Ok(()) => {
                                     OBKV_RPC_METRICS.observe_rpc_misc("write_bytes", buf.len() as f64);
                                     let start = Instant::now();
-                                    match write_stream.write_all(&buf) {
+                                    match write_stream.write_all(&buf).await {
                                         Ok(()) => {
                                             OBKV_RPC_METRICS.observe_rpc_duration(
                                                 "socket_write",
@@ -114,9 +123,9 @@ impl ConnectionSender {
                                         }
                                         Err(e) => {
                                             error!(
-                                                "Fail to write packet into stream connected to {}, err: {}",
-                                                addr, e
-                                            );
+                                            "Fail to write packet into stream connected to {}, err: {}",
+                                            addr, e
+                                        );
                                             break;
                                         }
                                     }
@@ -138,8 +147,8 @@ impl ConnectionSender {
                                 },
                             }
                         }
-                        Err(e) => {
-                            error!("Error in connection sender Receiver::recv, {}", e);
+                        None => {
+                            error!("Sender channel has been closed");
                             break;
                         }
                     }
@@ -147,7 +156,7 @@ impl ConnectionSender {
 
                 active.store(false, Ordering::Release);
 
-                if let Err(err) = write_stream.shutdown(Shutdown::Write) {
+                if let Err(err) = write_stream.shutdown().await {
                     error!("Fail to close write stream to {}, err:{}", addr, err);
                 }
 
@@ -156,11 +165,12 @@ impl ConnectionSender {
 
                 info!("Close write stream for connection to {}", addr);
                 Ok(())
-            }).expect("Fail to create connection_writer thread");
+            });
 
         ConnectionSender {
             sender,
             writer: Some(writer),
+            default_runtime,
         }
     }
 
@@ -169,27 +179,16 @@ impl ConnectionSender {
     ///It can fail only when connection gets closed.
     ///Which means OBKV connection is no longer valid.
     pub fn request(&self, message: ObTablePacket) -> Result<()> {
-        self.sender.send(message).map_err(Self::broken_pipe)
+        // TODO: remove block_on with sender.send().await
+        self.default_runtime
+            .block_on(async move { self.sender.send(message).await.map_err(Self::broken_pipe) })
     }
 
     fn close(&mut self) -> Result<()> {
         self.request(ObTablePacket::ClosePoison)?;
         let writer = mem::replace(&mut self.writer, None);
-
-        match writer.unwrap().join() {
-            Ok(_) => (),
-            Err(e) => {
-                error!(
-                    "ConnectionSender::close fail to join on writer, err={:?}",
-                    e
-                );
-                return Err(CommonErr(
-                    CommonErrCode::Rpc,
-                    "ConnectionSender::close fail to join on writer.".to_owned(),
-                ));
-            }
-        }
-
+        let drop_helper = AbortOnDropMany(vec![writer.unwrap()]);
+        drop(drop_helper);
         Ok(())
     }
 
@@ -207,7 +206,7 @@ pub struct Connection {
     //remote addr
     addr: SocketAddr,
     reader: Option<JoinHandle<Result<()>>>,
-    reader_signal_sender: Sender<()>,
+    reader_signal_sender: mpsc::Sender<()>,
     sender: ConnectionSender,
     requests: RequestsMap,
     continuous_timeout_failures: AtomicUsize,
@@ -218,11 +217,12 @@ pub struct Connection {
     id: u32,
     trace_id_counter: AtomicU32,
     load: AtomicUsize,
+    // TODO: check unused runtime
+    runtimes: RuntimesRef,
 }
 
 const OB_MYSQL_MAX_PACKET_LENGTH: usize = 1 << 24;
 const READ_BUF_SIZE: usize = 1 << 16;
-const DEFAULT_STACK_SIZE: usize = 2 * 1024 * 1024;
 
 struct LoadCounter<'a>(&'a AtomicUsize);
 
@@ -240,40 +240,44 @@ impl<'a> Drop for LoadCounter<'a> {
 }
 
 impl Connection {
-    fn internal_new(id: u32, addr: SocketAddr, stream: TcpStream) -> Result<Self> {
+    fn internal_new(
+        id: u32,
+        addr: SocketAddr,
+        stream: TcpStream,
+        runtimes: RuntimesRef,
+    ) -> Result<Self> {
         let requests: RequestsMap = Arc::new(Mutex::new(HashMap::new()));
         let read_requests = requests.clone();
 
-        let read_stream = stream.try_clone()?;
+        let (read_stream, write_stream) = stream.into_split();
 
         let active = Arc::new(AtomicBool::new(false));
         let read_active = active.clone();
-        let (sender, receiver): (Sender<()>, Receiver<()>) = unbounded();
+        let (sender, receiver): (mpsc::Sender<()>, mpsc::Receiver<()>) = mpsc::channel(1);
 
-        let join_handle = thread::Builder::new()
-            .name("conn_reader".to_owned())
-            .stack_size(OB_MYSQL_MAX_PACKET_LENGTH + DEFAULT_STACK_SIZE)
-            .spawn(move || {
-                let addr = read_stream.peer_addr()?;
+        let join_handle = runtimes.reader_runtime.spawn(async move {
+            let addr = read_stream.peer_addr()?;
 
-                Connection::process_reading_data(
-                    receiver,
-                    read_stream,
-                    read_requests.clone(),
-                    &addr,
-                );
+            Connection::process_reading_data(receiver, read_stream, read_requests.clone(), &addr)
+                .await;
 
-                read_active.store(false, Ordering::Release);
-                Connection::cancel_requests(&read_requests);
+            read_active.store(false, Ordering::Release);
+            Connection::cancel_requests(&read_requests);
 
-                info!("Close read stream for connection to {}", addr);
-                Ok(())
-            })?;
+            error!("Close read stream for connection to {}", addr);
+            Ok(())
+        });
 
         Ok(Connection {
             addr,
             reader: Some(join_handle),
-            sender: ConnectionSender::new(stream, requests.clone(), active.clone()),
+            sender: ConnectionSender::new(
+                write_stream,
+                requests.clone(),
+                active.clone(),
+                runtimes.writer_runtime.clone(),
+                runtimes.default_runtime.clone(),
+            ),
             requests,
             continuous_timeout_failures: AtomicUsize::new(0),
             continuous_timeout_failures_ceiling: CONN_CONTINUOUS_TIMEOUT_CEILING,
@@ -284,6 +288,7 @@ impl Connection {
             id,
             trace_id_counter: AtomicU32::new(0),
             load: AtomicUsize::new(0),
+            runtimes: runtimes.clone(),
         })
     }
 
@@ -291,9 +296,9 @@ impl Connection {
         self.load.load(Ordering::Relaxed)
     }
 
-    fn process_reading_data(
-        signal_receiver: Receiver<()>,
-        mut read_stream: TcpStream,
+    async fn process_reading_data(
+        mut signal_receiver: mpsc::Receiver<()>,
+        mut read_stream: OwnedReadHalf,
         read_requests: RequestsMap,
         addr: &SocketAddr,
     ) {
@@ -302,12 +307,13 @@ impl Connection {
         let mut buf = BytesMut::with_capacity(READ_BUF_SIZE);
         loop {
             if let Ok(()) = signal_receiver.try_recv() {
+                error!("DEBUG: out0");
                 break;
             }
 
             let start = Instant::now();
 
-            match read_stream.read(&mut read_buf) {
+            match read_stream.read(&mut read_buf).await {
                 Ok(size) => {
                     OBKV_RPC_METRICS.observe_rpc_duration("socket_read", start.elapsed());
                     OBKV_RPC_METRICS.observe_rpc_misc("read_bytes", size as f64);
@@ -330,7 +336,8 @@ impl Connection {
                         if !Self::decode_packets(&mut codec, &mut buf, &read_requests, addr) {
                             break;
                         }
-                        OBKV_RPC_METRICS.observe_rpc_duration("decode_responses", start.elapsed());
+                        OBKV_RPC_METRICS
+                            .observe_rpc_duration("decode_responses_time", start.elapsed());
                     } else {
                         info!(
                             "Connection::process_reading_data read zero bytes, \
@@ -339,12 +346,6 @@ impl Connection {
                         );
                         break;
                     }
-                }
-                Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
-                    let start = Instant::now();
-                    thread::yield_now();
-                    OBKV_RPC_METRICS.observe_rpc_duration("yield_thread", start.elapsed());
-                    continue;
                 }
                 Err(e) => {
                     error!(
@@ -355,28 +356,23 @@ impl Connection {
                 }
             }
         }
-        if let Err(err) = read_stream.shutdown(Shutdown::Read) {
-            warn!(
-                "Connection::process_reading_data fail to close read stream to {}, err:{}",
-                addr, err
-            );
-        }
+        // TODO: stream close
+        drop(read_stream);
     }
 
     fn cancel_requests(requests: &RequestsMap) {
         let mut requests = requests.lock().unwrap();
-        for (_, sender) in requests.iter() {
+        for (_, sender) in requests.drain() {
             if let Err(e) = sender.send(Err(CommonErr(
                 CommonErrCode::Rpc,
                 "connection reader exits".to_owned(),
             ))) {
                 error!(
                     "Connection::cancel_requests: fail to send cancel message, err:{}",
-                    e
+                    e.err().unwrap().to_string()
                 );
             }
         }
-        requests.clear();
     }
 
     fn decode_packets(
@@ -509,7 +505,7 @@ impl Connection {
 
         let start = Instant::now();
 
-        let timeout = Duration::from_millis(payload.timeout_millis() as u64);
+        let timeout = TokioDuration::from_millis(payload.timeout_millis() as u64);
 
         payload.set_tenant_id(self.tenant_id);
         if let Some(ref cred) = self.credential {
@@ -544,42 +540,45 @@ impl Connection {
         let rx = self.send(req, channel_id)?;
 
         if payload.timeout_millis() == 0 {
-            // no-wait request,return Ok directly
+            // no-wait request,return Ok directly2
             return Ok(());
         }
 
-        let resp = match rx.recv_timeout(timeout) {
-            Ok(resp) => {
-                self.on_recv_in_time();
-                resp.map_err(|e| {
-                    error!(
+        // TODO: remove block_on with rx.await
+        let resp = self.runtimes.default_runtime.block_on(async move {
+            match TokioTimeout(timeout, rx).await {
+                Ok(resp) => {
+                    self.on_recv_in_time();
+                    resp.map_err(|e| {
+                        error!(
                         "Connection::execute: fail to fetch rpc response, addr:{}, trace_id:{}, err:{}",
                         self.addr, trace_id, e
                     );
-                    e
-                })?
-            }
-            Err(err) => {
-                error!(
-                    "Connection::execute: wait for rpc response timeout, addr:{}, trace_id:{}, err:{}",
-                    self.addr, trace_id, err
-                );
+                        e
+                    })
+                }
+                Err(err) => {
+                    error!(
+                        "Connection::execute: wait for rpc response timeout, addr:{}, trace_id:{}, err:{}",
+                        self.addr, trace_id, err
+                    );
 
-                self.on_recv_timeout();
-                return Err(CommonErr(
-                    CommonErrCode::Rpc,
-                    format!("wait for rpc response timeout, err:{err}"),
-                ));
-            }
-        };
+                    self.on_recv_timeout();
+                    return Err(CommonErr(
+                        CommonErrCode::Rpc,
+                        format!("wait for rpc response timeout, err:{err}"),
+                    ));
+                }
+            }.expect("Tokio timeout panics, may be there is no current timer set")
+        });
 
         match resp {
-            ObTablePacket::ServerPacket {
+            Ok(ObTablePacket::ServerPacket {
                 id: _id,
                 header,
                 mut content,
                 code: _code,
-            } => {
+            }) => {
                 let header = header.unwrap();
                 let server_trace_id = header.trace_id();
                 response.set_header(header);
@@ -602,7 +601,7 @@ impl Connection {
                 OBKV_RPC_METRICS.observe_rpc_duration("execute_payload", start.elapsed());
                 Ok(())
             }
-            ObTablePacket::TransportPacket { error, code } => Err(CommonErr(
+            Ok(ObTablePacket::TransportPacket { error, code }) => Err(CommonErr(
                 CommonErrCode::Rpc,
                 format!("transport code: [{code:?}], error: [{error}]"),
             )),
@@ -637,7 +636,7 @@ impl Connection {
 
         self.execute(&mut payload, &mut login_result)?;
 
-        debug!("Connection::login login result {:?}", login_result);
+        debug!("Connection::login, login result {:?}", login_result);
 
         self.credential = Some(login_result.take_credential());
         self.tenant_id = Some(login_result.tenant_id());
@@ -698,11 +697,13 @@ impl Connection {
         }
 
         //2. close reader
-        if let Err(e) = self
-            .reader_signal_sender
-            .send(())
-            .map_err(ConnectionSender::broken_pipe)
-        {
+        //TODO: remove block_on
+        if let Err(e) = self.runtimes.default_runtime.block_on(async {
+            self.reader_signal_sender
+                .send(())
+                .await
+                .map_err(ConnectionSender::broken_pipe)
+        }) {
             error!(
                 "Connection::close fail to send signal to reader, err: {}.",
                 e
@@ -710,16 +711,8 @@ impl Connection {
         }
 
         let reader = mem::replace(&mut self.reader, None);
-        match reader.unwrap().join() {
-            Ok(_) => (),
-            Err(e) => {
-                error!("Connection::close fail to join on reader, err={:?}", e);
-                return Err(CommonErr(
-                    CommonErrCode::Rpc,
-                    "Connection::close fail to join on reader.".to_owned(),
-                ));
-            }
-        }
+
+        drop(reader);
 
         Ok(())
     }
@@ -733,8 +726,8 @@ impl Connection {
         &self,
         message: ObTablePacket,
         channel_id: i32,
-    ) -> Result<Receiver<Result<ObTablePacket>>> {
-        let (tx, rx) = bounded(1);
+    ) -> Result<oneshot::Receiver<Result<ObTablePacket>>> {
+        let (tx, rx) = oneshot::channel();
         self.requests.lock().unwrap().insert(channel_id, tx);
         self.sender.request(message).map_err(|e| {
             error!("Connection::send: fail to send message, err:{}", e);
@@ -787,6 +780,8 @@ pub struct Builder {
     user_name: String,
     database_name: String,
     password: String,
+
+    runtimes: Option<RuntimesRef>,
 }
 
 const SOCKET_KEEP_ALIVE_SECS: u64 = 15 * 60;
@@ -804,6 +799,7 @@ impl Builder {
             user_name: "".to_owned(),
             database_name: "".to_owned(),
             password: "".to_owned(),
+            runtimes: None,
         }
     }
 
@@ -857,6 +853,11 @@ impl Builder {
         self
     }
 
+    pub fn runtimes(mut self, runtimes: RuntimesRef) -> Self {
+        self.runtimes = Some(runtimes);
+        self
+    }
+
     pub fn build(self) -> Result<Connection> {
         let uuid = Uuid::new_v4();
         let id = BigEndian::read_u32(uuid.as_bytes());
@@ -869,24 +870,40 @@ impl Builder {
         if let Some(addr) = addr {
             let start = Instant::now();
 
-            let tcp = TcpBuilder::new_v4().unwrap();
-            // Set socket connect timeout
-            TcpStream::connect_timeout(&addr, self.connect_timeout)?;
+            let socket2_socket = Socket::new(Domain::IPV4, Type::STREAM, Some(Protocol::TCP))?;
 
-            tcp.reuse_address(true)?;
+            socket2_socket.set_nodelay(true)?;
+            socket2_socket.set_reuse_address(true)?;
+            socket2_socket.set_read_timeout(Some(self.read_timeout))?;
+            socket2_socket.set_nonblocking(true)?;
+            socket2_socket.set_tcp_keepalive(
+                &TcpKeepalive::new().with_time(Duration::from_secs(SOCKET_KEEP_ALIVE_SECS)),
+            )?;
+            socket2_socket.set_send_buffer_size(READ_BUF_SIZE)?;
+            socket2_socket.set_recv_buffer_size(2 * READ_BUF_SIZE)?;
 
-            let stream = tcp.connect(addr)?;
+            let tokio_socket = TcpSocket::from_std_stream(socket2_socket.into());
+
+            // TODO: remove block_on
+            let stream = self
+                .runtimes
+                .clone()
+                .unwrap()
+                .default_runtime
+                .block_on(async move {
+                    tokio_socket
+                        .connect(addr)
+                        .await
+                        .map_err(|e| {
+                            error!("Builder::build fail to connect to {}, err: {}.", addr, e);
+                            e
+                        })
+                        .unwrap()
+                });
 
             debug!("Builder::build succeeds in connecting to {}.", addr);
 
-            stream.set_nodelay(true)?;
-            stream.set_read_timeout(Some(self.read_timeout))?;
-            stream.set_nonblocking(false)?;
-            stream.set_keepalive(Some(Duration::from_secs(SOCKET_KEEP_ALIVE_SECS)))?;
-            stream.set_send_buffer_size(READ_BUF_SIZE)?;
-            stream.set_recv_buffer_size(2 * READ_BUF_SIZE)?;
-
-            let result = Connection::internal_new(id, addr, stream);
+            let result = Connection::internal_new(id, addr, stream, self.runtimes.unwrap());
 
             OBKV_RPC_METRICS.observe_rpc_duration("connect", start.elapsed());
 
@@ -934,7 +951,7 @@ mod test {
         let res = conn
             .send(packet, channel_id)
             .expect("fail to send request")
-            .recv();
+            .try_recv();
         assert!(res.is_ok());
         assert!(conn.close().is_ok());
     }

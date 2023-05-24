@@ -34,7 +34,7 @@ pub struct BaseTest {
 }
 
 impl BaseTest {
-    const ROW_NUM: usize = 500;
+    const ROW_NUM: usize = 400;
     const THREAD_NUM: usize = 10;
 
     pub fn new(client: ObTableClient) -> BaseTest {

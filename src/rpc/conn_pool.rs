@@ -425,6 +425,7 @@ mod test {
     use std::sync::atomic::Ordering;
 
     use super::*;
+    use crate::client::table_client::ObClientRuntimes;
 
     fn gen_test_conn_builder() -> ConnBuilder {
         ConnBuilder::new()
@@ -439,6 +440,7 @@ mod test {
             .user_name("test")
             .database_name("test")
             .password("test")
+            .runtimes(Arc::new(ObClientRuntimes::test_default()))
     }
 
     fn gen_test_conn_pool(min_conn_num: usize, max_conn_num: usize) -> ConnPool {

@@ -38,32 +38,41 @@ use super::{
     table::{self, ObTable},
     ClientConfig, Table, TableOpResult,
 };
-use crate::{error::{self, CommonErrCode, Error::Common as CommonErr, Result}, location::{
-    ob_part_constants::generate_phy_part_id, ObPartitionLevel, ObServerAddr, ObTableLocation,
-    ReplicaLocation, TableEntry, TableEntryKey,
-}, monitors::{
-    client_metrics::{ClientMetrics, ObClientOpRecordType, ObClientOpRetryType},
-    prometheus::OBKV_CLIENT_REGISTRY,
-}, rpc::{
-    conn_pool::{Builder as ConnPoolBuilder, ConnPool},
-    protocol::{
-        payloads::{
-            ObTableBatchOperation, ObTableEntityType, ObTableOperationRequest,
-            ObTableOperationResult, ObTableOperationType,
-        },
-        query::{
-            ObHTableFilter, ObNewRange, ObScanOrder, ObTableQuery, ObTableQueryRequest,
-            ObTableQueryResult, ObTableStreamRequest,
-        },
+use crate::{
+    error::{self, CommonErrCode, Error::Common as CommonErr, Result},
+    location::{
+        ob_part_constants::generate_phy_part_id, ObPartitionLevel, ObServerAddr, ObTableLocation,
+        ReplicaLocation, TableEntry, TableEntryKey,
     },
-    proxy::Proxy,
-    Builder as ConnBuilder,
-}, serde_obkv::value::Value, util::{
-    assert_not_empty, current_time_millis, duration_to_millis, millis_to_secs,
-    permit::{PermitGuard, Permits},
-    HandyRwLock,
-}, ResultCodes, runtime};
-use crate::runtime::RuntimeRef;
+    monitors::{
+        client_metrics::{ClientMetrics, ObClientOpRecordType, ObClientOpRetryType},
+        prometheus::OBKV_CLIENT_REGISTRY,
+    },
+    rpc::{
+        conn_pool::{Builder as ConnPoolBuilder, ConnPool},
+        protocol::{
+            payloads::{
+                ObTableBatchOperation, ObTableEntityType, ObTableOperationRequest,
+                ObTableOperationResult, ObTableOperationType,
+            },
+            query::{
+                ObHTableFilter, ObNewRange, ObScanOrder, ObTableQuery, ObTableQueryRequest,
+                ObTableQueryResult, ObTableStreamRequest,
+            },
+        },
+        proxy::Proxy,
+        Builder as ConnBuilder,
+    },
+    runtime,
+    runtime::RuntimeRef,
+    serde_obkv::value::Value,
+    util::{
+        assert_not_empty, current_time_millis, duration_to_millis, millis_to_secs,
+        permit::{PermitGuard, Permits},
+        HandyRwLock,
+    },
+    ResultCodes,
+};
 
 lazy_static! {
     pub static ref OBKV_CLIENT_METRICS: ClientMetrics = {
@@ -188,7 +197,7 @@ struct ObTableClientInner {
     status_mutex: Lock,
 
     /// Client Runtimes
-    runtimes: Arc<ObClientRuntimes>,
+    runtimes: RuntimesRef,
 
     //ServerAddr(all) -> ObTableConnection
     table_roster: RwLock<HashMap<ObServerAddr, Arc<ObTable>>>,
@@ -248,7 +257,7 @@ impl ObTableClientInner {
             datasource_name: "".to_owned(),
             running_mode,
             config: config.clone(),
-            runtimes: runtimes.clone(),
+            runtimes,
 
             location: ObTableLocation::new(config),
             initialized: AtomicBool::new(false),
@@ -598,7 +607,8 @@ impl ObTableClientInner {
                 .tenant_name(&self.tenant_name)
                 .user_name(&self.user_name)
                 .database_name(&self.database)
-                .password(&self.password);
+                .password(&self.password)
+                .runtimes(self.runtimes.clone());
 
             let pool = Arc::new(
                 ConnPoolBuilder::new()
@@ -1476,6 +1486,8 @@ impl Drop for ObTableClientInner {
     }
 }
 
+pub type RuntimesRef = Arc<ObClientRuntimes>;
+
 /// OBKV Table Runtime
 #[derive(Clone, Debug)]
 pub struct ObClientRuntimes {
@@ -1485,6 +1497,16 @@ pub struct ObClientRuntimes {
     pub writer_runtime: RuntimeRef,
     /// Runtime for some other tasks
     pub default_runtime: RuntimeRef,
+}
+
+impl ObClientRuntimes {
+    pub fn test_default() -> ObClientRuntimes {
+        ObClientRuntimes {
+            reader_runtime: Arc::new(build_runtime("ob-conn-read", 1)),
+            writer_runtime: Arc::new(build_runtime("ob-conn-write", 1)),
+            default_runtime: Arc::new(build_runtime("ob-default", 1)),
+        }
+    }
 }
 
 fn build_runtime(name: &str, threads_num: usize) -> runtime::Runtime {
@@ -1500,7 +1522,7 @@ fn build_obkv_runtimes(config: &ClientConfig) -> ObClientRuntimes {
     ObClientRuntimes {
         reader_runtime: Arc::new(build_runtime("ob-conn-read", config.conn_reader_threads)),
         writer_runtime: Arc::new(build_runtime("ob-conn-write", config.conn_writer_threads)),
-        default_runtime: Arc::new(build_runtime("ceres-default", config.default_threads_num)),
+        default_runtime: Arc::new(build_runtime("ob-default", config.default_threads_num)),
     }
 }
 
@@ -2369,7 +2391,7 @@ impl Builder {
                 self.database,
                 self.running_mode,
                 self.config,
-                runtimes.clone(),
+                runtimes,
             )?),
             refresh_thread_pool: Arc::new(
                 ScheduledThreadPool::builder()
