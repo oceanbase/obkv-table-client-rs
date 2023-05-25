@@ -177,7 +177,6 @@ pub enum RunningMode {
 type Lock = Mutex<u8>;
 
 // ObTableClient inner implemetation.
-#[allow(dead_code)]
 struct ObTableClientInner {
     location: ObTableLocation,
     ocp_manager: ObOcpModelManager,
@@ -196,22 +195,22 @@ struct ObTableClientInner {
     closed: AtomicBool,
     status_mutex: Lock,
 
-    /// Client Runtimes
+    // Client Runtimes
     runtimes: RuntimesRef,
 
-    //ServerAddr(all) -> ObTableConnection
+    // ServerAddr(all) -> ObTableConnection
     table_roster: RwLock<HashMap<ObServerAddr, Arc<ObTable>>>,
     server_roster: ServerRoster,
     running_mode: RunningMode,
-    //TableName -> TableEntry
+    // TableName -> TableEntry
     table_locations: RwLock<HashMap<String, Arc<TableEntry>>>,
     table_mutexs: RwLock<HashMap<String, Arc<Lock>>>,
-    //TableName -> rowKey element
+    // TableName -> rowKey element
     table_row_key_element: RwLock<HashMap<String, HashMap<String, i32>>>,
     connection_pools: RwLock<HashMap<ObServerAddr, Arc<ConnPool>>>,
 
     _retry_on_change_master: bool,
-    //TableName -> failure counter
+    // TableName -> failure counter
     table_continuous_failures: RwLock<HashMap<String, Arc<AtomicUsize>>>,
 
     refresh_metadata_mutex: Lock,
@@ -452,7 +451,7 @@ impl ObTableClientInner {
                 result.push((part_id, table.clone()));
                 continue;
             }
-            //Table not found, try to refresh it and retry get it again.
+            // Table not found, try to refresh it and retry get it again.
             warn!("ObTableClientInner::get_tables can not get ob table by address {:?} so that will sync refresh metadata.",
                   replica_location.addr());
             self.sync_refresh_metadata()?;
@@ -608,7 +607,8 @@ impl ObTableClientInner {
                 .user_name(&self.user_name)
                 .database_name(&self.database)
                 .password(&self.password)
-                .runtimes(self.runtimes.clone());
+                .runtimes(self.runtimes.clone())
+                .sender_channel_size(self.config.conn_sender_mpsc_channel);
 
             let pool = Arc::new(
                 ConnPoolBuilder::new()
@@ -904,7 +904,7 @@ impl ObTableClientInner {
         refresh: bool,
         blocking: bool,
     ) -> Result<Arc<TableEntry>> {
-        //Attempt to retrieve it from cache, avoid locking.
+        // Attempt to retrieve it from cache, avoid locking.
         if let Some(table_entry) = self.get_table_entry_from_cache(table_name) {
             //If the refresh is false indicates that user tolerate not the latest data
             if !refresh || !self.need_refresh_table_entry(&table_entry) {
@@ -912,7 +912,7 @@ impl ObTableClientInner {
             }
         }
 
-        //Table entry is none or not refresh
+        // Table entry is none or not refresh
         let table_mutex = {
             let table_mutexs = self.table_mutexs.rl();
             match table_mutexs.get(table_name) {

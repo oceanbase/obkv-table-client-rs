@@ -42,7 +42,7 @@ use tokio::{
         TcpSocket, TcpStream,
     },
     sync::{mpsc, oneshot},
-    time::{timeout as TokioTimeout, Duration as TokioDuration},
+    time::Duration as TokioDuration,
 };
 use tokio_util::codec::{Decoder, Encoder};
 use uuid::Uuid;
@@ -87,9 +87,10 @@ impl ConnectionSender {
         active: Arc<AtomicBool>,
         sender_runtime: RuntimeRef,
         default_runtime: RuntimeRef,
+        channel_capacity: usize,
     ) -> ConnectionSender {
         let (sender, mut receiver): (mpsc::Sender<ObTablePacket>, mpsc::Receiver<ObTablePacket>) =
-            mpsc::channel(100);
+            mpsc::channel(channel_capacity);
         let mut codec = ObTablePacketCodec::new();
 
         let writer = sender_runtime.spawn(async move {
@@ -107,7 +108,7 @@ impl ConnectionSender {
                             if packet.is_close_poison() {
                                 break;
                             }
-                            //clear the buf for reuse
+                            // clear the buf for reuse
                             buf.clear();
                             let channel_id = packet.channel_id();
                             match codec.encode(packet, &mut buf) {
@@ -157,7 +158,7 @@ impl ConnectionSender {
                 active.store(false, Ordering::Release);
 
                 if let Err(err) = write_stream.shutdown().await {
-                    error!("Fail to close write stream to {}, err:{}", addr, err);
+                    error!("Fail to close write stream to {addr}, err:{err}");
                 }
 
                 drop(receiver);
@@ -245,6 +246,7 @@ impl Connection {
         addr: SocketAddr,
         stream: TcpStream,
         runtimes: RuntimesRef,
+        channel_capacity: usize,
     ) -> Result<Self> {
         let requests: RequestsMap = Arc::new(Mutex::new(HashMap::new()));
         let read_requests = requests.clone();
@@ -277,6 +279,7 @@ impl Connection {
                 active.clone(),
                 runtimes.writer_runtime.clone(),
                 runtimes.default_runtime.clone(),
+                channel_capacity,
             ),
             requests,
             continuous_timeout_failures: AtomicUsize::new(0),
@@ -307,7 +310,7 @@ impl Connection {
         let mut buf = BytesMut::with_capacity(READ_BUF_SIZE);
         loop {
             if let Ok(()) = signal_receiver.try_recv() {
-                error!("DEBUG: out0");
+                debug!("Connection::process_reading_data signal_receiver.try_recv() quit");
                 break;
             }
 
@@ -367,10 +370,7 @@ impl Connection {
                 CommonErrCode::Rpc,
                 "connection reader exits".to_owned(),
             ))) {
-                error!(
-                    "Connection::cancel_requests: fail to send cancel message, err:{}",
-                    e.err().unwrap().to_string()
-                );
+                error!("Connection::cancel_requests: fail to send cancel message, err:{e:?}");
             }
         }
     }
@@ -540,13 +540,13 @@ impl Connection {
         let rx = self.send(req, channel_id)?;
 
         if payload.timeout_millis() == 0 {
-            // no-wait request,return Ok directly2
+            // no-wait request,return Ok directly
             return Ok(());
         }
 
         // TODO: remove block_on with rx.await
         let resp = self.runtimes.default_runtime.block_on(async move {
-            match TokioTimeout(timeout, rx).await {
+            match tokio::time::timeout(timeout, rx).await {
                 Ok(resp) => {
                     self.on_recv_in_time();
                     resp.map_err(|e| {
@@ -569,7 +569,7 @@ impl Connection {
                         format!("wait for rpc response timeout, err:{err}"),
                     ));
                 }
-            }.expect("Tokio timeout panics, may be there is no current timer set")
+            }.map_err(|err| CommonErr(CommonErrCode::Rpc, format!("Tokio timeout error: {err:?}")))?
         });
 
         match resp {
@@ -605,9 +605,10 @@ impl Connection {
                 CommonErrCode::Rpc,
                 format!("transport code: [{code:?}], error: [{error}]"),
             )),
-            _other => {
-                panic!("Connection::execute unexpected response packet here.");
-            }
+            _other => Err(CommonErr(
+                CommonErrCode::Rpc,
+                "Connection::execute unexpected response packet.".parse()?,
+            )),
         }
     }
 
@@ -691,13 +692,13 @@ impl Connection {
         }
         self.set_active(false);
 
-        //1. close writer
+        // 1. close writer
         if let Err(e) = self.sender.close() {
             error!("Connection::close fail to close writer, err: {}.", e);
         }
 
-        //2. close reader
-        //TODO: remove block_on
+        // 2. close reader
+        // TODO: remove block_on
         if let Err(e) = self.runtimes.default_runtime.block_on(async {
             self.reader_signal_sender
                 .send(())
@@ -782,6 +783,8 @@ pub struct Builder {
     password: String,
 
     runtimes: Option<RuntimesRef>,
+
+    sender_channel_size: usize,
 }
 
 const SOCKET_KEEP_ALIVE_SECS: u64 = 15 * 60;
@@ -800,6 +803,7 @@ impl Builder {
             database_name: "".to_owned(),
             password: "".to_owned(),
             runtimes: None,
+            sender_channel_size: 100,
         }
     }
 
@@ -858,6 +862,11 @@ impl Builder {
         self
     }
 
+    pub fn sender_channel_size(mut self, size: usize) -> Self {
+        self.sender_channel_size = size;
+        self
+    }
+
     pub fn build(self) -> Result<Connection> {
         let uuid = Uuid::new_v4();
         let id = BigEndian::read_u32(uuid.as_bytes());
@@ -903,7 +912,13 @@ impl Builder {
 
             debug!("Builder::build succeeds in connecting to {}.", addr);
 
-            let result = Connection::internal_new(id, addr, stream, self.runtimes.unwrap());
+            let result = Connection::internal_new(
+                id,
+                addr,
+                stream,
+                self.runtimes.unwrap(),
+                self.sender_channel_size,
+            );
 
             OBKV_RPC_METRICS.observe_rpc_duration("connect", start.elapsed());
 

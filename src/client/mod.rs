@@ -159,6 +159,8 @@ pub struct ClientConfig {
     pub conn_writer_threads: usize,
     pub default_threads_num: usize,
 
+    pub conn_sender_mpsc_channel: usize,
+
     pub log_level_flag: u16,
 }
 
@@ -203,9 +205,11 @@ impl Default for ClientConfig {
             conn_init_thread_num: 2,
             query_concurrency_limit: None,
 
-            conn_reader_threads: 6,
-            conn_writer_threads: 4,
+            conn_reader_threads: 4,
+            conn_writer_threads: 2,
             default_threads_num: 2,
+
+            conn_sender_mpsc_channel: 100,
 
             log_level_flag: DEFAULT_FLAG,
         }
