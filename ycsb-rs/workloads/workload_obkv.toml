@@ -52,5 +52,5 @@ max_conns_per_server = 10
 min_idle_conns_per_server = 10
 conn_init_thread_num = 1
 
-conn_reader_threads = 6
-conn_writer_threads = 4
+conn_reader_thread_num = 6
+conn_writer_thread_num = 4

@@ -104,11 +104,11 @@ fn conn_init_thread_num_default() -> usize {
     2
 }
 
-fn conn_reader_threads_default() -> usize {
+fn conn_reader_thread_num_default() -> usize {
     6
 }
 
-fn conn_writer_threads_default() -> usize {
+fn conn_writer_thread_num_default() -> usize {
     4
 }
 
@@ -210,13 +210,13 @@ pub struct Properties {
     )]
     pub conn_init_thread_num: usize,
     #[serde(
-        default = "conn_reader_threads_default",
-        rename = "conn_reader_threads"
+        default = "conn_reader_thread_num_default",
+        rename = "conn_reader_thread_num"
     )]
-    pub conn_reader_threads: usize,
+    pub conn_reader_thread_num: usize,
     #[serde(
-        default = "conn_writer_threads_default",
-        rename = "conn_writer_threads"
+        default = "conn_writer_thread_num_default",
+        rename = "conn_writer_thread_num"
     )]
-    pub conn_writer_threads: usize,
+    pub conn_writer_thread_num: usize,
 }

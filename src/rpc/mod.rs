@@ -359,8 +359,6 @@ impl Connection {
                 }
             }
         }
-        // TODO: stream close
-        drop(read_stream);
     }
 
     fn cancel_requests(requests: &RequestsMap) {

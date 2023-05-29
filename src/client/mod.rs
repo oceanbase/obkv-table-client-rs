@@ -155,9 +155,9 @@ pub struct ClientConfig {
     pub conn_init_thread_num: usize,
     pub query_concurrency_limit: Option<usize>,
 
-    pub conn_reader_threads: usize,
-    pub conn_writer_threads: usize,
-    pub default_threads_num: usize,
+    pub conn_reader_thread_num: usize,
+    pub conn_writer_thread_num: usize,
+    pub default_thread_num: usize,
 
     pub conn_sender_mpsc_channel: usize,
 
@@ -205,9 +205,9 @@ impl Default for ClientConfig {
             conn_init_thread_num: 2,
             query_concurrency_limit: None,
 
-            conn_reader_threads: 4,
-            conn_writer_threads: 2,
-            default_threads_num: 2,
+            conn_reader_thread_num: 4,
+            conn_writer_thread_num: 2,
+            default_thread_num: 2,
 
             conn_sender_mpsc_channel: 100,
 

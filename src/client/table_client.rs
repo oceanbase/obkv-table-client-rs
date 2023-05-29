@@ -1502,8 +1502,8 @@ pub struct ObClientRuntimes {
 impl ObClientRuntimes {
     pub fn test_default() -> ObClientRuntimes {
         ObClientRuntimes {
-            reader_runtime: Arc::new(build_runtime("ob-conn-read", 1)),
-            writer_runtime: Arc::new(build_runtime("ob-conn-write", 1)),
+            reader_runtime: Arc::new(build_runtime("ob-conn-reader", 1)),
+            writer_runtime: Arc::new(build_runtime("ob-conn-writer", 1)),
             default_runtime: Arc::new(build_runtime("ob-default", 1)),
         }
     }
@@ -1520,9 +1520,15 @@ fn build_runtime(name: &str, threads_num: usize) -> runtime::Runtime {
 
 fn build_obkv_runtimes(config: &ClientConfig) -> ObClientRuntimes {
     ObClientRuntimes {
-        reader_runtime: Arc::new(build_runtime("ob-conn-read", config.conn_reader_threads)),
-        writer_runtime: Arc::new(build_runtime("ob-conn-write", config.conn_writer_threads)),
-        default_runtime: Arc::new(build_runtime("ob-default", config.default_threads_num)),
+        reader_runtime: Arc::new(build_runtime(
+            "ob-conn-reader",
+            config.conn_reader_thread_num,
+        )),
+        writer_runtime: Arc::new(build_runtime(
+            "ob-conn-writer",
+            config.conn_writer_thread_num,
+        )),
+        default_runtime: Arc::new(build_runtime("ob-default", config.default_thread_num)),
     }
 }
 
