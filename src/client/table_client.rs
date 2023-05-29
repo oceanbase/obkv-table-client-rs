@@ -608,7 +608,7 @@ impl ObTableClientInner {
                 .database_name(&self.database)
                 .password(&self.password)
                 .runtimes(self.runtimes.clone())
-                .sender_channel_size(self.config.conn_sender_mpsc_channel);
+                .sender_channel_size(self.config.max_inflight_reqs_per_conn);
 
             let pool = Arc::new(
                 ConnPoolBuilder::new()

@@ -159,7 +159,7 @@ pub struct ClientConfig {
     pub conn_writer_thread_num: usize,
     pub default_thread_num: usize,
 
-    pub conn_sender_mpsc_channel: usize,
+    pub max_inflight_reqs_per_conn: usize,
 
     pub log_level_flag: u16,
 }
@@ -209,7 +209,7 @@ impl Default for ClientConfig {
             conn_writer_thread_num: 2,
             default_thread_num: 2,
 
-            conn_sender_mpsc_channel: 100,
+            max_inflight_reqs_per_conn: 100,
 
             log_level_flag: DEFAULT_FLAG,
         }
