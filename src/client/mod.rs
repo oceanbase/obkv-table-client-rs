@@ -155,6 +155,12 @@ pub struct ClientConfig {
     pub conn_init_thread_num: usize,
     pub query_concurrency_limit: Option<usize>,
 
+    pub conn_reader_thread_num: usize,
+    pub conn_writer_thread_num: usize,
+    pub default_thread_num: usize,
+
+    pub max_inflight_reqs_per_conn: usize,
+
     pub log_level_flag: u16,
 }
 
@@ -198,6 +204,12 @@ impl Default for ClientConfig {
             min_idle_conns_per_server: 5,
             conn_init_thread_num: 2,
             query_concurrency_limit: None,
+
+            conn_reader_thread_num: 4,
+            conn_writer_thread_num: 2,
+            default_thread_num: 2,
+
+            max_inflight_reqs_per_conn: 100,
 
             log_level_flag: DEFAULT_FLAG,
         }

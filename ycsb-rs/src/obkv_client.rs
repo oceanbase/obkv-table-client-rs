@@ -49,6 +49,9 @@ pub struct OBKVClientInitStruct {
     pub max_conns_per_server: usize,
     pub min_idle_conns_per_server: usize,
     pub conn_init_thread_num: usize,
+
+    pub conn_reader_thread_num: usize,
+    pub conn_writer_thread_num: usize,
 }
 
 impl OBKVClientInitStruct {
@@ -69,6 +72,8 @@ impl OBKVClientInitStruct {
             max_conns_per_server: props.max_conns_per_server,
             min_idle_conns_per_server: props.min_idle_conns_per_server,
             conn_init_thread_num: props.conn_init_thread_num,
+            conn_reader_thread_num: props.conn_reader_thread_num,
+            conn_writer_thread_num: props.conn_writer_thread_num,
         }
     }
 }
@@ -90,6 +95,8 @@ impl OBKVClient {
             max_conns_per_server: config.max_conns_per_server,
             min_idle_conns_per_server: config.min_idle_conns_per_server,
             conn_init_thread_num: config.conn_init_thread_num,
+            conn_reader_thread_num: config.conn_reader_thread_num,
+            conn_writer_thread_num: config.conn_writer_thread_num,
             ..Default::default()
         };
         let builder = Builder::new()
@@ -155,6 +162,7 @@ impl DB for OBKVClient {
             vec![Value::from(key)],
             COLUMN_NAMES.iter().map(|s| s.to_string()).collect(),
         );
+        assert!(result.is_ok());
         assert_eq!(10, result?.len());
 
         Ok(())

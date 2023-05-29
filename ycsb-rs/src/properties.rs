@@ -104,6 +104,14 @@ fn conn_init_thread_num_default() -> usize {
     2
 }
 
+fn conn_reader_thread_num_default() -> usize {
+    6
+}
+
+fn conn_writer_thread_num_default() -> usize {
+    4
+}
+
 #[derive(Deserialize, Debug)]
 pub struct Properties {
     #[serde(default = "zero_u64", rename = "insertstart")]
@@ -201,4 +209,14 @@ pub struct Properties {
         rename = "conn_init_thread_num"
     )]
     pub conn_init_thread_num: usize,
+    #[serde(
+        default = "conn_reader_thread_num_default",
+        rename = "conn_reader_thread_num"
+    )]
+    pub conn_reader_thread_num: usize,
+    #[serde(
+        default = "conn_writer_thread_num_default",
+        rename = "conn_writer_thread_num"
+    )]
+    pub conn_writer_thread_num: usize,
 }
