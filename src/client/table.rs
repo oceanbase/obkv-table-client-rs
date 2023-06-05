@@ -18,7 +18,7 @@
 use std::{collections::HashMap, fmt::Formatter, sync::Arc, time::Duration};
 
 use super::{
-    query::{QueryResultSet, QueryStreamResult, StreamQuerier, TableQuery},
+    query::{QueryResultSet, TableQuery},
     ClientConfig, Table, TableOpResult,
 };
 use crate::{
@@ -28,8 +28,7 @@ use crate::{
             codes::ResultCodes,
             payloads::*,
             query::{
-                ObHTableFilter, ObNewRange, ObScanOrder, ObTableQuery, ObTableQueryRequest,
-                ObTableQueryResult, ObTableStreamRequest,
+                ObHTableFilter, ObNewRange, ObScanOrder, ObTableQuery
             },
             ObPayload,
         },
@@ -63,12 +62,12 @@ impl std::fmt::Debug for ObTable {
 }
 
 impl ObTable {
-    pub fn execute_payload<T: ObPayload, R: ObPayload>(
+    pub async fn execute_payload<T: ObPayload, R: ObPayload>(
         &self,
         payload: &mut T,
         result: &mut R,
     ) -> Result<()> {
-        self.rpc_proxy.execute(payload, result)?;
+        self.rpc_proxy.execute(payload, result).await?;
         Ok(())
     }
 
@@ -80,7 +79,7 @@ impl ObTable {
         self.config.rpc_operation_timeout
     }
 
-    fn execute(
+    async fn execute(
         &self,
         table_name: &str,
         operation_type: ObTableOperationType,
@@ -98,7 +97,7 @@ impl ObTable {
             self.config.log_level_flag,
         );
         let mut result = ObTableOperationResult::new();
-        self.execute_payload(&mut payload, &mut result)?;
+        self.execute_payload(&mut payload, &mut result).await?;
         Ok(result)
     }
 }
@@ -175,7 +174,7 @@ impl Builder {
 
 // TODO: Table has no retry for any operation
 impl Table for ObTable {
-    fn insert(
+    async fn insert(
         &self,
         table_name: &str,
         row_keys: Vec<Value>,
@@ -189,11 +188,12 @@ impl Table for ObTable {
                 row_keys,
                 Some(columns),
                 Some(properties),
-            )?
+            )
+            .await?
             .affected_rows())
     }
 
-    fn update(
+    async fn update(
         &self,
         table_name: &str,
         row_keys: Vec<Value>,
@@ -207,11 +207,12 @@ impl Table for ObTable {
                 row_keys,
                 Some(columns),
                 Some(properties),
-            )?
+            )
+            .await?
             .affected_rows())
     }
 
-    fn insert_or_update(
+    async fn insert_or_update(
         &self,
         table_name: &str,
         row_keys: Vec<Value>,
@@ -225,11 +226,12 @@ impl Table for ObTable {
                 row_keys,
                 Some(columns),
                 Some(properties),
-            )?
+            )
+            .await?
             .affected_rows())
     }
 
-    fn replace(
+    async fn replace(
         &self,
         table_name: &str,
         row_keys: Vec<Value>,
@@ -243,11 +245,12 @@ impl Table for ObTable {
                 row_keys,
                 Some(columns),
                 Some(properties),
-            )?
+            )
+            .await?
             .affected_rows())
     }
 
-    fn append(
+    async fn append(
         &self,
         table_name: &str,
         row_keys: Vec<Value>,
@@ -261,11 +264,12 @@ impl Table for ObTable {
                 row_keys,
                 Some(columns),
                 Some(properties),
-            )?
+            )
+            .await?
             .affected_rows())
     }
 
-    fn increment(
+    async fn increment(
         &self,
         table_name: &str,
         row_keys: Vec<Value>,
@@ -279,17 +283,19 @@ impl Table for ObTable {
                 row_keys,
                 Some(columns),
                 Some(properties),
-            )?
+            )
+            .await?
             .affected_rows())
     }
 
-    fn delete(&self, table_name: &str, row_keys: Vec<Value>) -> Result<i64> {
+    async fn delete(&self, table_name: &str, row_keys: Vec<Value>) -> Result<i64> {
         Ok(self
-            .execute(table_name, ObTableOperationType::Del, row_keys, None, None)?
+            .execute(table_name, ObTableOperationType::Del, row_keys, None, None)
+            .await?
             .affected_rows())
     }
 
-    fn get(
+    async fn get(
         &self,
         table_name: &str,
         row_keys: Vec<Value>,
@@ -302,7 +308,8 @@ impl Table for ObTable {
                 row_keys,
                 Some(columns),
                 None,
-            )?
+            )
+            .await?
             .take_entity()
             .take_properties())
     }
@@ -311,7 +318,7 @@ impl Table for ObTable {
         ObTableBatchOperation::with_ops_num(ops_num_hint)
     }
 
-    fn execute_batch(
+    async fn execute_batch(
         &self,
         _table_name: &str,
         batch_op: ObTableBatchOperation,
@@ -323,7 +330,7 @@ impl Table for ObTable {
         );
         let mut result = ObTableBatchOperationResult::new();
 
-        self.rpc_proxy.execute(&mut payload, &mut result)?;
+        self.rpc_proxy.execute(&mut payload, &mut result).await?;
 
         result.into()
     }
@@ -355,44 +362,7 @@ impl From<ObTableBatchOperationResult> for Result<Vec<TableOpResult>> {
     }
 }
 
-struct ObTableStreamQuerier;
-
-impl ObTableStreamQuerier {
-    pub fn new() -> ObTableStreamQuerier {
-        ObTableStreamQuerier {}
-    }
-}
-
-impl StreamQuerier for ObTableStreamQuerier {
-    fn execute_query(
-        &self,
-        stream_result: &mut QueryStreamResult,
-        (part_id, ob_table): (i64, Arc<ObTable>),
-        payload: &mut ObTableQueryRequest,
-    ) -> Result<i64> {
-        let mut result = ObTableQueryResult::new();
-        ob_table.rpc_proxy.execute(payload, &mut result)?;
-        let row_count = result.row_count();
-        stream_result.cache_stream_next((part_id, ob_table), result);
-        Ok(row_count)
-    }
-
-    fn execute_stream(
-        &self,
-        stream_result: &mut QueryStreamResult,
-        (part_id, ob_table): (i64, Arc<ObTable>),
-        payload: &mut ObTableStreamRequest,
-    ) -> Result<i64> {
-        let mut result = ObTableQueryResult::new();
-        let is_stream_next = payload.is_stream_next();
-        ob_table.rpc_proxy.execute(payload, &mut result)?;
-        let row_count = result.row_count();
-        if is_stream_next {
-            stream_result.cache_stream_next((part_id, ob_table), result);
-        }
-        Ok(row_count)
-    }
-}
+// impl ObTableStreamQuerier for obtable
 
 pub struct ObTableQueryImpl {
     operation_timeout: Option<Duration>,
@@ -420,25 +390,8 @@ impl ObTableQueryImpl {
 }
 
 impl TableQuery for ObTableQueryImpl {
-    fn execute(&self) -> Result<QueryResultSet> {
-        let mut partition_table: HashMap<i64, (i64, Arc<ObTable>)> = HashMap::new();
-        partition_table.insert(0, (0, self.table.clone()));
-
-        self.table_query.verify()?;
-
-        let mut stream_result = QueryStreamResult::new(
-            Arc::new(ObTableStreamQuerier::new()),
-            self.table_query.clone(),
-        );
-
-        stream_result.set_entity_type(self.entity_type());
-        stream_result.set_table_name(&self.table_name);
-        stream_result.set_expectant(partition_table);
-        stream_result.set_operation_timeout(self.operation_timeout);
-        stream_result.set_flag(self.table.config.log_level_flag);
-        stream_result.init()?;
-
-        Ok(QueryResultSet::from_stream_result(stream_result))
+    async fn execute(&self) -> Result<QueryResultSet> {
+        todo!()
     }
 
     fn get_table_name(&self) -> String {

@@ -1,4 +1,5 @@
 use std::{cell::RefCell, fs, rc::Rc, sync::Arc, thread, time::Instant};
+use std::sync::Mutex;
 
 use anyhow::{bail, Result};
 use obkv::dump_metrics;
@@ -19,6 +20,7 @@ pub mod obkv_client;
 pub mod properties;
 pub mod sqlite;
 pub mod workload;
+mod runtime;
 
 #[derive(StructOpt, Debug)]
 #[structopt(name = "ycsb")]
@@ -45,20 +47,20 @@ fn run(wl: Arc<CoreWorkload>, db: Rc<dyn DB>, rng: Rc<RefCell<SmallRng>>, operat
     }
 }
 
-fn load_ob(wl: Arc<CoreWorkload>, db: Arc<OBKVClient>, operation_count: usize) {
+async fn load_ob(wl: Arc<CoreWorkload>, db: Arc<OBKVClient>, operation_count: usize) {
     for _ in 0..operation_count {
-        wl.ob_insert(db.clone());
+        wl.ob_insert(db.clone()).await;
     }
 }
 
-fn run_ob(
+async fn run_ob(
     wl: Arc<CoreWorkload>,
     db: Arc<OBKVClient>,
-    rng: Rc<RefCell<SmallRng>>,
+    rng: Arc<Mutex<SmallRng>>,
     operation_count: usize,
 ) {
     for _ in 0..operation_count {
-        wl.ob_transaction(rng.clone(), db.clone());
+        wl.ob_transaction(rng.clone(), db.clone()).await;
     }
 }
 
@@ -84,6 +86,7 @@ fn main() -> Result<()> {
     let actual_client_count = opt.threads / props.obkv_client_reuse;
     for cmd in opt.commands {
         let start = Instant::now();
+        let mut tasks = vec![];
         let mut threads = vec![];
         println!(
             "Database: {database}, Command: {cmd}, Counts Per Threads: {thread_operation_count}"
@@ -93,6 +96,7 @@ fn main() -> Result<()> {
             props.obkv_client_reuse
         );
         if database.eq_ignore_ascii_case("obkv") {
+            let runtimes = runtime::build_ycsb_runtimes(props.clone());
             for _client_idx in 0..actual_client_count {
                 let database = database.clone();
                 let db = db::create_ob(&database, config.clone()).unwrap();
@@ -100,17 +104,23 @@ fn main() -> Result<()> {
                     let db = db.clone();
                     let wl = wl.clone();
                     let cmd = cmd.clone();
-                    threads.push(thread::spawn(move || {
-                        let rng = Rc::new(RefCell::new(SmallRng::from_entropy()));
+                    let runtime = runtimes.default_runtime.clone();
+                    tasks.push(runtime.spawn(async move {
+                        let rng = Arc::new(Mutex::new(SmallRng::from_entropy()));
                         db.init().unwrap();
                         match &cmd[..] {
-                            "load" => load_ob(wl.clone(), db, thread_operation_count),
-                            "run" => run_ob(wl.clone(), db, rng, thread_operation_count),
+                            "load" => load_ob(wl.clone(), db, thread_operation_count).await,
+                            "run" => run_ob(wl.clone(), db, rng, thread_operation_count).await,
                             cmd => panic!("invalid command: {cmd}"),
                         };
                     }));
                 }
             }
+            runtimes.block_runtime.block_on(async move {
+                for task in tasks {
+                    task.await.expect("task failed");
+                }
+            });
         } else {
             for _ in 0..opt.threads {
                 let database = database.clone();
@@ -130,9 +140,9 @@ fn main() -> Result<()> {
                     };
                 }));
             }
-        }
-        for t in threads {
-            let _ = t.join();
+            for t in threads {
+                let _ = t.join();
+            }
         }
         let runtime = start.elapsed().as_millis();
         println!("[OVERALL], ThreadCount, {}", opt.threads);

@@ -112,6 +112,10 @@ fn conn_writer_thread_num_default() -> usize {
     4
 }
 
+fn ycsb_thread_num_default() -> usize {
+    16
+}
+
 #[derive(Deserialize, Debug)]
 pub struct Properties {
     #[serde(default = "zero_u64", rename = "insertstart")]
@@ -219,4 +223,6 @@ pub struct Properties {
         rename = "conn_writer_thread_num"
     )]
     pub conn_writer_thread_num: usize,
+    #[serde(default = "ycsb_thread_num_default", rename = "ycsb_thread_num")]
+    pub ycsb_thread_num: usize,
 }

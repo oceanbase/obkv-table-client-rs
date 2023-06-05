@@ -50,7 +50,9 @@ rpc_retry_interval = 0
 refresh_workers_num = 1
 max_conns_per_server = 10
 min_idle_conns_per_server = 10
-conn_init_thread_num = 1
 
+ycsb_thread_num = 10
+
+conn_init_thread_num = 2
 conn_reader_thread_num = 6
 conn_writer_thread_num = 4

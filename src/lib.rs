@@ -15,6 +15,8 @@
  * #L%
  */
 
+#![feature(async_fn_in_trait)]
+
 extern crate bytes;
 extern crate chrono;
 extern crate crossbeam;
@@ -51,7 +53,7 @@ pub mod error;
 mod location;
 pub mod monitors;
 mod rpc;
-mod runtime;
+pub mod runtime;
 pub mod serde_obkv;
 mod util;
 pub use self::{

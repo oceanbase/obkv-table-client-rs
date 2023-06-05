@@ -19,11 +19,13 @@
 #[allow(unused)]
 mod utils;
 
-use obkv::{Table, Value};
+use obkv::{ObTableClient, Table, Value};
+use tokio::task;
 
-#[test]
-fn test_execute_sql() {
-    let client = utils::common::build_normal_client();
+#[tokio::test]
+async fn test_execute_sql() {
+    let client_handle = task::spawn_blocking(|| utils::common::build_normal_client());
+    let client = client_handle.await.unwrap();
     let test_table_name = "test_execute_sql";
     let create_table =
         format!("create table IF NOT EXISTS {test_table_name}(id int, PRIMARY KEY(id));");
@@ -32,9 +34,10 @@ fn test_execute_sql() {
         .expect("fail to create table");
 }
 
-#[test]
-fn test_check_table_exists() {
-    let client = utils::common::build_normal_client();
+#[tokio::test]
+async fn test_check_table_exists() {
+    let client_handle = task::spawn_blocking(|| utils::common::build_normal_client());
+    let client = client_handle.await.unwrap();
     let test_table_name = "test_check_table_exists";
     let drop_table = format!("drop table IF EXISTS {test_table_name};");
 
@@ -60,48 +63,54 @@ fn test_check_table_exists() {
     assert!(exists, "should exists");
 }
 
-#[test]
-fn test_truncate_table() {
-    let client = utils::common::build_normal_client();
+async fn truncate_table(client: &ObTableClient, test_table_name: &str) {
+    client
+        .truncate_table(test_table_name)
+        .expect("Fail to truncate first test table");
+
+    let result = client
+        .get(
+            test_table_name,
+            vec![Value::from("foo")],
+            vec!["c2".to_owned()],
+        )
+        .await
+        .expect("Fail to get row");
+    assert!(result.is_empty());
+
+    let result = client
+        .insert(
+            test_table_name,
+            vec![Value::from("foo")],
+            vec!["c2".to_owned()],
+            vec![Value::from("bar")],
+        )
+        .await
+        .expect("Fail to insert row");
+    assert_eq!(result, 1);
+
+    client
+        .truncate_table(test_table_name)
+        .expect("Fail to truncate first test table");
+
+    let result = client
+        .get(
+            test_table_name,
+            vec![Value::from("foo")],
+            vec!["c2".to_owned()],
+        )
+        .await
+        .expect("Fail to get row");
+    assert!(result.is_empty());
+}
+
+#[tokio::test]
+async fn test_truncate_table() {
+    let client_handle = task::spawn_blocking(|| utils::common::build_normal_client());
+    let client = client_handle.await.unwrap();
     let test_table_name = "test_varchar_table";
-    let truncate_once = || {
-        client
-            .truncate_table(test_table_name)
-            .expect("Fail to truncate first test table");
 
-        let result = client
-            .get(
-                test_table_name,
-                vec![Value::from("foo")],
-                vec!["c2".to_owned()],
-            )
-            .expect("Fail to get row");
-        assert!(result.is_empty());
-
-        let result = client
-            .insert(
-                test_table_name,
-                vec![Value::from("foo")],
-                vec!["c2".to_owned()],
-                vec![Value::from("bar")],
-            )
-            .expect("Fail to insert row");
-        assert_eq!(result, 1);
-
-        client
-            .truncate_table(test_table_name)
-            .expect("Fail to truncate first test table");
-
-        let result = client
-            .get(
-                test_table_name,
-                vec![Value::from("foo")],
-                vec!["c2".to_owned()],
-            )
-            .expect("Fail to get row");
-        assert!(result.is_empty());
-    };
     for _ in 0..1 {
-        truncate_once();
+        truncate_table(&client, test_table_name).await;
     }
 }

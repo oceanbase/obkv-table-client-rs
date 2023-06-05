@@ -22,7 +22,7 @@ use anyhow::Result;
 use obkv::error::CommonErrCode;
 use obkv::{Builder, ClientConfig, ObTableClient, RunningMode, Table, TableQuery, Value};
 
-use crate::{db::DB, properties::Properties};
+use crate::{properties::Properties};
 
 const PRIMARY_KEY: &str = "ycsb_key";
 const COLUMN_NAMES: [&str; 10] = [
@@ -127,14 +127,12 @@ impl OBKVClient {
     pub fn build_hbase_client(config: Arc<OBKVClientInitStruct>) -> Result<Self> {
         Self::build_client(config, RunningMode::HBase)
     }
-}
 
-impl DB for OBKVClient {
-    fn init(&self) -> Result<()> {
+    pub fn init(&self) -> Result<()> {
         Ok(())
     }
 
-    fn insert(&self, table: &str, key: &str, values: &HashMap<&str, String>) -> Result<()> {
+    pub async fn insert(&self, table: &str, key: &str, values: &HashMap<&str, String>) -> Result<()> {
         let mut columns: Vec<String> = Vec::new();
         let mut properties: Vec<Value> = Vec::new();
         for (key, value) in values {
@@ -149,6 +147,7 @@ impl DB for OBKVClient {
                 columns,
                 properties,
             )
+            .await
             .expect("fail to insert_or update");
         assert_eq!(1, result);
 
@@ -156,19 +155,19 @@ impl DB for OBKVClient {
     }
 
     #[allow(unused)]
-    fn read(&self, table: &str, key: &str, result: &mut HashMap<String, String>) -> Result<()> {
+    pub async fn read(&self, table: &str, key: &str, result: &mut HashMap<String, String>) -> Result<()> {
         let result = self.client.get(
             table,
             vec![Value::from(key)],
             COLUMN_NAMES.iter().map(|s| s.to_string()).collect(),
-        );
+        ).await;
         assert!(result.is_ok());
         assert_eq!(10, result?.len());
 
         Ok(())
     }
 
-    fn update(&self, table: &str, key: &str, values: &HashMap<&str, String>) -> Result<()> {
+    pub async fn update(&self, table: &str, key: &str, values: &HashMap<&str, String>) -> Result<()> {
         let mut columns: Vec<String> = Vec::new();
         let mut properties: Vec<Value> = Vec::new();
         for (key, value) in values {
@@ -183,6 +182,7 @@ impl DB for OBKVClient {
                 columns,
                 properties,
             )
+            .await
             .expect("fail to insert_or update");
         assert_eq!(10, result);
 
@@ -190,14 +190,14 @@ impl DB for OBKVClient {
     }
 
     #[allow(unused)]
-    fn scan(
+    pub async fn scan(
         &self,
         table: &str,
         startkey: &str,
         endkey: &str,
         result: &mut HashMap<String, String>,
     ) -> Result<()> {
-        let result = self
+        let query = self
             .client
             .query(table)
             .select(COLUMN_NAMES.iter().map(|s| s.to_string()).collect())
@@ -207,8 +207,8 @@ impl DB for OBKVClient {
                 true,
                 vec![Value::from(endkey)],
                 true,
-            )
-            .execute();
+            );
+        let result = query.execute().await;
         assert!(result.is_ok());
         Ok(())
     }

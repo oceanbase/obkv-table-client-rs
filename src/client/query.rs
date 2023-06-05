@@ -25,7 +25,7 @@ use std::{
 /// Query API for ob table
 use super::ObTable;
 use crate::{
-    client::table_client::OBKV_CLIENT_METRICS,
+    client::table_client::{ObTableClientStreamQuerier, OBKV_CLIENT_METRICS},
     error::{CommonErrCode, Error::Common as CommonErr, Result},
     rpc::protocol::{
         payloads::ObTableEntityType,
@@ -35,6 +35,7 @@ use crate::{
         },
         DEFAULT_FLAG,
     },
+    runtime::RuntimeRef,
     serde_obkv::value::Value,
 };
 
@@ -43,25 +44,27 @@ use crate::{
 const ZERO_TIMEOUT_MS: Duration = Duration::from_millis(0);
 
 pub trait StreamQuerier {
-    fn execute_query(
+    async fn execute_query(
         &self,
         result: &mut QueryStreamResult,
         part_id_and_table: (i64, Arc<ObTable>),
         payload: &mut ObTableQueryRequest,
     ) -> Result<i64>;
 
-    fn execute_stream(
+    async fn execute_stream(
         &self,
         result: &mut QueryStreamResult,
         part_id_and_table: (i64, Arc<ObTable>),
         payload: &mut ObTableStreamRequest,
     ) -> Result<i64>;
+
+    fn get_runtime(&self) -> RuntimeRef;
 }
 
 type PartitionQueryResultDeque = VecDeque<((i64, Arc<ObTable>), ObTableQueryResult)>;
 
 pub struct QueryStreamResult {
-    querier: Arc<dyn StreamQuerier + Send + Sync>,
+    querier: Arc<ObTableClientStreamQuerier>,
     initialized: bool,
     eof: bool,
     closed: bool,
@@ -87,7 +90,7 @@ impl fmt::Debug for QueryStreamResult {
 }
 
 impl QueryStreamResult {
-    pub fn new(querier: Arc<dyn StreamQuerier + Send + Sync>, table_query: ObTableQuery) -> Self {
+    pub fn new(querier: Arc<ObTableClientStreamQuerier>, table_query: ObTableQuery) -> Self {
         Self {
             querier,
             initialized: false,
@@ -106,7 +109,10 @@ impl QueryStreamResult {
         }
     }
 
-    fn refer_to_new_partition(&mut self, (part_id, ob_table): (i64, Arc<ObTable>)) -> Result<i64> {
+    async fn refer_to_new_partition(
+        &mut self,
+        (part_id, ob_table): (i64, Arc<ObTable>),
+    ) -> Result<i64> {
         let mut req = ObTableQueryRequest::new(
             &self.table_name,
             part_id,
@@ -120,16 +126,17 @@ impl QueryStreamResult {
         let result = self
             .querier
             .clone()
-            .execute_query(self, (part_id, ob_table), &mut req);
+            .execute_query(self, (part_id, ob_table), &mut req)
+            .await;
 
         if result.is_err() {
-            self.close_eagerly("err");
+            self.close_eagerly("err").await;
         }
 
         result
     }
 
-    fn refer_to_last_stream_result(
+    async fn refer_to_last_stream_result(
         &mut self,
         (part_id, ob_table): (i64, Arc<ObTable>),
         last_result: &ObTableQueryResult,
@@ -144,10 +151,11 @@ impl QueryStreamResult {
         let result = self
             .querier
             .clone()
-            .execute_stream(self, (part_id, ob_table), &mut req);
+            .execute_stream(self, (part_id, ob_table), &mut req)
+            .await;
 
         if result.is_err() {
-            self.close_eagerly("err");
+            self.close_eagerly("err").await;
         }
 
         result
@@ -192,16 +200,16 @@ impl QueryStreamResult {
         }
     }
 
-    pub fn init(&mut self) -> Result<()> {
+    pub async fn init(&mut self) -> Result<()> {
         if self.initialized {
             return Ok(());
         }
 
         if self.table_query.batch_size() == -1 {
-            let tuples = std::mem::take(&mut self.expectant);
+            let tuples = mem::take(&mut self.expectant);
 
             for (_, tuple) in tuples {
-                self.refer_to_new_partition(tuple)?;
+                self.refer_to_new_partition(tuple).await?;
             }
         }
 
@@ -214,11 +222,10 @@ impl QueryStreamResult {
         self.cache_rows.len()
     }
 
-    pub fn close(&mut self) -> Result<()> {
+    pub async fn close(&mut self) -> Result<()> {
         if self.closed {
             return Ok(());
         }
-        self.closed = true;
 
         let last_result_num = self.partition_last_result.len();
 
@@ -229,7 +236,7 @@ impl QueryStreamResult {
                 None => break,
                 Some((tuple, last_result)) => {
                     if last_result.is_stream() && last_result.is_stream_next() {
-                        if let Err(e) = self.close_last_stream_result(tuple, last_result) {
+                        if let Err(e) = self.close_last_stream_result(tuple, last_result).await {
                             debug!(
                                 "QueryStreamResult::close fail to close \
                                  last stream result, err: {}",
@@ -249,6 +256,9 @@ impl QueryStreamResult {
                 last_result_num, loop_cnt
             );
         }
+
+        self.closed = true;
+
         Ok(())
     }
 
@@ -271,7 +281,7 @@ impl QueryStreamResult {
         ZERO_TIMEOUT_MS
     }
 
-    fn close_last_stream_result(
+    async fn close_last_stream_result(
         &mut self,
         (part_id, ob_table): (i64, Arc<ObTable>),
         last_result: ObTableQueryResult,
@@ -286,6 +296,7 @@ impl QueryStreamResult {
         self.querier
             .clone()
             .execute_stream(self, (part_id, ob_table), &mut req)
+            .await
     }
 
     fn pop_next_row_from_cache(&mut self) -> Result<Option<Vec<Value>>> {
@@ -294,8 +305,8 @@ impl QueryStreamResult {
     }
 
     #[inline]
-    fn close_eagerly(&mut self, tag: &str) {
-        if let Err(e) = self.close() {
+    async fn close_eagerly(&mut self, tag: &str) {
+        if let Err(e) = self.close().await {
             error!(
                 "QueryStreamResult::close_eagerly fail to close stream result, err: {}",
                 e
@@ -312,7 +323,7 @@ impl QueryStreamResult {
         self.cache_properties.clone()
     }
 
-    pub fn fetch_next_row(&mut self) -> Result<Option<Vec<Value>>> {
+    pub async fn fetch_next_row(&mut self) -> Result<Option<Vec<Value>>> {
         if !self.initialized {
             return Err(CommonErr(
                 CommonErrCode::NotInitialized,
@@ -331,19 +342,21 @@ impl QueryStreamResult {
             ));
         }
 
-        //1. Found from cache.
+        // 1. Found from cache.
         if !self.cache_rows.is_empty() {
             return self.pop_next_row_from_cache();
         }
 
-        //2. Get from the last stream request result
+        // 2. Get from the last stream request result
         loop {
             let last_part_result = self.partition_last_result.pop_front();
             match last_part_result {
                 None => break,
                 Some((tuple, last_result)) => {
                     if last_result.is_stream() && last_result.is_stream_next() {
-                        let row_count = self.refer_to_last_stream_result(tuple, &last_result)?;
+                        let row_count = self
+                            .refer_to_last_stream_result(tuple, &last_result)
+                            .await?;
                         if row_count == 0 {
                             continue;
                         }
@@ -353,13 +366,13 @@ impl QueryStreamResult {
             }
         }
 
-        //3. Query from new parttion
+        // 3. Query from new parttion
         let mut referred_partitions = vec![];
         let mut has_next = false;
 
         for (k, tuple) in self.expectant.clone() {
             referred_partitions.push(k);
-            let row_count = self.refer_to_new_partition(tuple)?;
+            let row_count = self.refer_to_new_partition(tuple).await?;
 
             if row_count != 0 {
                 has_next = true;
@@ -376,7 +389,7 @@ impl QueryStreamResult {
         } else {
             //4. Reach the end.
             self.eof = true;
-            self.close_eagerly("eof");
+            self.close_eagerly("eof").await;
             Ok(None)
         }
     }
@@ -384,9 +397,10 @@ impl QueryStreamResult {
 
 impl Drop for QueryStreamResult {
     fn drop(&mut self) {
-        match self.close() {
-            Ok(()) => (),
-            Err(e) => error!("QueryStreamResult::close fail: #{:?}", e),
+        if self.closed {
+            ()
+        } else {
+            error!("QueryStreamResult::close fail")
         }
     }
 }
@@ -425,20 +439,35 @@ impl QueryResultSet {
     pub fn close(&mut self) -> Result<()> {
         match self {
             QueryResultSet::None => Ok(()),
-            QueryResultSet::Some(stream_result) => stream_result.close(),
+            QueryResultSet::Some(stream_result) => {
+                // TODO: async close
+                if stream_result.closed {
+                    return Ok(());
+                } else {
+                    Err(CommonErr(
+                        CommonErrCode::Rpc,
+                        "QueryResultSet is not closed".to_owned(),
+                    ))
+                }
+            }
+        }
+    }
+
+    pub async fn async_close(&mut self) -> Result<()> {
+        match self {
+            QueryResultSet::None => Ok(()),
+            QueryResultSet::Some(stream_result) => stream_result.close().await,
         }
     }
 }
 
-impl Iterator for QueryResultSet {
-    type Item = Result<HashMap<String, Value>>;
-
-    fn next(&mut self) -> Option<Self::Item> {
+impl QueryResultSet {
+    pub async fn next(&mut self) -> Option<Result<HashMap<String, Value>>> {
         match self {
             QueryResultSet::None => None,
             QueryResultSet::Some(ref mut stream_result) => {
-                match stream_result.fetch_next_row() {
-                    //Find a row.
+                match stream_result.fetch_next_row().await {
+                    // Find a row.
                     Ok(Some(mut row)) => {
                         let mut names = stream_result.cache_properties();
                         assert_eq!(names.len(), row.len());
@@ -452,9 +481,9 @@ impl Iterator for QueryResultSet {
                         }
                         Some(Ok(row_map))
                     }
-                    //Reach end
+                    // Reach end
                     Ok(None) => None,
-                    //Error happens
+                    // Error happens
                     Err(e) => Some(Err(e)),
                 }
             }
@@ -476,7 +505,7 @@ impl Drop for QueryResultSet {
 const PRIMARY_INDEX_NAME: &str = "PRIMARY";
 
 pub trait TableQuery {
-    fn execute(&self) -> Result<QueryResultSet>;
+    async fn execute(&self) -> Result<QueryResultSet>;
     fn get_table_name(&self) -> String;
     fn set_entity_type(&mut self, entity_type: ObTableEntityType);
     fn entity_type(&self) -> ObTableEntityType;

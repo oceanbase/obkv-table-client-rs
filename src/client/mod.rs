@@ -37,7 +37,7 @@ pub enum TableOpResult {
 
 pub trait Table {
     /// Insert a record
-    fn insert(
+    async fn insert(
         &self,
         table_name: &str,
         row_keys: Vec<Value>,
@@ -46,7 +46,7 @@ pub trait Table {
     ) -> Result<i64>;
 
     /// Update a record
-    fn update(
+    async fn update(
         &self,
         table_name: &str,
         row_keys: Vec<Value>,
@@ -56,7 +56,7 @@ pub trait Table {
 
     /// Insert or update a record, if the record exists, update it.
     /// Otherwise insert a new one.
-    fn insert_or_update(
+    async fn insert_or_update(
         &self,
         table_name: &str,
         row_keys: Vec<Value>,
@@ -65,7 +65,7 @@ pub trait Table {
     ) -> Result<i64>;
 
     /// Replace a record.
-    fn replace(
+    async fn replace(
         &self,
         table_name: &str,
         row_keys: Vec<Value>,
@@ -74,7 +74,7 @@ pub trait Table {
     ) -> Result<i64>;
 
     /// Append
-    fn append(
+    async fn append(
         &self,
         table_name: &str,
         row_keys: Vec<Value>,
@@ -83,7 +83,7 @@ pub trait Table {
     ) -> Result<i64>;
 
     /// Increment
-    fn increment(
+    async fn increment(
         &self,
         table_name: &str,
         row_keys: Vec<Value>,
@@ -92,10 +92,10 @@ pub trait Table {
     ) -> Result<i64>;
 
     /// Delete records by row keys.
-    fn delete(&self, table_name: &str, row_keys: Vec<Value>) -> Result<i64>;
+    async fn delete(&self, table_name: &str, row_keys: Vec<Value>) -> Result<i64>;
 
     /// Retrieve a record by row keys.
-    fn get(
+    async fn get(
         &self,
         table_name: &str,
         row_keys: Vec<Value>,
@@ -105,7 +105,7 @@ pub trait Table {
     /// Create a batch operation
     fn batch_operation(&self, ops_num_hint: usize) -> ObTableBatchOperation;
     // Execute a batch operation
-    fn execute_batch(
+    async fn execute_batch(
         &self,
         table_name: &str,
         batch_op: ObTableBatchOperation,
@@ -152,9 +152,11 @@ pub struct ClientConfig {
 
     pub max_conns_per_server: usize,
     pub min_idle_conns_per_server: usize,
-    pub conn_init_thread_num: usize,
     pub query_concurrency_limit: Option<usize>,
 
+    pub batch_op_thread_num: usize,
+    pub query_thread_num: usize,
+    pub conn_init_thread_num: usize,
     pub conn_reader_thread_num: usize,
     pub conn_writer_thread_num: usize,
     pub default_thread_num: usize,
@@ -205,6 +207,8 @@ impl Default for ClientConfig {
             conn_init_thread_num: 2,
             query_concurrency_limit: None,
 
+            batch_op_thread_num: 2,
+            query_thread_num: 2,
             conn_reader_thread_num: 4,
             conn_writer_thread_num: 2,
             default_thread_num: 2,

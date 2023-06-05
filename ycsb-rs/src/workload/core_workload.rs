@@ -110,7 +110,7 @@ impl CoreWorkload {
         db.insert(&self.table, &dbkey, &values).unwrap();
     }
 
-    fn ob_transaction_insert(&self, db: Arc<OBKVClient>) {
+    async fn ob_transaction_insert(&self, db: Arc<OBKVClient>) {
         let keynum = self.next_key_num();
         let dbkey = format!("{}", fnvhash64(keynum));
         let mut values = HashMap::new();
@@ -124,7 +124,7 @@ impl CoreWorkload {
                 .sample_string::<SmallRng>(&mut self.rng.lock().unwrap(), field_len as usize);
             values.insert(&field_name[..], s);
         }
-        db.insert(&self.table, &dbkey, &values).unwrap();
+        db.insert(&self.table, &dbkey, &values).await.unwrap();
     }
 
     fn do_transaction_read(&self, db: Rc<dyn DB>) {
@@ -135,11 +135,11 @@ impl CoreWorkload {
         // TODO: verify rows
     }
 
-    fn ob_transaction_read(&self, db: Arc<OBKVClient>) {
+    async fn ob_transaction_read(&self, db: Arc<OBKVClient>) {
         let keynum = self.next_key_num();
         let dbkey = format!("{}", fnvhash64(keynum));
         let mut result = HashMap::new();
-        db.read(&self.table, &dbkey, &mut result).unwrap();
+        db.read(&self.table, &dbkey, &mut result).await.unwrap();
         // TODO: verify rows
     }
 
@@ -160,7 +160,7 @@ impl CoreWorkload {
         db.update(&self.table, &dbkey, &values).unwrap();
     }
 
-    fn ob_transaction_update(&self, db: Arc<OBKVClient>) {
+    async fn ob_transaction_update(&self, db: Arc<OBKVClient>) {
         let keynum = self.next_key_num();
         let dbkey = format!("{}", fnvhash64(keynum));
         let mut values = HashMap::new();
@@ -174,15 +174,15 @@ impl CoreWorkload {
                 .sample_string::<SmallRng>(&mut self.rng.lock().unwrap(), field_len as usize);
             values.insert(&field_name[..], s);
         }
-        db.update(&self.table, &dbkey, &values).unwrap();
+        db.update(&self.table, &dbkey, &values).await.unwrap();
     }
 
-    fn ob_transaction_scan(&self, db: Arc<OBKVClient>) {
+    async fn ob_transaction_scan(&self, db: Arc<OBKVClient>) {
         let start = self.next_key_num();
         let dbstart = format!("{}", fnvhash64(start));
         let dbend = format!("{}", fnvhash64(start));
         let mut result = HashMap::new();
-        db.scan(&self.table, &dbstart, &dbend, &mut result).unwrap();
+        db.scan(&self.table, &dbstart, &dbend, &mut result).await.unwrap();
     }
 
     fn next_key_num(&self) -> u64 {
@@ -194,10 +194,8 @@ impl CoreWorkload {
             .unwrap()
             .next_value(&mut self.rng.lock().unwrap())
     }
-}
 
-impl Workload for CoreWorkload {
-    fn do_insert(&self, db: Rc<dyn DB>) {
+    pub async fn ob_insert(&self, db: Arc<OBKVClient>) {
         let dbkey = self
             .key_sequence
             .lock()
@@ -215,10 +213,35 @@ impl Workload for CoreWorkload {
                 .sample_string::<SmallRng>(&mut self.rng.lock().unwrap(), field_len as usize);
             values.insert(&field_name[..], s);
         }
-        db.insert(&self.table, &dbkey, &values).unwrap();
+        db.insert(&self.table, &dbkey, &values).await.unwrap();
     }
 
-    fn ob_insert(&self, db: Arc<OBKVClient>) {
+    pub async fn ob_transaction(&self, rng: Arc<Mutex<SmallRng>>, db: Arc<OBKVClient>) {
+        let op = self
+            .operation_chooser
+            .lock()
+            .unwrap()
+            .next_value(&mut *rng.lock().unwrap());
+        match op {
+            CoreOperation::Insert => {
+                self.ob_transaction_insert(db).await;
+            }
+            CoreOperation::Read => {
+                self.ob_transaction_read(db).await;
+            }
+            CoreOperation::Update => {
+                self.ob_transaction_update(db).await;
+            }
+            CoreOperation::Scan => {
+                self.ob_transaction_scan(db).await;
+            }
+            _ => todo!(),
+        }
+    }
+}
+
+impl Workload for CoreWorkload {
+    fn do_insert(&self, db: Rc<dyn DB>) {
         let dbkey = self
             .key_sequence
             .lock()
@@ -254,29 +277,6 @@ impl Workload for CoreWorkload {
             }
             CoreOperation::Update => {
                 self.do_transaction_update(db);
-            }
-            _ => todo!(),
-        }
-    }
-
-    fn ob_transaction(&self, rng: Rc<RefCell<SmallRng>>, db: Arc<OBKVClient>) {
-        let op = self
-            .operation_chooser
-            .lock()
-            .unwrap()
-            .next_value(rng.borrow_mut().deref_mut());
-        match op {
-            CoreOperation::Insert => {
-                self.ob_transaction_insert(db);
-            }
-            CoreOperation::Read => {
-                self.ob_transaction_read(db);
-            }
-            CoreOperation::Update => {
-                self.ob_transaction_update(db);
-            }
-            CoreOperation::Scan => {
-                self.ob_transaction_scan(db);
             }
             _ => todo!(),
         }

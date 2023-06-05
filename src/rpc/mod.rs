@@ -77,7 +77,6 @@ const CONN_CONTINUOUS_TIMEOUT_CEILING: usize = 10;
 pub struct ConnectionSender {
     sender: mpsc::Sender<ObTablePacket>,
     writer: Option<JoinHandle<Result<()>>>,
-    default_runtime: RuntimeRef, // TODO: remove this
 }
 
 impl ConnectionSender {
@@ -86,7 +85,6 @@ impl ConnectionSender {
         requests: RequestsMap,
         active: Arc<AtomicBool>,
         sender_runtime: RuntimeRef,
-        default_runtime: RuntimeRef,
         channel_capacity: usize,
     ) -> ConnectionSender {
         let (sender, mut receiver): (mpsc::Sender<ObTablePacket>, mpsc::Receiver<ObTablePacket>) =
@@ -171,7 +169,6 @@ impl ConnectionSender {
         ConnectionSender {
             sender,
             writer: Some(writer),
-            default_runtime,
         }
     }
 
@@ -179,14 +176,12 @@ impl ConnectionSender {
     ///
     ///It can fail only when connection gets closed.
     ///Which means OBKV connection is no longer valid.
-    pub fn request(&self, message: ObTablePacket) -> Result<()> {
-        // TODO: remove block_on with sender.send().await
-        self.default_runtime
-            .block_on(async move { self.sender.send(message).await.map_err(Self::broken_pipe) })
+    pub async fn request(&self, message: ObTablePacket) -> Result<()> {
+        self.sender.send(message).await.map_err(Self::broken_pipe)
     }
 
-    fn close(&mut self) -> Result<()> {
-        self.request(ObTablePacket::ClosePoison)?;
+    async fn close(&mut self) -> Result<()> {
+        self.request(ObTablePacket::ClosePoison).await?;
         let writer = mem::replace(&mut self.writer, None);
         let drop_helper = AbortOnDropMany(vec![writer.unwrap()]);
         drop(drop_helper);
@@ -278,7 +273,6 @@ impl Connection {
                 requests.clone(),
                 active.clone(),
                 runtimes.writer_runtime.clone(),
-                runtimes.default_runtime.clone(),
                 channel_capacity,
             ),
             requests,
@@ -494,7 +488,7 @@ impl Connection {
     // payload & response should keep Idempotent
     // NOTE: caller should know response wont be be updated when a no-reply request
     // is execute
-    pub fn execute<T: ObPayload, R: ObPayload>(
+    pub async fn execute<T: ObPayload, R: ObPayload>(
         &self,
         payload: &mut T,
         response: &mut R,
@@ -523,7 +517,7 @@ impl Connection {
         let channel_id = match req.channel_id() {
             None => {
                 debug!("Connection::execute: send no reply request");
-                self.sender.request(req).map_err(|e| {
+                self.sender.request(req).await.map_err(|e| {
                     error!(
                         "Connection::execute fail to send no-reply request, err:{}",
                         e
@@ -535,40 +529,38 @@ impl Connection {
             Some(id) => id,
         };
 
-        let rx = self.send(req, channel_id)?;
+        let rx = self.send(req, channel_id).await?;
 
         if payload.timeout_millis() == 0 {
             // no-wait request,return Ok directly
             return Ok(());
         }
 
-        // TODO: remove block_on with rx.await
-        let resp = self.runtimes.default_runtime.block_on(async move {
-            match tokio::time::timeout(timeout, rx).await {
-                Ok(resp) => {
-                    self.on_recv_in_time();
-                    resp.map_err(|e| {
-                        error!(
-                        "Connection::execute: fail to fetch rpc response, addr:{}, trace_id:{}, err:{}",
-                        self.addr, trace_id, e
-                    );
-                        e
-                    })
-                }
-                Err(err) => {
+        // Get result from receiver
+        let resp = match tokio::time::timeout(timeout, rx).await {
+            Ok(resp) => {
+                self.on_recv_in_time();
+                resp.map_err(|e| {
                     error!(
-                        "Connection::execute: wait for rpc response timeout, addr:{}, trace_id:{}, err:{}",
-                        self.addr, trace_id, err
-                    );
+                    "Connection::execute: fail to fetch rpc response, addr:{}, trace_id:{}, err:{}",
+                    self.addr, trace_id, e
+                );
+                    e
+                })
+            }
+            Err(err) => {
+                error!(
+                    "Connection::execute: wait for rpc response timeout, addr:{}, trace_id:{}, err:{}",
+                    self.addr, trace_id, err
+                );
 
-                    self.on_recv_timeout();
-                    return Err(CommonErr(
-                        CommonErrCode::Rpc,
-                        format!("wait for rpc response timeout, err:{err}"),
-                    ));
-                }
-            }.map_err(|err| CommonErr(CommonErrCode::Rpc, format!("Tokio timeout error: {err:?}")))?
-        });
+                self.on_recv_timeout();
+                return Err(CommonErr(
+                    CommonErrCode::Rpc,
+                    format!("wait for rpc response timeout, err:{err}"),
+                ));
+            }
+        }.map_err(|err| CommonErr(CommonErrCode::Rpc, format!("Tokio timeout error: {err:?}")))?;
 
         match resp {
             Ok(ObTablePacket::ServerPacket {
@@ -610,7 +602,7 @@ impl Connection {
         }
     }
 
-    pub fn connect(
+    pub async fn connect(
         &mut self,
         tenant_name: &str,
         user_name: &str,
@@ -618,9 +610,10 @@ impl Connection {
         password: &str,
     ) -> Result<()> {
         self.login(tenant_name, user_name, database_name, password)
+            .await
     }
 
-    fn login(
+    async fn login(
         &mut self,
         tenant_name: &str,
         user_name: &str,
@@ -633,7 +626,7 @@ impl Connection {
 
         let mut login_result = ObTableLoginResult::new();
 
-        self.execute(&mut payload, &mut login_result)?;
+        self.execute(&mut payload, &mut login_result).await?;
 
         debug!("Connection::login, login result {:?}", login_result);
 
@@ -679,11 +672,13 @@ impl Connection {
     /// invalidated.
     ///
     ///For info on default settings see [Builder](struct.Builder.html)
-    pub fn new() -> Result<Connection> {
-        Builder::new().build()
+    pub async fn new() -> Result<Connection> {
+        Builder::new().build().await
     }
 
     /// close the connection
+    /// close is used by Drop, since Drop is sync, we need to use block_on to
+    /// wait for the future
     fn close(&mut self) -> Result<()> {
         if self.reader.is_none() {
             return Ok(());
@@ -691,12 +686,15 @@ impl Connection {
         self.set_active(false);
 
         // 1. close writer
-        if let Err(e) = self.sender.close() {
+        if let Err(e) = self
+            .runtimes
+            .default_runtime
+            .block_on(async { self.sender.close().await })
+        {
             error!("Connection::close fail to close writer, err: {}.", e);
         }
 
         // 2. close reader
-        // TODO: remove block_on
         if let Err(e) = self.runtimes.default_runtime.block_on(async {
             self.reader_signal_sender
                 .send(())
@@ -721,14 +719,14 @@ impl Connection {
     ///
     ///It can fail only when connection gets closed.
     ///Which means OBKV connection is no longer valid.
-    pub fn send(
+    pub async fn send(
         &self,
         message: ObTablePacket,
         channel_id: i32,
     ) -> Result<oneshot::Receiver<Result<ObTablePacket>>> {
         let (tx, rx) = oneshot::channel();
         self.requests.lock().unwrap().insert(channel_id, tx);
-        self.sender.request(message).map_err(|e| {
+        self.sender.request(message).await.map_err(|e| {
             error!("Connection::send: fail to send message, err:{}", e);
             self.requests.lock().unwrap().remove(&channel_id);
             e
@@ -865,13 +863,13 @@ impl Builder {
         self
     }
 
-    pub fn build(self) -> Result<Connection> {
+    pub async fn build(self) -> Result<Connection> {
         let uuid = Uuid::new_v4();
         let id = BigEndian::read_u32(uuid.as_bytes());
-        self.build_with_id(id)
+        self.build_with_id(id).await
     }
 
-    pub fn build_with_id(self, id: u32) -> Result<Connection> {
+    pub async fn build_with_id(self, id: u32) -> Result<Connection> {
         let addr = (&self.ip[..], self.port).to_socket_addrs()?.next();
 
         if let Some(addr) = addr {
@@ -891,22 +889,14 @@ impl Builder {
 
             let tokio_socket = TcpSocket::from_std_stream(socket2_socket.into());
 
-            // TODO: remove block_on
-            let stream = self
-                .runtimes
-                .clone()
-                .unwrap()
-                .default_runtime
-                .block_on(async move {
-                    tokio_socket
-                        .connect(addr)
-                        .await
-                        .map_err(|e| {
-                            error!("Builder::build fail to connect to {}, err: {}.", addr, e);
-                            e
-                        })
-                        .unwrap()
-                });
+            let stream = tokio_socket
+                .connect(addr)
+                .await
+                .map_err(|e| {
+                    error!("Builder::build fail to connect to {}, err: {}.", addr, e);
+                    e
+                })
+                .unwrap();
 
             debug!("Builder::build succeeds in connecting to {}.", addr);
 
@@ -950,19 +940,20 @@ mod test {
         }
     }
 
-    #[test]
+    #[tokio::test]
     #[ignore]
-    fn test_connect() {
+    async fn test_connect() {
         let packet = gen_test_server_packet(100);
 
         let mut builder = Builder::new();
         builder = builder.ip(TEST_SERVER_IP).port(TEST_SERVER_PORT);
 
-        let mut conn: Connection = builder.build().expect("Create OBKV Client");
+        let mut conn: Connection = builder.build().await.expect("Create OBKV Client");
 
         let channel_id = packet.channel_id().unwrap();
         let res = conn
             .send(packet, channel_id)
+            .await
             .expect("fail to send request")
             .try_recv();
         assert!(res.is_ok());
