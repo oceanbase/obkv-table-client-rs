@@ -1,5 +1,11 @@
-use std::{cell::RefCell, fs, rc::Rc, sync::Arc, thread, time::Instant};
-use std::sync::Mutex;
+use std::{
+    cell::RefCell,
+    fs,
+    rc::Rc,
+    sync::{Arc, Mutex},
+    thread,
+    time::Instant,
+};
 
 use anyhow::{bail, Result};
 use obkv::dump_metrics;
@@ -18,9 +24,9 @@ pub mod db;
 pub mod generator;
 pub mod obkv_client;
 pub mod properties;
+mod runtime;
 pub mod sqlite;
 pub mod workload;
-mod runtime;
 
 #[derive(StructOpt, Debug)]
 #[structopt(name = "ycsb")]

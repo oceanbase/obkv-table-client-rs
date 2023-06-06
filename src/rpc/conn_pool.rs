@@ -192,7 +192,7 @@ impl ConnPool {
                             error!("ConnPool::add_connection_background::bg_add fail to build a connection after {} retries, err:{}", retry_num, e);
                             let delay = cmp::max(min_build_retry_interval, delay);
                             let delay = cmp::min(shared_pool.conn_builder.connect_timeout / 2, delay * 2);
-                            sleep(delay.into()).await;
+                            sleep(delay).await;
                         }
                     }
                 }
@@ -438,7 +438,7 @@ mod test {
         builder.build().expect("fail to build ConnPool")
     }
 
-    #[test]
+    #[tokio::test]
     #[ignore]
     async fn check_conn_valid() {
         let (min_conn_num, max_conn_num) = (2, 3);
@@ -456,7 +456,7 @@ mod test {
         assert!(conn.is_active(), "conn should be active");
     }
 
-    #[test]
+    #[tokio::test]
     #[ignore]
     async fn rebuild_conn() {
         let (min_conn_num, max_conn_num) = (3, 5);

@@ -15,8 +15,6 @@
  * #L%
  */
 
-#![feature(async_fn_in_trait)]
-
 extern crate bytes;
 extern crate chrono;
 extern crate crossbeam;

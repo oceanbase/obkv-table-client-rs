@@ -36,8 +36,9 @@ pub enum TableOpResult {
 }
 
 pub trait Table {
+    // TODO: async operation support
     /// Insert a record
-    async fn insert(
+    fn insert(
         &self,
         table_name: &str,
         row_keys: Vec<Value>,
@@ -46,7 +47,7 @@ pub trait Table {
     ) -> Result<i64>;
 
     /// Update a record
-    async fn update(
+    fn update(
         &self,
         table_name: &str,
         row_keys: Vec<Value>,
@@ -56,7 +57,7 @@ pub trait Table {
 
     /// Insert or update a record, if the record exists, update it.
     /// Otherwise insert a new one.
-    async fn insert_or_update(
+    fn insert_or_update(
         &self,
         table_name: &str,
         row_keys: Vec<Value>,
@@ -65,7 +66,7 @@ pub trait Table {
     ) -> Result<i64>;
 
     /// Replace a record.
-    async fn replace(
+    fn replace(
         &self,
         table_name: &str,
         row_keys: Vec<Value>,
@@ -74,7 +75,7 @@ pub trait Table {
     ) -> Result<i64>;
 
     /// Append
-    async fn append(
+    fn append(
         &self,
         table_name: &str,
         row_keys: Vec<Value>,
@@ -83,7 +84,7 @@ pub trait Table {
     ) -> Result<i64>;
 
     /// Increment
-    async fn increment(
+    fn increment(
         &self,
         table_name: &str,
         row_keys: Vec<Value>,
@@ -92,10 +93,10 @@ pub trait Table {
     ) -> Result<i64>;
 
     /// Delete records by row keys.
-    async fn delete(&self, table_name: &str, row_keys: Vec<Value>) -> Result<i64>;
+    fn delete(&self, table_name: &str, row_keys: Vec<Value>) -> Result<i64>;
 
     /// Retrieve a record by row keys.
-    async fn get(
+    fn get(
         &self,
         table_name: &str,
         row_keys: Vec<Value>,
@@ -105,7 +106,7 @@ pub trait Table {
     /// Create a batch operation
     fn batch_operation(&self, ops_num_hint: usize) -> ObTableBatchOperation;
     // Execute a batch operation
-    async fn execute_batch(
+    fn execute_batch(
         &self,
         table_name: &str,
         batch_op: ObTableBatchOperation,

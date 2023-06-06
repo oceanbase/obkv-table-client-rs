@@ -32,9 +32,9 @@ use scheduled_thread_pool::ScheduledThreadPool;
 
 use super::{
     ocp::{ObOcpModelManager, OcpModel},
-    query::{QueryResultSet, QueryStreamResult, StreamQuerier, TableQuery},
+    query::{QueryResultSet, QueryStreamResult},
     table::{self, ObTable},
-    ClientConfig, Table, TableOpResult,
+    ClientConfig, TableOpResult,
 };
 use crate::{
     error::{self, CommonErrCode, Error::Common as CommonErr, Result},
@@ -1393,7 +1393,7 @@ impl ObTableClientInner {
                 Ok(result) => {
                     let error_no = result.header().errorno();
                     let result_code = ResultCodes::from_i32(error_no);
-                    let result = if result_code == ResultCodes::OB_SUCCESS {
+                    if result_code == ResultCodes::OB_SUCCESS {
                         self.reset_table_failure(table_name);
                         Ok(result)
                     } else {
@@ -1404,8 +1404,7 @@ impl ObTableClientInner {
                                 result.header().message()
                             ),
                         ))
-                    };
-                    result
+                    }
                 }
                 Err(e) => {
                     debug!(
@@ -1436,7 +1435,7 @@ impl ObTableClientInner {
                     );
                     Err(e)
                 }
-            }
+            };
         }
     }
 }
@@ -1659,11 +1658,10 @@ impl ObTableClient {
 
         Ok(all_results)
     }
-}
 
-impl Table for ObTableClient {
+    // TODO: impl ObTable async methods
     #[inline]
-    async fn insert(
+    pub async fn insert(
         &self,
         table_name: &str,
         row_keys: Vec<Value>,
@@ -1684,7 +1682,7 @@ impl Table for ObTableClient {
     }
 
     #[inline]
-    async fn update(
+    pub async fn update(
         &self,
         table_name: &str,
         row_keys: Vec<Value>,
@@ -1705,7 +1703,7 @@ impl Table for ObTableClient {
     }
 
     #[inline]
-    async fn insert_or_update(
+    pub async fn insert_or_update(
         &self,
         table_name: &str,
         row_keys: Vec<Value>,
@@ -1726,7 +1724,7 @@ impl Table for ObTableClient {
     }
 
     #[inline]
-    async fn replace(
+    pub async fn replace(
         &self,
         table_name: &str,
         row_keys: Vec<Value>,
@@ -1747,7 +1745,7 @@ impl Table for ObTableClient {
     }
 
     #[inline]
-    async fn append(
+    pub async fn append(
         &self,
         table_name: &str,
         row_keys: Vec<Value>,
@@ -1768,7 +1766,7 @@ impl Table for ObTableClient {
     }
 
     #[inline]
-    async fn increment(
+    pub async fn increment(
         &self,
         table_name: &str,
         row_keys: Vec<Value>,
@@ -1789,7 +1787,7 @@ impl Table for ObTableClient {
     }
 
     #[inline]
-    async fn delete(&self, table_name: &str, row_keys: Vec<Value>) -> Result<i64> {
+    pub async fn delete(&self, table_name: &str, row_keys: Vec<Value>) -> Result<i64> {
         Ok(self
             .inner
             .execute(table_name, ObTableOperationType::Del, row_keys, None, None)
@@ -1798,7 +1796,7 @@ impl Table for ObTableClient {
     }
 
     #[inline]
-    async fn get(
+    pub async fn get(
         &self,
         table_name: &str,
         row_keys: Vec<Value>,
@@ -1819,11 +1817,11 @@ impl Table for ObTableClient {
     }
 
     #[inline]
-    fn batch_operation(&self, ops_num_hint: usize) -> ObTableBatchOperation {
+    pub fn batch_operation(&self, ops_num_hint: usize) -> ObTableBatchOperation {
         ObTableBatchOperation::with_ops_num_raw(ops_num_hint)
     }
 
-    async fn execute_batch(
+    pub async fn execute_batch(
         &self,
         table_name: &str,
         batch_op: ObTableBatchOperation,
@@ -1877,16 +1875,6 @@ pub struct ObTableClientStreamQuerier {
     start_execute_ts: AtomicI64,
 }
 
-impl ObTableClientStreamQuerier {
-    fn new(table_name: &str, client: Arc<ObTableClientInner>) -> Self {
-        Self {
-            client,
-            table_name: table_name.to_owned(),
-            start_execute_ts: AtomicI64::new(0),
-        }
-    }
-}
-
 impl Drop for ObTableClientStreamQuerier {
     fn drop(&mut self) {
         let start_ts = self.start_execute_ts.load(Ordering::Relaxed);
@@ -1901,8 +1889,17 @@ impl Drop for ObTableClientStreamQuerier {
     }
 }
 
-impl StreamQuerier for ObTableClientStreamQuerier {
-    async fn execute_query(
+impl ObTableClientStreamQuerier {
+    fn new(table_name: &str, client: Arc<ObTableClientInner>) -> Self {
+        Self {
+            client,
+            table_name: table_name.to_owned(),
+            start_execute_ts: AtomicI64::new(0),
+        }
+    }
+
+    // TODO: impl StreamQuerier for ObTableClientStreamQuerier
+    pub async fn execute_query(
         &self,
         stream_result: &mut QueryStreamResult,
         (part_id, ob_table): (i64, Arc<ObTable>),
@@ -1932,7 +1929,7 @@ impl StreamQuerier for ObTableClientStreamQuerier {
         Ok(row_count)
     }
 
-    async fn execute_stream(
+    pub async fn execute_stream(
         &self,
         stream_result: &mut QueryStreamResult,
         (part_id, ob_table): (i64, Arc<ObTable>),
@@ -1961,11 +1958,9 @@ impl StreamQuerier for ObTableClientStreamQuerier {
         }
         Ok(row_count)
     }
-
-    fn get_runtime(&self) -> RuntimeRef {
-        self.client.runtimes.query_runtime.clone()
-    }
 }
+
+pub const PRIMARY_INDEX_NAME: &str = "PRIMARY";
 
 /// TODO refactor with ObTableQueryImpl
 pub struct ObTableClientQueryImpl {
@@ -1990,10 +1985,9 @@ impl ObTableClientQueryImpl {
     fn reset(&mut self) {
         self.table_query = ObTableQuery::new();
     }
-}
 
-impl TableQuery for ObTableClientQueryImpl {
-    async fn execute(&self) -> Result<QueryResultSet> {
+    // TODO: impl TableQuery for ObTableClientQueryImpl
+    pub async fn execute(&self) -> Result<QueryResultSet> {
         let mut partition_table: HashMap<i64, (i64, Arc<ObTable>)> = HashMap::new();
 
         self.table_query.verify()?;
@@ -2042,22 +2036,22 @@ impl TableQuery for ObTableClientQueryImpl {
     }
 
     #[inline]
-    fn get_table_name(&self) -> String {
+    pub fn get_table_name(&self) -> String {
         self.table_name.to_owned()
     }
 
     #[inline]
-    fn set_entity_type(&mut self, entity_type: ObTableEntityType) {
+    pub fn set_entity_type(&mut self, entity_type: ObTableEntityType) {
         self.entity_type = entity_type;
     }
 
     #[inline]
-    fn entity_type(&self) -> ObTableEntityType {
+    pub fn entity_type(&self) -> ObTableEntityType {
         self.entity_type
     }
 
     #[inline]
-    fn select(mut self, columns: Vec<String>) -> Self
+    pub fn select(mut self, columns: Vec<String>) -> Self
     where
         Self: Sized,
     {
@@ -2066,7 +2060,7 @@ impl TableQuery for ObTableClientQueryImpl {
     }
 
     #[inline]
-    fn limit(mut self, offset: Option<i32>, limit: i32) -> Self
+    pub fn limit(mut self, offset: Option<i32>, limit: i32) -> Self
     where
         Self: Sized,
     {
@@ -2077,7 +2071,7 @@ impl TableQuery for ObTableClientQueryImpl {
         self
     }
 
-    fn add_scan_range(
+    pub fn add_scan_range(
         mut self,
         start: Vec<Value>,
         start_equals: bool,
@@ -2104,7 +2098,7 @@ impl TableQuery for ObTableClientQueryImpl {
         self
     }
 
-    fn add_scan_range_starts_with(mut self, start: Vec<Value>, start_equals: bool) -> Self
+    pub fn add_scan_range_starts_with(mut self, start: Vec<Value>, start_equals: bool) -> Self
     where
         Self: Sized,
     {
@@ -2126,7 +2120,7 @@ impl TableQuery for ObTableClientQueryImpl {
         self
     }
 
-    fn add_scan_range_ends_with(mut self, end: Vec<Value>, end_equals: bool) -> Self
+    pub fn add_scan_range_ends_with(mut self, end: Vec<Value>, end_equals: bool) -> Self
     where
         Self: Sized,
     {
@@ -2149,7 +2143,7 @@ impl TableQuery for ObTableClientQueryImpl {
     }
 
     #[inline]
-    fn scan_order(mut self, forward: bool) -> Self
+    pub fn scan_order(mut self, forward: bool) -> Self
     where
         Self: Sized,
     {
@@ -2159,7 +2153,7 @@ impl TableQuery for ObTableClientQueryImpl {
     }
 
     #[inline]
-    fn index_name(mut self, index_name: &str) -> Self
+    pub fn index_name(mut self, index_name: &str) -> Self
     where
         Self: Sized,
     {
@@ -2168,7 +2162,15 @@ impl TableQuery for ObTableClientQueryImpl {
     }
 
     #[inline]
-    fn filter_string(mut self, filter_string: &str) -> Self
+    pub fn primary_index(self) -> Self
+    where
+        Self: Sized,
+    {
+        self.index_name(PRIMARY_INDEX_NAME)
+    }
+
+    #[inline]
+    pub fn filter_string(mut self, filter_string: &str) -> Self
     where
         Self: Sized,
     {
@@ -2177,7 +2179,7 @@ impl TableQuery for ObTableClientQueryImpl {
     }
 
     #[inline]
-    fn htable_filter(mut self, filter: ObHTableFilter) -> Self
+    pub fn htable_filter(mut self, filter: ObHTableFilter) -> Self
     where
         Self: Sized,
     {
@@ -2186,7 +2188,7 @@ impl TableQuery for ObTableClientQueryImpl {
     }
 
     #[inline]
-    fn batch_size(mut self, batch_size: i32) -> Self
+    pub fn batch_size(mut self, batch_size: i32) -> Self
     where
         Self: Sized,
     {
@@ -2195,7 +2197,7 @@ impl TableQuery for ObTableClientQueryImpl {
     }
 
     #[inline]
-    fn operation_timeout(mut self, timeout: Duration) -> Self
+    pub fn operation_timeout(mut self, timeout: Duration) -> Self
     where
         Self: Sized,
     {
@@ -2204,7 +2206,7 @@ impl TableQuery for ObTableClientQueryImpl {
     }
 
     #[inline]
-    fn clear(&mut self) {
+    pub fn clear(&mut self) {
         self.reset();
     }
 }

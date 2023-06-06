@@ -20,7 +20,7 @@ pub mod test_table_client_base;
 #[allow(unused)]
 mod utils;
 
-use obkv::{Table, Value};
+use obkv::Value;
 use serial_test_derive::serial;
 use tokio::task;
 
@@ -34,7 +34,7 @@ use tokio::task;
 // ```
 #[tokio::test]
 async fn test_varchar_all_ob() {
-    let client_handle = task::spawn_blocking(|| utils::common::build_normal_client());
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
     let client = client_handle.await.unwrap();
     const TABLE_NAME: &str = "TEST_VARCHAR_TABLE_RANGE";
     client.add_row_key_element(TABLE_NAME, vec!["c1".to_string()]);
@@ -63,7 +63,7 @@ async fn test_varchar_all_ob() {
 // ```
 #[tokio::test]
 async fn test_blob_all() {
-    let client_handle = task::spawn_blocking(|| utils::common::build_normal_client());
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
     let client = client_handle.await.unwrap();
     const TABLE_NAME: &str = "TEST_BLOB_TABLE_RANGE";
     client.add_row_key_element(TABLE_NAME, vec!["c1".to_string()]);
@@ -82,7 +82,7 @@ async fn test_blob_all() {
 
 #[tokio::test]
 async fn test_ob_exceptions() {
-    let client_handle = task::spawn_blocking(|| utils::common::build_normal_client());
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
     let client = client_handle.await.unwrap();
     const TABLE_NAME: &str = "TEST_VARCHAR_TABLE_RANGE";
     client.add_row_key_element(TABLE_NAME, vec!["c1".to_string()]);
@@ -102,7 +102,7 @@ async fn test_ob_exceptions() {
 #[tokio::test]
 #[serial]
 async fn test_query() {
-    let client_handle = task::spawn_blocking(|| utils::common::build_normal_client());
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
     let client = client_handle.await.unwrap();
     const TABLE_NAME: &str = "TEST_QUERY_TABLE_RANGE";
     client.add_row_key_element(TABLE_NAME, vec!["c1".to_string()]);
@@ -122,7 +122,7 @@ async fn test_query() {
 #[tokio::test]
 #[serial]
 async fn test_stream_query() {
-    let client_handle = task::spawn_blocking(|| utils::common::build_normal_client());
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
     let client = client_handle.await.unwrap();
     const TABLE_NAME: &str = "TEST_STREAM_QUERY_TABLE_RANGE";
     client.add_row_key_element(TABLE_NAME, vec!["c1".to_string()]);
@@ -141,7 +141,7 @@ async fn test_stream_query() {
 // ```
 #[tokio::test]
 async fn test_concurrent() {
-    let client_handle = task::spawn_blocking(|| utils::common::build_normal_client());
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
     let client = client_handle.await.unwrap();
     const TABLE_NAME: &str = "TEST_VARCHAR_TABLE_RANGE_CONCURRENT";
     client.add_row_key_element(TABLE_NAME, vec!["c1".to_string()]);
@@ -169,7 +169,7 @@ async fn test_concurrent() {
 // ```
 #[tokio::test]
 async fn test_obtable_client_batch_atomic_op() {
-    let client_handle = task::spawn_blocking(|| utils::common::build_normal_client());
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
     let client = client_handle.await.unwrap();
     const TABLE_NAME: &str = "TEST_TABLE_BATCH_RANGE";
     const TABLE_NAME_COMPLEX: &str = "TEST_TABLE_BATCH_RANGE_COMPLEX";

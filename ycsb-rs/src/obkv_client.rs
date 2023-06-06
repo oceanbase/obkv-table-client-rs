@@ -20,9 +20,9 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 use anyhow::Result;
 #[allow(unused)]
 use obkv::error::CommonErrCode;
-use obkv::{Builder, ClientConfig, ObTableClient, RunningMode, Table, TableQuery, Value};
+use obkv::{Builder, ClientConfig, ObTableClient, RunningMode, Value};
 
-use crate::{properties::Properties};
+use crate::properties::Properties;
 
 const PRIMARY_KEY: &str = "ycsb_key";
 const COLUMN_NAMES: [&str; 10] = [
@@ -132,7 +132,12 @@ impl OBKVClient {
         Ok(())
     }
 
-    pub async fn insert(&self, table: &str, key: &str, values: &HashMap<&str, String>) -> Result<()> {
+    pub async fn insert(
+        &self,
+        table: &str,
+        key: &str,
+        values: &HashMap<&str, String>,
+    ) -> Result<()> {
         let mut columns: Vec<String> = Vec::new();
         let mut properties: Vec<Value> = Vec::new();
         for (key, value) in values {
@@ -155,19 +160,32 @@ impl OBKVClient {
     }
 
     #[allow(unused)]
-    pub async fn read(&self, table: &str, key: &str, result: &mut HashMap<String, String>) -> Result<()> {
-        let result = self.client.get(
-            table,
-            vec![Value::from(key)],
-            COLUMN_NAMES.iter().map(|s| s.to_string()).collect(),
-        ).await;
+    pub async fn read(
+        &self,
+        table: &str,
+        key: &str,
+        result: &mut HashMap<String, String>,
+    ) -> Result<()> {
+        let result = self
+            .client
+            .get(
+                table,
+                vec![Value::from(key)],
+                COLUMN_NAMES.iter().map(|s| s.to_string()).collect(),
+            )
+            .await;
         assert!(result.is_ok());
         assert_eq!(10, result?.len());
 
         Ok(())
     }
 
-    pub async fn update(&self, table: &str, key: &str, values: &HashMap<&str, String>) -> Result<()> {
+    pub async fn update(
+        &self,
+        table: &str,
+        key: &str,
+        values: &HashMap<&str, String>,
+    ) -> Result<()> {
         let mut columns: Vec<String> = Vec::new();
         let mut properties: Vec<Value> = Vec::new();
         for (key, value) in values {

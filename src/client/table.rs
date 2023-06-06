@@ -15,21 +15,16 @@
  * #L%
  */
 
-use std::{collections::HashMap, fmt::Formatter, sync::Arc, time::Duration};
+use std::{fmt::Formatter, sync::Arc, time::Duration};
 
-use super::{
-    query::{QueryResultSet, TableQuery},
-    ClientConfig, Table, TableOpResult,
-};
+use super::{query::QueryResultSet, ClientConfig, TableOpResult};
 use crate::{
     error::{CommonErrCode, Error::Common as CommonErr, Result},
     rpc::{
         protocol::{
             codes::ResultCodes,
             payloads::*,
-            query::{
-                ObHTableFilter, ObNewRange, ObScanOrder, ObTableQuery
-            },
+            query::{ObHTableFilter, ObNewRange, ObScanOrder, ObTableQuery},
             ObPayload,
         },
         proxy::Proxy,
@@ -61,6 +56,7 @@ impl std::fmt::Debug for ObTable {
     }
 }
 
+// TODO: impl Table for ObTable
 impl ObTable {
     pub async fn execute_payload<T: ObPayload, R: ObPayload>(
         &self,
@@ -71,34 +67,32 @@ impl ObTable {
         Ok(())
     }
 
-    pub fn query(&self, table_name: &str) -> impl TableQuery {
-        ObTableQueryImpl::new(table_name, Arc::new(self.clone()))
+    pub fn query(&self, _table_name: &str) {
+        // TODO: return impl TableQuery
+        todo!()
+        // ObTableQueryImpl::new(table_name, Arc::new(self.clone()))
     }
 
     pub fn operation_timeout(&self) -> Duration {
         self.config.rpc_operation_timeout
     }
 
-    async fn execute(
+    /// Execute a batch operation on a table
+    pub async fn execute_batch(
         &self,
-        table_name: &str,
-        operation_type: ObTableOperationType,
-        row_keys: Vec<Value>,
-        columns: Option<Vec<String>>,
-        properties: Option<Vec<Value>>,
-    ) -> Result<ObTableOperationResult> {
-        let mut payload = ObTableOperationRequest::new(
-            table_name,
-            operation_type,
-            row_keys,
-            columns,
-            properties,
+        _table_name: &str,
+        batch_op: ObTableBatchOperation,
+    ) -> Result<Vec<TableOpResult>> {
+        let mut payload = ObTableBatchOperationRequest::new(
+            batch_op,
             self.config.rpc_operation_timeout,
             self.config.log_level_flag,
         );
-        let mut result = ObTableOperationResult::new();
-        self.execute_payload(&mut payload, &mut result).await?;
-        Ok(result)
+        let mut result = ObTableBatchOperationResult::new();
+
+        self.rpc_proxy.execute(&mut payload, &mut result).await?;
+
+        result.into()
     }
 }
 
@@ -172,170 +166,6 @@ impl Builder {
     }
 }
 
-// TODO: Table has no retry for any operation
-impl Table for ObTable {
-    async fn insert(
-        &self,
-        table_name: &str,
-        row_keys: Vec<Value>,
-        columns: Vec<String>,
-        properties: Vec<Value>,
-    ) -> Result<i64> {
-        Ok(self
-            .execute(
-                table_name,
-                ObTableOperationType::Insert,
-                row_keys,
-                Some(columns),
-                Some(properties),
-            )
-            .await?
-            .affected_rows())
-    }
-
-    async fn update(
-        &self,
-        table_name: &str,
-        row_keys: Vec<Value>,
-        columns: Vec<String>,
-        properties: Vec<Value>,
-    ) -> Result<i64> {
-        Ok(self
-            .execute(
-                table_name,
-                ObTableOperationType::Update,
-                row_keys,
-                Some(columns),
-                Some(properties),
-            )
-            .await?
-            .affected_rows())
-    }
-
-    async fn insert_or_update(
-        &self,
-        table_name: &str,
-        row_keys: Vec<Value>,
-        columns: Vec<String>,
-        properties: Vec<Value>,
-    ) -> Result<i64> {
-        Ok(self
-            .execute(
-                table_name,
-                ObTableOperationType::InsertOrUpdate,
-                row_keys,
-                Some(columns),
-                Some(properties),
-            )
-            .await?
-            .affected_rows())
-    }
-
-    async fn replace(
-        &self,
-        table_name: &str,
-        row_keys: Vec<Value>,
-        columns: Vec<String>,
-        properties: Vec<Value>,
-    ) -> Result<i64> {
-        Ok(self
-            .execute(
-                table_name,
-                ObTableOperationType::Replace,
-                row_keys,
-                Some(columns),
-                Some(properties),
-            )
-            .await?
-            .affected_rows())
-    }
-
-    async fn append(
-        &self,
-        table_name: &str,
-        row_keys: Vec<Value>,
-        columns: Vec<String>,
-        properties: Vec<Value>,
-    ) -> Result<i64> {
-        Ok(self
-            .execute(
-                table_name,
-                ObTableOperationType::Append,
-                row_keys,
-                Some(columns),
-                Some(properties),
-            )
-            .await?
-            .affected_rows())
-    }
-
-    async fn increment(
-        &self,
-        table_name: &str,
-        row_keys: Vec<Value>,
-        columns: Vec<String>,
-        properties: Vec<Value>,
-    ) -> Result<i64> {
-        Ok(self
-            .execute(
-                table_name,
-                ObTableOperationType::Increment,
-                row_keys,
-                Some(columns),
-                Some(properties),
-            )
-            .await?
-            .affected_rows())
-    }
-
-    async fn delete(&self, table_name: &str, row_keys: Vec<Value>) -> Result<i64> {
-        Ok(self
-            .execute(table_name, ObTableOperationType::Del, row_keys, None, None)
-            .await?
-            .affected_rows())
-    }
-
-    async fn get(
-        &self,
-        table_name: &str,
-        row_keys: Vec<Value>,
-        columns: Vec<String>,
-    ) -> Result<HashMap<String, Value>> {
-        Ok(self
-            .execute(
-                table_name,
-                ObTableOperationType::Get,
-                row_keys,
-                Some(columns),
-                None,
-            )
-            .await?
-            .take_entity()
-            .take_properties())
-    }
-
-    fn batch_operation(&self, ops_num_hint: usize) -> ObTableBatchOperation {
-        ObTableBatchOperation::with_ops_num(ops_num_hint)
-    }
-
-    async fn execute_batch(
-        &self,
-        _table_name: &str,
-        batch_op: ObTableBatchOperation,
-    ) -> Result<Vec<TableOpResult>> {
-        let mut payload = ObTableBatchOperationRequest::new(
-            batch_op,
-            self.config.rpc_operation_timeout,
-            self.config.log_level_flag,
-        );
-        let mut result = ObTableBatchOperationResult::new();
-
-        self.rpc_proxy.execute(&mut payload, &mut result).await?;
-
-        result.into()
-    }
-}
-
 impl From<ObTableBatchOperationResult> for Result<Vec<TableOpResult>> {
     fn from(batch_result: ObTableBatchOperationResult) -> Result<Vec<TableOpResult>> {
         let op_results = batch_result.take_op_results();
@@ -362,8 +192,8 @@ impl From<ObTableBatchOperationResult> for Result<Vec<TableOpResult>> {
     }
 }
 
+#[allow(dead_code)]
 // impl ObTableStreamQuerier for obtable
-
 pub struct ObTableQueryImpl {
     operation_timeout: Option<Duration>,
     entity_type: ObTableEntityType,
@@ -389,8 +219,9 @@ impl ObTableQueryImpl {
     }
 }
 
-impl TableQuery for ObTableQueryImpl {
-    async fn execute(&self) -> Result<QueryResultSet> {
+#[allow(dead_code)]
+impl ObTableQueryImpl {
+    fn execute(&self) -> Result<QueryResultSet> {
         todo!()
     }
 

@@ -44,14 +44,15 @@ use crate::{
 const ZERO_TIMEOUT_MS: Duration = Duration::from_millis(0);
 
 pub trait StreamQuerier {
-    async fn execute_query(
+    // TODO: `async` trait functions are not currently supported
+    fn execute_query(
         &self,
         result: &mut QueryStreamResult,
         part_id_and_table: (i64, Arc<ObTable>),
         payload: &mut ObTableQueryRequest,
     ) -> Result<i64>;
 
-    async fn execute_stream(
+    fn execute_stream(
         &self,
         result: &mut QueryStreamResult,
         part_id_and_table: (i64, Arc<ObTable>),
@@ -398,7 +399,6 @@ impl QueryStreamResult {
 impl Drop for QueryStreamResult {
     fn drop(&mut self) {
         if self.closed {
-            ()
         } else {
             error!("QueryStreamResult::close fail")
         }
@@ -442,7 +442,7 @@ impl QueryResultSet {
             QueryResultSet::Some(stream_result) => {
                 // TODO: async close
                 if stream_result.closed {
-                    return Ok(());
+                    Ok(())
                 } else {
                     Err(CommonErr(
                         CommonErrCode::Rpc,
@@ -502,10 +502,11 @@ impl Drop for QueryResultSet {
 
 /// Table Query Trait
 
-const PRIMARY_INDEX_NAME: &str = "PRIMARY";
+pub const PRIMARY_INDEX_NAME: &str = "PRIMARY";
 
 pub trait TableQuery {
-    async fn execute(&self) -> Result<QueryResultSet>;
+    // TODO: async execute / `async` trait functions are not currently supported
+    fn execute(&self) -> Result<QueryResultSet>;
     fn get_table_name(&self) -> String;
     fn set_entity_type(&mut self, entity_type: ObTableEntityType);
     fn entity_type(&self) -> ObTableEntityType;

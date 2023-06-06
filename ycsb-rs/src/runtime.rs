@@ -16,7 +16,9 @@
  */
 
 use std::sync::Arc;
+
 use obkv::runtime;
+
 use crate::properties::Properties;
 
 /// OBKV Table Runtime

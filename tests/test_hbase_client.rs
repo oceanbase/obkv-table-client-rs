@@ -19,7 +19,7 @@
 #[allow(unused)]
 mod utils;
 
-use obkv::{Table, Value};
+use obkv::Value;
 use tokio::task;
 
 // ```sql
@@ -33,7 +33,7 @@ use tokio::task;
 // ```
 #[tokio::test]
 async fn test_obtable_partition_hash_crud() {
-    let client_handle = task::spawn_blocking(|| utils::common::build_hbase_client());
+    let client_handle = task::spawn_blocking(utils::common::build_hbase_client);
     let client = client_handle.await.unwrap();
     const TEST_TABLE: &str = "TEST_HBASE_HASH";
 
@@ -105,7 +105,7 @@ async fn test_obtable_partition_hash_crud() {
 // ```
 #[tokio::test]
 async fn test_obtable_partition_key_varbinary_crud() {
-    let client_handle = task::spawn_blocking(|| utils::common::build_hbase_client());
+    let client_handle = task::spawn_blocking(utils::common::build_hbase_client);
     let client = client_handle.await.unwrap();
     const TEST_TABLE: &str = "TEST_HBASE_PARTITION";
 
@@ -182,7 +182,7 @@ async fn test_obtable_partition_key_varbinary_crud() {
 // ```
 #[tokio::test]
 async fn test_obtable_partition_key_varchar_crud() {
-    let client_handle = task::spawn_blocking(|| utils::common::build_hbase_client());
+    let client_handle = task::spawn_blocking(utils::common::build_hbase_client);
     let client = client_handle.await.unwrap();
     const TABLE_NAME: &str = "TEST_HBASE_PARTITION";
 
@@ -255,7 +255,7 @@ async fn test_obtable_partition_key_varchar_crud() {
 // ```
 #[tokio::test]
 async fn test_obtable_partition_range_crud() {
-    let client_handle = task::spawn_blocking(|| utils::common::build_hbase_client());
+    let client_handle = task::spawn_blocking(utils::common::build_hbase_client);
     let client = client_handle.await.unwrap();
     const TABLE_NAME: &str = "TEST_HBASE_RANGE";
 

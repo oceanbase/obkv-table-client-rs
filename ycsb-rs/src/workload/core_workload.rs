@@ -182,7 +182,9 @@ impl CoreWorkload {
         let dbstart = format!("{}", fnvhash64(start));
         let dbend = format!("{}", fnvhash64(start));
         let mut result = HashMap::new();
-        db.scan(&self.table, &dbstart, &dbend, &mut result).await.unwrap();
+        db.scan(&self.table, &dbstart, &dbend, &mut result)
+            .await
+            .unwrap();
     }
 
     fn next_key_num(&self) -> u64 {
@@ -221,7 +223,7 @@ impl CoreWorkload {
             .operation_chooser
             .lock()
             .unwrap()
-            .next_value(&mut *rng.lock().unwrap());
+            .next_value(&mut rng.lock().unwrap());
         match op {
             CoreOperation::Insert => {
                 self.ob_transaction_insert(db).await;

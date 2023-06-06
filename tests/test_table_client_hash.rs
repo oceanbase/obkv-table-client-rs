@@ -20,7 +20,7 @@ pub mod test_table_client_base;
 #[allow(unused)]
 mod utils;
 
-use obkv::{Table, Value};
+use obkv::Value;
 use serial_test_derive::serial;
 use tokio::task;
 
@@ -35,7 +35,7 @@ use tokio::task;
 #[tokio::test]
 #[serial]
 async fn test_concurrent() {
-    let client_handle = task::spawn_blocking(|| utils::common::build_normal_client());
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
     let client = client_handle.await.unwrap();
     const TABLE_NAME: &str = "TEST_VARCHAR_TABLE_HASH_CONCURRENT";
     client.add_row_key_element(TABLE_NAME, vec!["c1".to_string()]);
@@ -55,7 +55,7 @@ async fn test_concurrent() {
 // ```
 #[tokio::test]
 async fn test_obtable_client_hash() {
-    let client_handle = task::spawn_blocking(|| utils::common::build_normal_client());
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
     let client = client_handle.await.unwrap();
     const TABLE_NAME: &str = "TEST_TABLE_BATCH_HASH";
     client.add_row_key_element(TABLE_NAME, vec!["c1".to_string(), "c1sb".to_string()]);

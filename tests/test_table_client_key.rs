@@ -20,7 +20,7 @@ pub mod test_table_client_base;
 #[allow(unused)]
 mod utils;
 
-use obkv::{ObTableClient, Table, TableQuery, Value};
+use obkv::{ObTableClient, Value};
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use serial_test_derive::serial;
 use tokio::task;
@@ -35,7 +35,7 @@ use tokio::task;
 // ```
 #[tokio::test]
 async fn test_varchar_all_ob() {
-    let client_handle = task::spawn_blocking(|| utils::common::build_normal_client());
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
     let client = client_handle.await.unwrap();
     const TABLE_NAME: &str = "TEST_VARCHAR_TABLE_KEY";
     client.add_row_key_element(TABLE_NAME, vec!["c1".to_string()]);
@@ -64,7 +64,7 @@ async fn test_varchar_all_ob() {
 // ```
 #[tokio::test]
 async fn test_blob_all() {
-    let client_handle = task::spawn_blocking(|| utils::common::build_normal_client());
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
     let client = client_handle.await.unwrap();
     const TABLE_NAME: &str = "TEST_BLOB_TABLE_KEY";
     client.add_row_key_element(TABLE_NAME, vec!["c1".to_string()]);
@@ -83,7 +83,7 @@ async fn test_blob_all() {
 
 #[tokio::test]
 async fn test_ob_exceptions() {
-    let client_handle = task::spawn_blocking(|| utils::common::build_normal_client());
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
     let client = client_handle.await.unwrap();
     const TABLE_NAME: &str = "TEST_VARCHAR_TABLE_KEY";
     client.add_row_key_element(TABLE_NAME, vec!["c1".to_string()]);
@@ -121,7 +121,7 @@ async fn insert_query_test_record(
 #[tokio::test]
 #[serial]
 async fn test_query() {
-    let client_handle = task::spawn_blocking(|| utils::common::build_normal_client());
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
     let client = client_handle.await.unwrap();
 
     const TABLE_NAME: &str = "TEST_QUERY_TABLE_KEY";
@@ -146,7 +146,7 @@ async fn test_query() {
         );
 
     let result_set = query.execute().await;
-    println!("result_set: {:?}", result_set);
+    println!("result_set: {result_set:?}");
     assert!(result_set.is_ok());
     let result_set = result_set.unwrap();
     assert_eq!(5, result_set.cache_size());
@@ -346,7 +346,7 @@ async fn test_query() {
 #[tokio::test]
 #[serial]
 async fn test_stream_query() {
-    let client_handle = task::spawn_blocking(|| utils::common::build_normal_client());
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
     let client = client_handle.await.unwrap();
     const TABLE_NAME: &str = "TEST_STREAM_QUERY_TABLE_KEY";
     client.add_row_key_element(TABLE_NAME, vec!["c1".to_string()]);
@@ -365,7 +365,7 @@ async fn test_stream_query() {
 // ```
 #[tokio::test]
 async fn test_concurrent() {
-    let client_handle = task::spawn_blocking(|| utils::common::build_normal_client());
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
     let client = client_handle.await.unwrap();
     const TABLE_NAME: &str = "TEST_VARCHAR_TABLE_KEY_CONCURRENT";
     client.add_row_key_element(TABLE_NAME, vec!["c1".to_string()]);
@@ -385,7 +385,7 @@ async fn test_concurrent() {
 // ```
 #[tokio::test]
 async fn test_batch() {
-    let client_handle = task::spawn_blocking(|| utils::common::build_normal_client());
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
     let client = client_handle.await.unwrap();
     const TABLE_NAME: &str = "TEST_TABLE_BATCH_KEY";
     client.add_row_key_element(TABLE_NAME, vec!["c1".to_string(), "c1sb".to_string()]);
@@ -415,7 +415,7 @@ fn clean_table(client: ObTableClient, table_name: &str) {
 
 #[tokio::test]
 async fn test_partition_varchar_general_ci() {
-    let client_handle = task::spawn_blocking(|| utils::common::build_normal_client());
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
     let client = client_handle.await.unwrap();
     const VARCHAR_TABLE_NAME: &str = "TEST_TABLE_PARTITION_VARCHAR_KEY";
     client.add_row_key_element(VARCHAR_TABLE_NAME, vec!["c1".to_string()]);
@@ -471,7 +471,7 @@ async fn test_partition_varchar_general_ci() {
 
 #[tokio::test]
 async fn test_partition_complex() {
-    let client_handle = task::spawn_blocking(|| utils::common::build_normal_client());
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
     let client = client_handle.await.unwrap();
     const TABLE_NAME: &str = "TEST_TABLE_PARTITION_COMPLEX_KEY";
     client.add_row_key_element(
@@ -526,7 +526,7 @@ async fn test_partition_complex() {
 
 #[tokio::test]
 async fn test_sub_partition_complex() {
-    let client_handle = task::spawn_blocking(|| utils::common::build_normal_client());
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
     let client = client_handle.await.unwrap();
     const TABLE_NAME: &str = "TEST_TABLE_SUB_PARTITION_COMPLEX_KEY";
     client.add_row_key_element(

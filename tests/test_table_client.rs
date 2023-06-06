@@ -19,12 +19,12 @@
 #[allow(unused)]
 mod utils;
 
-use obkv::{ResultCodes, Table, TableQuery, Value};
+use obkv::{ResultCodes, Value};
 use tokio::task;
 
 #[tokio::test]
 async fn test_obtable_client_curd() {
-    let client_handle = task::spawn_blocking(|| utils::common::build_normal_client());
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
     let client = client_handle.await.unwrap();
     const TEST_TABLE_NAME: &str = "test_varchar_table";
 
@@ -109,7 +109,7 @@ async fn test_obtable_client_curd() {
 
 #[tokio::test]
 async fn test_obtable_client_batch_op() {
-    let client_handle = task::spawn_blocking(|| utils::common::build_normal_client());
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
     let client = client_handle.await.unwrap();
     const TEST_TABLE_NAME: &str = "test_varchar_table";
 

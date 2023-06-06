@@ -5,7 +5,7 @@ use std::{cell::RefCell, rc::Rc};
 pub use core_workload::CoreWorkload;
 use rand::rngs::SmallRng;
 
-use crate::{db::DB};
+use crate::db::DB;
 
 pub trait Workload {
     fn do_insert(&self, db: Rc<dyn DB>);

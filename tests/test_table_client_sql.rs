@@ -19,12 +19,12 @@
 #[allow(unused)]
 mod utils;
 
-use obkv::{ObTableClient, Table, Value};
+use obkv::{ObTableClient, Value};
 use tokio::task;
 
 #[tokio::test]
 async fn test_execute_sql() {
-    let client_handle = task::spawn_blocking(|| utils::common::build_normal_client());
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
     let client = client_handle.await.unwrap();
     let test_table_name = "test_execute_sql";
     let create_table =
@@ -36,7 +36,7 @@ async fn test_execute_sql() {
 
 #[tokio::test]
 async fn test_check_table_exists() {
-    let client_handle = task::spawn_blocking(|| utils::common::build_normal_client());
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
     let client = client_handle.await.unwrap();
     let test_table_name = "test_check_table_exists";
     let drop_table = format!("drop table IF EXISTS {test_table_name};");
@@ -106,7 +106,7 @@ async fn truncate_table(client: &ObTableClient, test_table_name: &str) {
 
 #[tokio::test]
 async fn test_truncate_table() {
-    let client_handle = task::spawn_blocking(|| utils::common::build_normal_client());
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
     let client = client_handle.await.unwrap();
     let test_table_name = "test_varchar_table";
 

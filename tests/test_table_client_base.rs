@@ -27,7 +27,7 @@ use std::{
     time::Duration,
 };
 
-use obkv::{error::CommonErrCode, ObTableClient, ResultCodes, Table, TableQuery, Value};
+use obkv::{error::CommonErrCode, ObTableClient, ResultCodes, Value};
 use tokio::task;
 
 pub struct BaseTest {
@@ -753,11 +753,16 @@ impl BaseTest {
     }
 
     pub async fn test_query(&self, table_name: &str) {
-        self.insert_query_test_record(table_name, "123", "123c2").await;
-        self.insert_query_test_record(table_name, "124", "124c2").await;
-        self.insert_query_test_record(table_name, "234", "234c2").await;
-        self.insert_query_test_record(table_name, "456", "456c2").await;
-        self.insert_query_test_record(table_name, "567", "567c2").await;
+        self.insert_query_test_record(table_name, "123", "123c2")
+            .await;
+        self.insert_query_test_record(table_name, "124", "124c2")
+            .await;
+        self.insert_query_test_record(table_name, "234", "234c2")
+            .await;
+        self.insert_query_test_record(table_name, "456", "456c2")
+            .await;
+        self.insert_query_test_record(table_name, "567", "567c2")
+            .await;
 
         let query = self
             .client

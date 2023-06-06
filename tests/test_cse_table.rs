@@ -19,7 +19,7 @@
 mod utils;
 use std::collections::HashSet;
 
-use obkv::{client::query::TableQuery, Table, Value};
+use obkv::Value;
 #[allow(unused_imports)]
 use serial_test_derive::serial;
 use tokio::task;
@@ -43,7 +43,7 @@ use tokio::task;
 #[tokio::test]
 #[serial]
 async fn test_cse_data_range_table() {
-    let client_handle = task::spawn_blocking(|| utils::common::build_normal_client());
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
     let client = client_handle.await.unwrap();
     let cse_table = "cse_data_20190308_1";
 
@@ -109,7 +109,7 @@ async fn test_cse_data_range_table() {
 #[tokio::test]
 #[serial]
 async fn test_data_range_part() {
-    let client_handle = task::spawn_blocking(|| utils::common::build_normal_client());
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
     let client = client_handle.await.unwrap();
     let cse_table = "cse_data_20190308_1";
     client
@@ -145,7 +145,7 @@ async fn test_data_range_part() {
 #[tokio::test]
 #[serial]
 async fn test_cse_meta_data_table() {
-    let client_handle = task::spawn_blocking(|| utils::common::build_normal_client());
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
     let client = client_handle.await.unwrap();
     let cse_table = "cse_meta_data_0";
 
@@ -207,7 +207,7 @@ async fn test_cse_meta_data_table() {
 #[tokio::test]
 #[serial]
 async fn test_cse_index_key_table() {
-    let client_handle = task::spawn_blocking(|| utils::common::build_normal_client());
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
     let client = client_handle.await.unwrap();
     let cse_table = "cse_index_1";
 
@@ -278,7 +278,7 @@ async fn test_cse_index_key_table() {
                     row[2].to_owned(),
                     row[3].to_owned(),
                 );
-                assert_eq!(rows.contains(&vec![m, k, v]), true);
+                assert!(rows.contains(&vec![m, k, v]));
                 assert_eq!(ids, series_ids);
             }
             None => {
@@ -286,7 +286,7 @@ async fn test_cse_index_key_table() {
                 break;
             }
             Some(Err(e)) => {
-                panic!("Error: {:?}", e);
+                panic!("Error: {e:?}");
             }
         }
     }
@@ -299,7 +299,7 @@ async fn test_cse_index_key_table() {
 #[tokio::test]
 #[serial]
 async fn test_index_key_part() {
-    let client_handle = task::spawn_blocking(|| utils::common::build_normal_client());
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
     let client = client_handle.await.unwrap();
     let cse_table = "cse_index_1";
 
@@ -332,7 +332,7 @@ async fn test_index_key_part() {
 #[tokio::test]
 #[serial]
 async fn test_cse_field_key_table() {
-    let client_handle = task::spawn_blocking(|| utils::common::build_normal_client());
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
     let client = client_handle.await.unwrap();
     let cse_table = "cse_field_1";
 
@@ -407,7 +407,7 @@ async fn test_cse_field_key_table() {
 #[tokio::test]
 #[serial]
 async fn test_field_key_part() {
-    let client_handle = task::spawn_blocking(|| utils::common::build_normal_client());
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
     let client = client_handle.await.unwrap();
     let cse_table = "cse_field_1";
 
@@ -435,7 +435,7 @@ async fn test_field_key_part() {
 #[tokio::test]
 #[serial]
 async fn test_series_key_table() {
-    let client_handle = task::spawn_blocking(|| utils::common::build_normal_client());
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
     let client = client_handle.await.unwrap();
     let cse_table = "cse_series_key_to_id_1";
 
