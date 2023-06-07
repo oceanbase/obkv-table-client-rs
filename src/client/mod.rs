@@ -155,12 +155,9 @@ pub struct ClientConfig {
     pub min_idle_conns_per_server: usize,
     pub query_concurrency_limit: Option<usize>,
 
-    pub batch_op_thread_num: usize,
-    pub query_thread_num: usize,
-    pub conn_init_thread_num: usize,
-    pub conn_reader_thread_num: usize,
-    pub conn_writer_thread_num: usize,
-    pub default_thread_num: usize,
+    pub tcp_recv_thread_num: usize,
+    pub tcp_send_thread_num: usize,
+    pub bg_thread_num: usize,
 
     pub max_inflight_reqs_per_conn: usize,
 
@@ -205,14 +202,11 @@ impl Default for ClientConfig {
 
             max_conns_per_server: 10,
             min_idle_conns_per_server: 5,
-            conn_init_thread_num: 2,
             query_concurrency_limit: None,
 
-            batch_op_thread_num: 2,
-            query_thread_num: 2,
-            conn_reader_thread_num: 4,
-            conn_writer_thread_num: 2,
-            default_thread_num: 2,
+            tcp_recv_thread_num: 4,
+            tcp_send_thread_num: 2,
+            bg_thread_num: 2,
 
             max_inflight_reqs_per_conn: 100,
 

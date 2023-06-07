@@ -51,7 +51,7 @@ impl PoolInner {
         }
     }
 
-    // TODO: use more random/fair policy to pick a connection
+    // TODO: use more random/fair policy to pick a connection / async remove conn
     fn try_get(&mut self) -> (Option<Arc<Connection>>, usize) {
         let mut removed = 0usize;
         while !self.conns.is_empty() {
@@ -171,9 +171,13 @@ impl ConnPool {
             mut retry_num: usize,
             build_retry_limit: usize,
         ) {
-            let shared_pool = shared_pool.clone();
-            shared_pool.clone().runtimes.conn_init_runtime.spawn(async move {
+            let weak_shared_pool = Arc::downgrade(shared_pool);
+            shared_pool.clone().runtimes.bg_runtime.spawn(async move {
                 loop {
+                    let shared_pool = match weak_shared_pool.upgrade() {
+                        None => return,
+                        Some(p) => p,
+                    };
                     match shared_pool.build_conn().await {
                         Ok(conn) => {
                             let mut inner = shared_pool.inner.lock().unwrap();

@@ -1454,29 +1454,20 @@ pub type RuntimesRef = Arc<ObClientRuntimes>;
 /// OBKV Table Runtime
 #[derive(Clone, Debug)]
 pub struct ObClientRuntimes {
-    /// Runtime for multi-batch operation
-    pub batch_op_runtime: RuntimeRef,
-    /// Runtime for query
-    pub query_runtime: RuntimeRef,
-    /// Runtime for init connection
-    pub conn_init_runtime: RuntimeRef,
     /// Runtime for connection to read data
-    pub reader_runtime: RuntimeRef,
+    pub tcp_send_runtime: RuntimeRef,
     /// Runtime for connection to write data
-    pub writer_runtime: RuntimeRef,
-    /// Runtime for some other tasks
-    pub default_runtime: RuntimeRef,
+    pub tcp_recv_runtime: RuntimeRef,
+    /// Runtime for background task such as: conn_init / batch operation
+    pub bg_runtime: RuntimeRef,
 }
 
 impl ObClientRuntimes {
     pub fn test_default() -> ObClientRuntimes {
         ObClientRuntimes {
-            batch_op_runtime: Arc::new(build_runtime("ob-batch-executor", 1)),
-            query_runtime: Arc::new(build_runtime("ob-query-executor", 1)),
-            conn_init_runtime: Arc::new(build_runtime("ob-conn-initer", 1)),
-            reader_runtime: Arc::new(build_runtime("ob-conn-reader", 1)),
-            writer_runtime: Arc::new(build_runtime("ob-conn-writer", 1)),
-            default_runtime: Arc::new(build_runtime("ob-default", 1)),
+            tcp_recv_runtime: Arc::new(build_runtime("ob-tcp-reviever", 1)),
+            tcp_send_runtime: Arc::new(build_runtime("ob-tcp-sender", 1)),
+            bg_runtime: Arc::new(build_runtime("ob-default", 1)),
         }
     }
 }
@@ -1492,21 +1483,15 @@ fn build_runtime(name: &str, threads_num: usize) -> runtime::Runtime {
 
 fn build_obkv_runtimes(config: &ClientConfig) -> ObClientRuntimes {
     ObClientRuntimes {
-        batch_op_runtime: Arc::new(build_runtime(
-            "ob-batch-executor",
-            config.batch_op_thread_num,
+        tcp_recv_runtime: Arc::new(build_runtime(
+            "ob-tcp-reviever",
+            config.tcp_recv_thread_num,
         )),
-        query_runtime: Arc::new(build_runtime("ob-query-executor", config.query_thread_num)),
-        conn_init_runtime: Arc::new(build_runtime("ob-conn-initer", config.conn_init_thread_num)),
-        reader_runtime: Arc::new(build_runtime(
-            "ob-conn-reader",
-            config.conn_reader_thread_num,
+        tcp_send_runtime: Arc::new(build_runtime(
+            "ob-tcp-sender",
+            config.tcp_send_thread_num,
         )),
-        writer_runtime: Arc::new(build_runtime(
-            "ob-conn-writer",
-            config.conn_writer_thread_num,
-        )),
-        default_runtime: Arc::new(build_runtime("ob-default", config.default_thread_num)),
+        bg_runtime: Arc::new(build_runtime("ob_bg", config.bg_thread_num)),
     }
 }
 
@@ -1644,7 +1629,7 @@ impl ObTableClient {
                 .inner
                 .get_or_create_table(table_name, &table_entry, part_id)?;
             let table_name = table_name.to_owned();
-            handles.push(self.inner.runtimes.batch_op_runtime.spawn(async move {
+            handles.push(self.inner.runtimes.bg_runtime.spawn(async move {
                 batch_op.set_partition_id(part_id);
                 batch_op.set_table_name(table_name.clone());
                 table.execute_batch(&table_name, batch_op).await
@@ -1659,7 +1644,6 @@ impl ObTableClient {
         Ok(all_results)
     }
 
-    // TODO: impl ObTable async methods
     #[inline]
     pub async fn insert(
         &self,
@@ -1869,13 +1853,13 @@ impl ObTableClient {
     }
 }
 
-pub struct ObTableClientStreamQuerier {
+pub struct StreamQuerier {
     client: Arc<ObTableClientInner>,
     table_name: String,
     start_execute_ts: AtomicI64,
 }
 
-impl Drop for ObTableClientStreamQuerier {
+impl Drop for StreamQuerier {
     fn drop(&mut self) {
         let start_ts = self.start_execute_ts.load(Ordering::Relaxed);
 
@@ -1889,7 +1873,7 @@ impl Drop for ObTableClientStreamQuerier {
     }
 }
 
-impl ObTableClientStreamQuerier {
+impl StreamQuerier {
     fn new(table_name: &str, client: Arc<ObTableClientInner>) -> Self {
         Self {
             client,
@@ -1898,7 +1882,6 @@ impl ObTableClientStreamQuerier {
         }
     }
 
-    // TODO: impl StreamQuerier for ObTableClientStreamQuerier
     pub async fn execute_query(
         &self,
         stream_result: &mut QueryStreamResult,
@@ -1916,7 +1899,7 @@ impl ObTableClientStreamQuerier {
             Err(e) => {
                 if let Err(e) = self.client.on_table_op_failure(&self.table_name, &e) {
                     error!(
-                        "ObTableClientStreamQuerier::execute_query on_table_op_failure err: {}.",
+                        "StreamQuerier::execute_query on_table_op_failure err: {}.",
                         e
                     );
                 }
@@ -1943,7 +1926,7 @@ impl ObTableClientStreamQuerier {
             Err(e) => {
                 if let Err(e) = self.client.on_table_op_failure(&self.table_name, &e) {
                     error!(
-                        "ObTableClientStreamQuerier::execute_query on_table_op_failure err: {}.",
+                        "StreamQuerier::execute_query on_table_op_failure err: {}.",
                         e
                     );
                 }
@@ -1962,7 +1945,6 @@ impl ObTableClientStreamQuerier {
 
 pub const PRIMARY_INDEX_NAME: &str = "PRIMARY";
 
-/// TODO refactor with ObTableQueryImpl
 pub struct ObTableClientQueryImpl {
     operation_timeout: Option<Duration>,
     entity_type: ObTableEntityType,
@@ -1986,7 +1968,6 @@ impl ObTableClientQueryImpl {
         self.table_query = ObTableQuery::new();
     }
 
-    // TODO: impl TableQuery for ObTableClientQueryImpl
     pub async fn execute(&self) -> Result<QueryResultSet> {
         let mut partition_table: HashMap<i64, (i64, Arc<ObTable>)> = HashMap::new();
 
@@ -2014,7 +1995,7 @@ impl ObTableClientQueryImpl {
         let start = Instant::now();
 
         let mut stream_result = QueryStreamResult::new(
-            Arc::new(ObTableClientStreamQuerier::new(
+            Arc::new(StreamQuerier::new(
                 &self.table_name,
                 self.client.clone(),
             )),

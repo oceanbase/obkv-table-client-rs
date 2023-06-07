@@ -25,17 +25,16 @@ use std::{
 /// Query API for ob table
 use super::ObTable;
 use crate::{
-    client::table_client::{ObTableClientStreamQuerier, OBKV_CLIENT_METRICS},
+    client::table_client::{StreamQuerier, OBKV_CLIENT_METRICS},
     error::{CommonErrCode, Error::Common as CommonErr, Result},
     rpc::protocol::{
         payloads::ObTableEntityType,
         query::{
-            ObHTableFilter, ObTableQuery, ObTableQueryRequest, ObTableQueryResult,
+            ObTableQuery, ObTableQueryRequest, ObTableQueryResult,
             ObTableStreamRequest,
         },
         DEFAULT_FLAG,
     },
-    runtime::RuntimeRef,
     serde_obkv::value::Value,
 };
 
@@ -43,29 +42,10 @@ use crate::{
 // Zero timeout means no-wait request.
 const ZERO_TIMEOUT_MS: Duration = Duration::from_millis(0);
 
-pub trait StreamQuerier {
-    // TODO: `async` trait functions are not currently supported
-    fn execute_query(
-        &self,
-        result: &mut QueryStreamResult,
-        part_id_and_table: (i64, Arc<ObTable>),
-        payload: &mut ObTableQueryRequest,
-    ) -> Result<i64>;
-
-    fn execute_stream(
-        &self,
-        result: &mut QueryStreamResult,
-        part_id_and_table: (i64, Arc<ObTable>),
-        payload: &mut ObTableStreamRequest,
-    ) -> Result<i64>;
-
-    fn get_runtime(&self) -> RuntimeRef;
-}
-
 type PartitionQueryResultDeque = VecDeque<((i64, Arc<ObTable>), ObTableQueryResult)>;
 
 pub struct QueryStreamResult {
-    querier: Arc<ObTableClientStreamQuerier>,
+    querier: Arc<StreamQuerier>,
     initialized: bool,
     eof: bool,
     closed: bool,
@@ -91,7 +71,7 @@ impl fmt::Debug for QueryStreamResult {
 }
 
 impl QueryStreamResult {
-    pub fn new(querier: Arc<ObTableClientStreamQuerier>, table_query: ObTableQuery) -> Self {
+    pub fn new(querier: Arc<StreamQuerier>, table_query: ObTableQuery) -> Self {
         Self {
             querier,
             initialized: false,
@@ -498,40 +478,4 @@ impl Drop for QueryResultSet {
             Err(e) => error!("QueryResultSet:drop failed: {:?}", e),
         }
     }
-}
-
-/// Table Query Trait
-
-pub const PRIMARY_INDEX_NAME: &str = "PRIMARY";
-
-pub trait TableQuery {
-    // TODO: async execute / `async` trait functions are not currently supported
-    fn execute(&self) -> Result<QueryResultSet>;
-    fn get_table_name(&self) -> String;
-    fn set_entity_type(&mut self, entity_type: ObTableEntityType);
-    fn entity_type(&self) -> ObTableEntityType;
-    fn select(self, columns: Vec<String>) -> Self;
-    fn limit(self, offset: Option<i32>, limit: i32) -> Self;
-    fn add_scan_range(
-        self,
-        start: Vec<Value>,
-        start_equals: bool,
-        end: Vec<Value>,
-        end_equals: bool,
-    ) -> Self;
-    fn add_scan_range_starts_with(self, start: Vec<Value>, start_equals: bool) -> Self;
-    fn add_scan_range_ends_with(self, end: Vec<Value>, end_equals: bool) -> Self;
-    fn scan_order(self, forward: bool) -> Self;
-    fn index_name(self, index_name: &str) -> Self;
-    fn primary_index(self) -> Self
-    where
-        Self: Sized,
-    {
-        self.index_name(PRIMARY_INDEX_NAME)
-    }
-    fn filter_string(self, filter_string: &str) -> Self;
-    fn htable_filter(self, filter: ObHTableFilter) -> Self;
-    fn batch_size(self, batch_size: i32) -> Self;
-    fn operation_timeout(self, timeout: Duration) -> Self;
-    fn clear(&mut self);
 }

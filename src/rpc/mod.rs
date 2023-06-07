@@ -199,7 +199,7 @@ impl ConnectionSender {
 
 /// A Connection to OBKV Server
 pub struct Connection {
-    //remote addr
+    // remote addr
     addr: SocketAddr,
     reader: Option<JoinHandle<Result<()>>>,
     reader_signal_sender: mpsc::Sender<()>,
@@ -214,7 +214,7 @@ pub struct Connection {
     trace_id_counter: AtomicU32,
     load: AtomicUsize,
     // TODO: check unused runtime
-    runtimes: RuntimesRef,
+    bg_runtime: RuntimeRef,
 }
 
 const OB_MYSQL_MAX_PACKET_LENGTH: usize = 1 << 24;
@@ -252,7 +252,7 @@ impl Connection {
         let read_active = active.clone();
         let (sender, receiver): (mpsc::Sender<()>, mpsc::Receiver<()>) = mpsc::channel(1);
 
-        let join_handle = runtimes.reader_runtime.spawn(async move {
+        let join_handle = runtimes.tcp_recv_runtime.spawn(async move {
             let addr = read_stream.peer_addr()?;
 
             Connection::process_reading_data(receiver, read_stream, read_requests.clone(), &addr)
@@ -272,7 +272,7 @@ impl Connection {
                 write_stream,
                 requests.clone(),
                 active.clone(),
-                runtimes.writer_runtime.clone(),
+                runtimes.tcp_send_runtime.clone(),
                 channel_capacity,
             ),
             requests,
@@ -285,7 +285,7 @@ impl Connection {
             id,
             trace_id_counter: AtomicU32::new(0),
             load: AtomicUsize::new(0),
-            runtimes: runtimes.clone(),
+            bg_runtime: runtimes.bg_runtime.clone(),
         })
     }
 
@@ -687,15 +687,14 @@ impl Connection {
 
         // 1. close writer
         if let Err(e) = self
-            .runtimes
-            .default_runtime
+            .bg_runtime
             .block_on(async { self.sender.close().await })
         {
             error!("Connection::close fail to close writer, err: {}.", e);
         }
 
         // 2. close reader
-        if let Err(e) = self.runtimes.default_runtime.block_on(async {
+        if let Err(e) = self.bg_runtime.block_on(async {
             self.reader_signal_sender
                 .send(())
                 .await
@@ -957,6 +956,6 @@ mod test {
             .expect("fail to send request")
             .try_recv();
         assert!(res.is_ok());
-        assert!(conn.close().is_ok());
+        assert!(conn.close().await.is_ok());
     }
 }

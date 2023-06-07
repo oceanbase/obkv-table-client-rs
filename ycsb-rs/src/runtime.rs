@@ -2,7 +2,7 @@
  * #%L
  * OBKV Table Client Framework
  * %%
- * Copyright (C) 2021 OceanBase
+ * Copyright (C) 2023 OceanBase
  * %%
  * OBKV Table Client Framework is licensed under Mulan PSL v2.
  * You can use this software according to the terms and conditions of the
