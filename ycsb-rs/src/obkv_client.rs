@@ -48,10 +48,10 @@ pub struct OBKVClientInitStruct {
 
     pub max_conns_per_server: usize,
     pub min_idle_conns_per_server: usize,
-    pub conn_init_thread_num: usize,
 
-    pub conn_reader_thread_num: usize,
-    pub conn_writer_thread_num: usize,
+    pub bg_thread_num: usize,
+    pub tcp_recv_thread_num: usize,
+    pub tcp_send_thread_num: usize,
 }
 
 impl OBKVClientInitStruct {
@@ -71,9 +71,9 @@ impl OBKVClientInitStruct {
             refresh_workers_num: props.refresh_workers_num,
             max_conns_per_server: props.max_conns_per_server,
             min_idle_conns_per_server: props.min_idle_conns_per_server,
-            conn_init_thread_num: props.conn_init_thread_num,
-            conn_reader_thread_num: props.conn_reader_thread_num,
-            conn_writer_thread_num: props.conn_writer_thread_num,
+            bg_thread_num: props.bg_thread_num,
+            tcp_recv_thread_num: props.tcp_recv_thread_num,
+            tcp_send_thread_num: props.tcp_send_thread_num,
         }
     }
 }
@@ -94,9 +94,9 @@ impl OBKVClient {
             refresh_workers_num: config.refresh_workers_num,
             max_conns_per_server: config.max_conns_per_server,
             min_idle_conns_per_server: config.min_idle_conns_per_server,
-            conn_init_thread_num: config.conn_init_thread_num,
-            conn_reader_thread_num: config.conn_reader_thread_num,
-            conn_writer_thread_num: config.conn_writer_thread_num,
+            bg_thread_num: config.bg_thread_num,
+            tcp_recv_thread_num: config.tcp_recv_thread_num,
+            tcp_send_thread_num: config.tcp_send_thread_num,
             ..Default::default()
         };
         let builder = Builder::new()

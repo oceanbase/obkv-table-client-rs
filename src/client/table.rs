@@ -21,11 +21,7 @@ use super::{ClientConfig, TableOpResult};
 use crate::{
     error::{CommonErrCode, Error::Common as CommonErr, Result},
     rpc::{
-        protocol::{
-            codes::ResultCodes,
-            payloads::*,
-            ObPayload,
-        },
+        protocol::{codes::ResultCodes, payloads::*, ObPayload},
         proxy::Proxy,
     },
 };

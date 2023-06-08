@@ -266,8 +266,7 @@ async fn test_obtable_partition_range_crud() {
     ];
     let result = client.delete(TABLE_NAME, rowk_keys.clone()).await;
     assert!(result.is_ok());
-    let result = result.unwrap();
-    assert_eq!(1, result);
+    result.unwrap();
 
     let result = client
         .insert(

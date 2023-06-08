@@ -1483,14 +1483,8 @@ fn build_runtime(name: &str, threads_num: usize) -> runtime::Runtime {
 
 fn build_obkv_runtimes(config: &ClientConfig) -> ObClientRuntimes {
     ObClientRuntimes {
-        tcp_recv_runtime: Arc::new(build_runtime(
-            "ob-tcp-reviever",
-            config.tcp_recv_thread_num,
-        )),
-        tcp_send_runtime: Arc::new(build_runtime(
-            "ob-tcp-sender",
-            config.tcp_send_thread_num,
-        )),
+        tcp_recv_runtime: Arc::new(build_runtime("ob-tcp-reviever", config.tcp_recv_thread_num)),
+        tcp_send_runtime: Arc::new(build_runtime("ob-tcp-sender", config.tcp_send_thread_num)),
         bg_runtime: Arc::new(build_runtime("ob_bg", config.bg_thread_num)),
     }
 }
@@ -1995,10 +1989,7 @@ impl ObTableClientQueryImpl {
         let start = Instant::now();
 
         let mut stream_result = QueryStreamResult::new(
-            Arc::new(StreamQuerier::new(
-                &self.table_name,
-                self.client.clone(),
-            )),
+            Arc::new(StreamQuerier::new(&self.table_name, self.client.clone())),
             self.table_query.clone(),
         );
 

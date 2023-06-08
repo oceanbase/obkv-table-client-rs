@@ -672,7 +672,7 @@ impl Connection {
     /// invalidated.
     ///
     ///For info on default settings see [Builder](struct.Builder.html)
-    pub async fn new() -> Result<Connection> {
+    pub async fn try_new() -> Result<Connection> {
         Builder::new().build().await
     }
 
@@ -956,6 +956,6 @@ mod test {
             .expect("fail to send request")
             .try_recv();
         assert!(res.is_ok());
-        assert!(conn.close().await.is_ok());
+        assert!(conn.close().is_ok());
     }
 }

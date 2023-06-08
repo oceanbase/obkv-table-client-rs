@@ -250,7 +250,7 @@ impl ConnPool {
         Ok(())
     }
 
-    pub async fn get(&self) -> Result<Arc<Connection>> {
+    pub fn get(&self) -> Result<Arc<Connection>> {
         let start = Instant::now();
         let pool = &self.shared_pool;
 
@@ -453,10 +453,7 @@ mod test {
             "conn_num({conn_num}) should in the range: [{min_conn_num}, {max_conn_num}]",
         );
 
-        let conn = pool
-            .get()
-            .await
-            .expect("fail to get connection from the pool");
+        let conn = pool.get().expect("fail to get connection from the pool");
         assert!(conn.is_active(), "conn should be active");
     }
 
@@ -466,10 +463,7 @@ mod test {
         let (min_conn_num, max_conn_num) = (3, 5);
         let pool = gen_test_conn_pool(min_conn_num, max_conn_num);
         for _ in 0..max_conn_num * 2 {
-            let conn = pool
-                .get()
-                .await
-                .expect("fail to get connection from the pool");
+            let conn = pool.get().expect("fail to get connection from the pool");
             assert!(conn.is_active(), "should get active connection");
             conn.active.store(false, Ordering::SeqCst);
         }

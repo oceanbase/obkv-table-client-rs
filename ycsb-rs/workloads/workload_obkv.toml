@@ -53,6 +53,6 @@ min_idle_conns_per_server = 10
 
 ycsb_thread_num = 10
 
-conn_init_thread_num = 2
-conn_reader_thread_num = 6
-conn_writer_thread_num = 4
+bg_thread_num = 2
+tcp_recv_thread_num = 6
+tcp_send_thread_num = 4

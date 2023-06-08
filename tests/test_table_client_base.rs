@@ -1186,7 +1186,7 @@ impl BaseTest {
                 _ => unreachable!(),
             }
         }
-        let ret = result_set.async_close().await;
+        let ret = result_set.close().await;
         assert!(ret.is_ok());
 
         match result_set.next().await {

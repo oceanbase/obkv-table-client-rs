@@ -77,7 +77,7 @@ async fn test_obtable_client_curd() {
 
     assert!(result_set.is_ok());
 
-    let result_set = result_set.unwrap();
+    let mut result_set = result_set.unwrap();
 
     assert!(result_set.cache_size() > 0);
 
@@ -86,6 +86,12 @@ async fn test_obtable_client_curd() {
     let result = result.unwrap();
 
     assert_eq!(1, result);
+
+    if let Err(e) = result_set.close().await {
+        println!("Error: {e}");
+    }
+
+    drop(result_set);
 
     let result = client
         .get(

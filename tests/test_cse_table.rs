@@ -290,10 +290,7 @@ async fn test_cse_index_key_table() {
             }
         }
     }
-    result_set
-        .async_close()
-        .await
-        .expect("Fail to close result set");
+    result_set.close().await.expect("Fail to close result set");
 }
 
 #[tokio::test]

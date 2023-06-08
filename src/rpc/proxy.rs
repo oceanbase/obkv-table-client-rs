@@ -46,7 +46,7 @@ impl Proxy {
     ) -> Result<()> {
         // the connection is ensured to be active now by checking conn.is_active
         // but it may be actually broken already.
-        let conn = self.0.get().await?;
+        let conn = self.0.get()?;
 
         OBKV_PROXY_METRICS.observe_proxy_misc("conn_load", conn.load() as f64);
 
@@ -80,7 +80,7 @@ impl Proxy {
                 retry_cnt, err
             );
 
-            let conn = self.0.get().await?;
+            let conn = self.0.get()?;
             let res = conn.execute(payload, response).await;
             if res.is_ok() || conn.is_active() {
                 OBKV_PROXY_METRICS.observe_proxy_misc("retry_times", retry_cnt as f64);

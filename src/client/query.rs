@@ -29,10 +29,7 @@ use crate::{
     error::{CommonErrCode, Error::Common as CommonErr, Result},
     rpc::protocol::{
         payloads::ObTableEntityType,
-        query::{
-            ObTableQuery, ObTableQueryRequest, ObTableQueryResult,
-            ObTableStreamRequest,
-        },
+        query::{ObTableQuery, ObTableQueryRequest, ObTableQueryResult, ObTableStreamRequest},
         DEFAULT_FLAG,
     },
     serde_obkv::value::Value,
@@ -378,9 +375,8 @@ impl QueryStreamResult {
 
 impl Drop for QueryStreamResult {
     fn drop(&mut self) {
-        if self.closed {
-        } else {
-            error!("QueryStreamResult::close fail")
+        if !self.closed {
+            error!("QueryStreamResult::drop stream is not closed when drop")
         }
     }
 }
@@ -416,7 +412,7 @@ impl QueryResultSet {
         }
     }
 
-    pub fn close(&mut self) -> Result<()> {
+    pub fn check_close(&mut self) -> Result<()> {
         match self {
             QueryResultSet::None => Ok(()),
             QueryResultSet::Some(stream_result) => {
@@ -433,7 +429,7 @@ impl QueryResultSet {
         }
     }
 
-    pub async fn async_close(&mut self) -> Result<()> {
+    pub async fn close(&mut self) -> Result<()> {
         match self {
             QueryResultSet::None => Ok(()),
             QueryResultSet::Some(stream_result) => stream_result.close().await,
@@ -473,7 +469,7 @@ impl QueryResultSet {
 
 impl Drop for QueryResultSet {
     fn drop(&mut self) {
-        match self.close() {
+        match self.check_close() {
             Ok(()) => (),
             Err(e) => error!("QueryResultSet:drop failed: {:?}", e),
         }

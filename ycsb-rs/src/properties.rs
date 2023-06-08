@@ -100,15 +100,15 @@ fn min_idle_conns_per_server_default() -> usize {
     1
 }
 
-fn conn_init_thread_num_default() -> usize {
+fn bg_thread_num_default() -> usize {
     2
 }
 
-fn conn_reader_thread_num_default() -> usize {
+fn tcp_recv_thread_num_default() -> usize {
     6
 }
 
-fn conn_writer_thread_num_default() -> usize {
+fn tcp_send_thread_num_default() -> usize {
     4
 }
 
@@ -208,21 +208,18 @@ pub struct Properties {
         rename = "min_idle_conns_per_server"
     )]
     pub min_idle_conns_per_server: usize,
+    #[serde(default = "bg_thread_num_default", rename = "bg_thread_num")]
+    pub bg_thread_num: usize,
     #[serde(
-        default = "conn_init_thread_num_default",
-        rename = "conn_init_thread_num"
+        default = "tcp_recv_thread_num_default",
+        rename = "tcp_recv_thread_num"
     )]
-    pub conn_init_thread_num: usize,
+    pub tcp_recv_thread_num: usize,
     #[serde(
-        default = "conn_reader_thread_num_default",
-        rename = "conn_reader_thread_num"
+        default = "tcp_send_thread_num_default",
+        rename = "tcp_send_thread_num"
     )]
-    pub conn_reader_thread_num: usize,
-    #[serde(
-        default = "conn_writer_thread_num_default",
-        rename = "conn_writer_thread_num"
-    )]
-    pub conn_writer_thread_num: usize,
+    pub tcp_send_thread_num: usize,
     #[serde(default = "ycsb_thread_num_default", rename = "ycsb_thread_num")]
     pub ycsb_thread_num: usize,
 }
