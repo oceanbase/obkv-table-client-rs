@@ -20,6 +20,10 @@ fn field_length_default() -> u64 {
     100
 }
 
+fn batch_count_default() -> u64 {
+    100
+}
+
 fn read_proportion_default() -> f64 {
     0.95
 }
@@ -37,6 +41,14 @@ fn scan_proportion_default() -> f64 {
 }
 
 fn read_modify_write_proportion_default() -> f64 {
+    0.0
+}
+
+fn batch_read_proportion_default() -> f64 {
+    0.0
+}
+
+fn batch_insertup_proportion_default() -> f64 {
     0.0
 }
 
@@ -145,6 +157,8 @@ pub struct Properties {
     pub request_distribution: String,
     #[serde(default = "field_length_default", rename = "fieldlength")]
     pub field_length: u64,
+    #[serde(default = "batch_count_default", rename = "batchcount")]
+    pub batch_count: u64,
 
     // read, update, insert, scan, read-modify-write
     #[serde(default = "read_proportion_default", rename = "readproportion")]
@@ -160,6 +174,16 @@ pub struct Properties {
         rename = "readmodifywriteproportion"
     )]
     pub read_modify_write_proportion: f64,
+    #[serde(
+        default = "batch_read_proportion_default",
+        rename = "batchreadproportion"
+    )]
+    pub batch_read_proportion: f64,
+    #[serde(
+        default = "batch_insertup_proportion_default",
+        rename = "batchinsertupproportion"
+    )]
+    pub batch_insertup_proportion: f64,
 
     #[serde(default = "full_user_name_default", rename = "full_user_name")]
     pub full_user_name: String,

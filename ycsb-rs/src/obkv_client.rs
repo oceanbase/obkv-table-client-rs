@@ -20,15 +20,11 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 use anyhow::Result;
 #[allow(unused)]
 use obkv::error::CommonErrCode;
-use obkv::{Builder, ClientConfig, ObTableClient, RunningMode, Value};
+use obkv::{Builder, ClientConfig, ObTableClient, RunningMode, TableOpResult, Value};
 
 use crate::properties::Properties;
 
 const PRIMARY_KEY: &str = "ycsb_key";
-const COLUMN_NAMES: [&str; 10] = [
-    "field0", "field1", "field2", "field3", "field4", "field5", "field6", "field7", "field8",
-    "field9",
-];
 
 pub struct OBKVClientInitStruct {
     pub full_user_name: String,
@@ -164,15 +160,12 @@ impl OBKVClient {
         &self,
         table: &str,
         key: &str,
+        columns: &Vec<String>,
         result: &mut HashMap<String, String>,
     ) -> Result<()> {
         let result = self
             .client
-            .get(
-                table,
-                vec![Value::from(key)],
-                COLUMN_NAMES.iter().map(|s| s.to_string()).collect(),
-            )
+            .get(table, vec![Value::from(key)], columns.to_owned())
             .await;
         assert!(result.is_ok());
         assert_eq!(10, result?.len());
@@ -201,7 +194,7 @@ impl OBKVClient {
                 properties,
             )
             .await
-            .expect("fail to insert_or update");
+            .expect("fail to insert or update");
         assert_eq!(10, result);
 
         Ok(())
@@ -213,12 +206,13 @@ impl OBKVClient {
         table: &str,
         startkey: &str,
         endkey: &str,
+        columns: &Vec<String>,
         result: &mut HashMap<String, String>,
     ) -> Result<()> {
         let query = self
             .client
             .query(table)
-            .select(COLUMN_NAMES.iter().map(|s| s.to_string()).collect())
+            .select(columns.to_owned())
             .primary_index()
             .add_scan_range(
                 vec![Value::from(startkey)],
@@ -228,6 +222,81 @@ impl OBKVClient {
             );
         let result = query.execute().await;
         assert!(result.is_ok());
+        Ok(())
+    }
+
+    #[allow(unused)]
+    pub async fn batch_read(
+        &self,
+        table: &str,
+        keys: &Vec<String>,
+        columns: &Vec<String>,
+        result: &mut HashMap<String, String>,
+    ) -> Result<()> {
+        let mut batch_op = self.client.batch_operation(keys.len());
+        for key in keys {
+            batch_op.get(vec![Value::from(key.to_owned())], columns.to_owned());
+        }
+        let results = self.client.execute_batch(table, batch_op).await;
+
+        // Verify the results
+        assert!(results.is_ok());
+        let results = results.unwrap();
+        assert_eq!(results.len(), keys.len());
+        for result in results {
+            match result {
+                TableOpResult::RetrieveRows(rows) => {
+                    assert_eq!(10, rows.len());
+                }
+                _ => {
+                    unreachable!()
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    #[allow(unused)]
+    pub async fn batch_insertup(
+        &self,
+        table: &str,
+        keys: &Vec<String>,
+        fields: &Vec<String>,
+        values: &Vec<String>,
+    ) -> Result<()> {
+        let mut batch_op = self.client.batch_operation(keys.len());
+        for key in keys {
+            let mut properties: Vec<Value> = Vec::new();
+            for value in values {
+                properties.push(Value::from(value.to_owned()));
+            }
+            batch_op.insert_or_update(
+                vec![Value::from(key.to_owned())],
+                fields.to_owned(),
+                properties,
+            );
+        }
+        let results = self.client.execute_batch(table, batch_op).await;
+
+        // Verify the results
+        if results.is_err() {
+            println!("Error: {:?}", results.as_ref().err());
+        }
+        assert!(results.is_ok());
+        let results = results.unwrap();
+        assert_eq!(results.len(), keys.len());
+        for result in results {
+            match result {
+                TableOpResult::AffectedRows(affected_rows) => {
+                    assert_eq!(1, affected_rows);
+                }
+                _ => {
+                    unreachable!()
+                }
+            }
+        }
+
         Ok(())
     }
 }

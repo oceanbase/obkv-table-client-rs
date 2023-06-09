@@ -24,10 +24,15 @@ measurementtype = "histogram"
 
 readallfields = true
 
+# The number of operation in one batch
+batchcount = 100
+
 insertproportion = 0
 readproportion = 1.0
 scanproportion = 0
 updateproportion = 0
+batchreadproportion = 0
+batchinsertupproportion = 0
 
 requestdistribution = "uniform"
 
