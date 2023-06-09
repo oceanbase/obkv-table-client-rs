@@ -26,9 +26,9 @@ use tokio::time::sleep;
 
 use super::{Builder as ConnBuilder, Connection};
 use crate::{
-    client::table_client::RuntimesRef,
     error::{CommonErrCode, Error::Common as CommonErr, Result},
     proxy::OBKV_PROXY_METRICS,
+    runtime::RuntimeRef,
 };
 
 const MIN_BUILD_RETRY_INTERVAL_MS: u64 = 50 * 1000;
@@ -172,7 +172,7 @@ impl ConnPool {
             build_retry_limit: usize,
         ) {
             let weak_shared_pool = Arc::downgrade(shared_pool);
-            shared_pool.clone().runtimes.bg_runtime.spawn(async move {
+            shared_pool.clone().runtime.spawn(async move {
                 loop {
                     let shared_pool = match weak_shared_pool.upgrade() {
                         None => return,
@@ -320,7 +320,7 @@ struct SharedPool {
     conn_builder: ConnBuilder,
     inner: Mutex<PoolInner>,
     cond: Condvar,
-    runtimes: RuntimesRef,
+    runtime: RuntimeRef,
 }
 
 impl SharedPool {
@@ -336,7 +336,7 @@ impl SharedPool {
             conn_builder: builder,
             inner: Mutex::new(PoolInner::new(max_conn_num)),
             cond: Condvar::new(),
-            runtimes,
+            runtime: runtimes.bg_runtime.clone(),
         })
     }
 
