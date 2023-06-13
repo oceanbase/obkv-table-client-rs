@@ -137,8 +137,6 @@ pub struct ClientConfig {
     pub table_entry_refresh_try_interval: Duration,
     pub table_entry_refresh_continuous_failure_ceiling: usize,
 
-    pub table_batch_op_thread_num: usize,
-
     pub server_address_priority_timeout: Duration,
     pub runtime_continuous_failure_ceiling: usize,
 
@@ -185,8 +183,6 @@ impl Default for ClientConfig {
             table_entry_refresh_try_times: 3,
             table_entry_refresh_try_interval: Duration::from_millis(20),
             table_entry_refresh_continuous_failure_ceiling: 10,
-
-            table_batch_op_thread_num: 16,
 
             server_address_priority_timeout: Duration::from_secs(1800),
             runtime_continuous_failure_ceiling: 100,

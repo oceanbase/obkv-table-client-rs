@@ -65,7 +65,7 @@ impl ObTable {
         self.config.rpc_operation_timeout
     }
 
-    /// Execute a batch operation on a partition table
+    /// Execute batch operation
     pub async fn execute_batch(
         &self,
         _table_name: &str,

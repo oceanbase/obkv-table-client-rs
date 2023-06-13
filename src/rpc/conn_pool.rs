@@ -51,7 +51,7 @@ impl PoolInner {
         }
     }
 
-    // TODO: use more random/fair policy to pick a connection / async remove conn
+    // TODO: use more random / fair policy to pick a connection / async remove conn
     fn try_get(&mut self) -> (Option<Arc<Connection>>, usize) {
         let mut removed = 0usize;
         while !self.conns.is_empty() {

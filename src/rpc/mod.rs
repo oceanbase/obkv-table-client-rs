@@ -180,8 +180,15 @@ impl ConnectionSender {
         self.sender.send(message).await.map_err(Self::broken_pipe)
     }
 
+    #[allow(dead_code)]
+    /// close the connection
     async fn close(&mut self) -> Result<()> {
         self.request(ObTablePacket::ClosePoison).await?;
+        self.shutdown()
+    }
+
+    /// Shutdown the sender without closing remote
+    fn shutdown(&mut self) -> Result<()> {
         let writer = mem::replace(&mut self.writer, None);
         let drop_helper = AbortOnDropMany(vec![writer.unwrap()]);
         drop(drop_helper);
@@ -202,7 +209,7 @@ pub struct Connection {
     // remote addr
     addr: SocketAddr,
     reader: Option<JoinHandle<Result<()>>>,
-    reader_signal_sender: mpsc::Sender<()>,
+    reader_signal_sender: Option<oneshot::Sender<()>>,
     sender: ConnectionSender,
     requests: RequestsMap,
     continuous_timeout_failures: AtomicUsize,
@@ -213,8 +220,6 @@ pub struct Connection {
     id: u32,
     trace_id_counter: AtomicU32,
     load: AtomicUsize,
-    // TODO: check unused runtime
-    bg_runtime: RuntimeRef,
 }
 
 const OB_MYSQL_MAX_PACKET_LENGTH: usize = 1 << 24;
@@ -250,7 +255,7 @@ impl Connection {
 
         let active = Arc::new(AtomicBool::new(false));
         let read_active = active.clone();
-        let (sender, receiver): (mpsc::Sender<()>, mpsc::Receiver<()>) = mpsc::channel(1);
+        let (sender, receiver) = oneshot::channel();
 
         let join_handle = runtimes.tcp_recv_runtime.spawn(async move {
             let addr = read_stream.peer_addr()?;
@@ -278,14 +283,13 @@ impl Connection {
             requests,
             continuous_timeout_failures: AtomicUsize::new(0),
             continuous_timeout_failures_ceiling: CONN_CONTINUOUS_TIMEOUT_CEILING,
-            reader_signal_sender: sender,
+            reader_signal_sender: Some(sender),
             credential: None,
             tenant_id: None,
             active,
             id,
             trace_id_counter: AtomicU32::new(0),
             load: AtomicUsize::new(0),
-            bg_runtime: runtimes.bg_runtime.clone(),
         })
     }
 
@@ -294,7 +298,7 @@ impl Connection {
     }
 
     async fn process_reading_data(
-        mut signal_receiver: mpsc::Receiver<()>,
+        mut signal_receiver: oneshot::Receiver<()>,
         mut read_stream: OwnedReadHalf,
         read_requests: RequestsMap,
         addr: &SocketAddr,
@@ -482,6 +486,7 @@ impl Connection {
             );
             self.set_active(false);
             Connection::cancel_requests(&self.requests);
+            // TODO: although TCP connection may be closed by remote, we should do async close
         }
     }
 
@@ -676,34 +681,60 @@ impl Connection {
         Builder::new().build().await
     }
 
+    #[allow(dead_code)]
     /// close the connection
-    /// close is used by Drop, since Drop is sync, we need to use block_on to
-    /// wait for the future
-    fn close(&mut self) -> Result<()> {
+    ///
+    /// client should use close() if client close the connection voluntarily
+    async fn close(&mut self) -> Result<()> {
         if self.reader.is_none() {
             return Ok(());
         }
         self.set_active(false);
 
         // 1. close writer
-        if let Err(e) = self
-            .bg_runtime
-            .block_on(async { self.sender.close().await })
-        {
+        if let Err(e) = self.sender.close().await {
             error!("Connection::close fail to close writer, err: {}.", e);
         }
 
         // 2. close reader
-        if let Err(e) = self.bg_runtime.block_on(async {
-            self.reader_signal_sender
-                .send(())
-                .await
-                .map_err(ConnectionSender::broken_pipe)
-        }) {
-            error!(
-                "Connection::close fail to send signal to reader, err: {}.",
-                e
-            );
+        if let Some(sender) = self.reader_signal_sender.take() {
+            if let Err(e) = sender.send(()).map_err(ConnectionSender::broken_pipe) {
+                error!(
+                    "Connection::close fail to send signal to reader, err: {}.",
+                    e
+                );
+            }
+        }
+
+        let reader = mem::replace(&mut self.reader, None);
+
+        drop(reader);
+
+        Ok(())
+    }
+
+    /// shutdown the connection
+    ///
+    /// shutdown the conection without closing the TCP connection
+    fn shutdown(&mut self) -> Result<()> {
+        if self.reader.is_none() {
+            return Ok(());
+        }
+        self.set_active(false);
+
+        // 1. shutdown writer
+        if let Err(e) = self.sender.shutdown() {
+            error!("Connection::shutdown fail to shutdown writer, err: {}.", e);
+        }
+
+        // 2. close reader
+        if let Some(sender) = self.reader_signal_sender.take() {
+            if let Err(e) = sender.send(()).map_err(ConnectionSender::broken_pipe) {
+                error!(
+                    "Connection::shutdown fail to send signal to reader, err: {}.",
+                    e
+                );
+            }
         }
 
         let reader = mem::replace(&mut self.reader, None);
@@ -741,8 +772,8 @@ impl Connection {
 
 impl Drop for Connection {
     fn drop(&mut self) {
-        if let Err(err) = self.close() {
-            warn!("Connection::drop fail to close connection, err: {}.", err)
+        if let Err(err) = self.shutdown() {
+            warn!("Connection::drop fail to shutdown connection, err: {}.", err)
         }
         let mut requests = self.requests.lock().unwrap();
         for (_id, sender) in requests.drain() {
@@ -956,6 +987,6 @@ mod test {
             .expect("fail to send request")
             .try_recv();
         assert!(res.is_ok());
-        assert!(conn.close().is_ok());
+        assert!(conn.close().await.is_ok());
     }
 }
