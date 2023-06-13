@@ -181,17 +181,23 @@ impl ConnectionSender {
     }
 
     #[allow(dead_code)]
-    /// close the connection
+    /// Close the connection
+    /// Requests in requests map will be cancelled when the writer closed
     async fn close(&mut self) -> Result<()> {
         self.request(ObTablePacket::ClosePoison).await?;
-        self.shutdown()
+        if let Some(writer) = mem::take(&mut self.writer) {
+            writer.await??
+        }
+        self.sender.closed().await;
+        Ok(())
     }
 
     /// Shutdown the sender without closing remote
+    /// Requests in the requests map will be not be cancelled
     fn shutdown(&mut self) -> Result<()> {
-        let writer = mem::replace(&mut self.writer, None);
-        let drop_helper = AbortOnDropMany(vec![writer.unwrap()]);
-        drop(drop_helper);
+        if let Some(writer) = mem::take(&mut self.writer) {
+            let _drop_helper = AbortOnDropMany(vec![writer]);
+        }
         Ok(())
     }
 
@@ -362,10 +368,16 @@ impl Connection {
     fn cancel_requests(requests: &RequestsMap) {
         let mut requests = requests.lock().unwrap();
         for (_, sender) in requests.drain() {
-            if let Err(e) = sender.send(Err(CommonErr(
-                CommonErrCode::Rpc,
-                "connection reader exits".to_owned(),
-            ))) {
+            if let Err(e) = sender
+                .send(Ok(ObTablePacket::TransportPacket {
+                    error: CommonErr(
+                        CommonErrCode::BrokenPipe,
+                        "No longer able to send messages".to_owned(),
+                    ),
+                    code: TransportCode::SendFailure,
+                }))
+                .map_err(ConnectionSender::broken_pipe)
+            {
                 error!("Connection::cancel_requests: fail to send cancel message, err:{e:?}");
             }
         }
@@ -486,7 +498,8 @@ impl Connection {
             );
             self.set_active(false);
             Connection::cancel_requests(&self.requests);
-            // TODO: although TCP connection may be closed by remote, we should do async close
+            // TODO: although TCP connection may be closed by remote, we should
+            // do async close
         }
     }
 
@@ -705,9 +718,8 @@ impl Connection {
                 );
             }
         }
-
-        let reader = mem::replace(&mut self.reader, None);
-
+        let reader = mem::take(&mut self.reader);
+        Connection::cancel_requests(&self.requests);
         drop(reader);
 
         Ok(())
@@ -736,9 +748,8 @@ impl Connection {
                 );
             }
         }
-
-        let reader = mem::replace(&mut self.reader, None);
-
+        let reader = mem::take(&mut self.reader);
+        Connection::cancel_requests(&self.requests);
         drop(reader);
 
         Ok(())
@@ -773,22 +784,10 @@ impl Connection {
 impl Drop for Connection {
     fn drop(&mut self) {
         if let Err(err) = self.shutdown() {
-            warn!("Connection::drop fail to shutdown connection, err: {}.", err)
-        }
-        let mut requests = self.requests.lock().unwrap();
-        for (_id, sender) in requests.drain() {
-            if let Err(e) = sender
-                .send(Ok(ObTablePacket::TransportPacket {
-                    error: CommonErr(
-                        CommonErrCode::BrokenPipe,
-                        "No longer able to send messages".to_owned(),
-                    ),
-                    code: TransportCode::SendFailure,
-                }))
-                .map_err(ConnectionSender::broken_pipe)
-            {
-                error!("Connection::drop fail to notify senders, err: {}.", e);
-            }
+            error!(
+                "Connection::drop fail to shutdown connection, err: {}.",
+                err
+            )
         }
     }
 }

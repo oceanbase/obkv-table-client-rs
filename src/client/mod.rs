@@ -17,11 +17,7 @@
 
 use std::{collections::HashMap, time::Duration};
 
-use crate::{
-    error::Result,
-    rpc::protocol::{payloads::ObTableBatchOperation, DEFAULT_FLAG},
-    serde_obkv::value::Value,
-};
+use crate::{rpc::protocol::DEFAULT_FLAG, serde_obkv::value::Value};
 
 mod ocp;
 pub mod query;
@@ -33,84 +29,6 @@ use self::table::ObTable;
 pub enum TableOpResult {
     AffectedRows(i64),
     RetrieveRows(HashMap<String, Value>),
-}
-
-pub trait Table {
-    // TODO: async operation support
-    /// Insert a record
-    fn insert(
-        &self,
-        table_name: &str,
-        row_keys: Vec<Value>,
-        columns: Vec<String>,
-        properties: Vec<Value>,
-    ) -> Result<i64>;
-
-    /// Update a record
-    fn update(
-        &self,
-        table_name: &str,
-        row_keys: Vec<Value>,
-        columns: Vec<String>,
-        properties: Vec<Value>,
-    ) -> Result<i64>;
-
-    /// Insert or update a record, if the record exists, update it.
-    /// Otherwise insert a new one.
-    fn insert_or_update(
-        &self,
-        table_name: &str,
-        row_keys: Vec<Value>,
-        columns: Vec<String>,
-        properties: Vec<Value>,
-    ) -> Result<i64>;
-
-    /// Replace a record.
-    fn replace(
-        &self,
-        table_name: &str,
-        row_keys: Vec<Value>,
-        columns: Vec<String>,
-        properties: Vec<Value>,
-    ) -> Result<i64>;
-
-    /// Append
-    fn append(
-        &self,
-        table_name: &str,
-        row_keys: Vec<Value>,
-        columns: Vec<String>,
-        properties: Vec<Value>,
-    ) -> Result<i64>;
-
-    /// Increment
-    fn increment(
-        &self,
-        table_name: &str,
-        row_keys: Vec<Value>,
-        columns: Vec<String>,
-        properties: Vec<Value>,
-    ) -> Result<i64>;
-
-    /// Delete records by row keys.
-    fn delete(&self, table_name: &str, row_keys: Vec<Value>) -> Result<i64>;
-
-    /// Retrieve a record by row keys.
-    fn get(
-        &self,
-        table_name: &str,
-        row_keys: Vec<Value>,
-        columns: Vec<String>,
-    ) -> Result<HashMap<String, Value>>;
-
-    /// Create a batch operation
-    fn batch_operation(&self, ops_num_hint: usize) -> ObTableBatchOperation;
-    // Execute a batch operation
-    fn execute_batch(
-        &self,
-        table_name: &str,
-        batch_op: ObTableBatchOperation,
-    ) -> Result<Vec<TableOpResult>>;
 }
 
 /// ObTable client config

@@ -59,7 +59,7 @@ pub use self::{
         query::QueryResultSet,
         table::ObTable,
         table_client::{Builder, ObTableClient, RunningMode},
-        ClientConfig, Table, TableOpResult,
+        ClientConfig, TableOpResult,
     },
     monitors::prometheus::dump_metrics,
     rpc::{
