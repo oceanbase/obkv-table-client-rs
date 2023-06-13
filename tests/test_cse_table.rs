@@ -19,10 +19,10 @@
 mod utils;
 use std::collections::HashSet;
 
-use obkv::{client::query::TableQuery, Table, Value};
+use obkv::Value;
 #[allow(unused_imports)]
 use serial_test_derive::serial;
-use test_log::test;
+use tokio::task;
 
 // ```sql
 // create table cse_data_20190308_1 (
@@ -40,10 +40,11 @@ use test_log::test;
 // partition p19 values less than(72000), partition p20 values less than(75600), partition p21 values less than(79200), partition p22 values less than(82800),
 // partition p23 values less than(86400), partition p24 values less than(MAXVALUE));
 // ```
-#[test]
+#[tokio::test]
 #[serial]
-fn test_cse_data_range_table() {
-    let client = utils::common::build_normal_client();
+async fn test_cse_data_range_table() {
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
+    let client = client_handle.await.unwrap();
     let cse_table = "cse_data_20190308_1";
 
     client
@@ -58,37 +59,46 @@ fn test_cse_data_range_table() {
         ],
     );
     let rowk_keys = vec![Value::from(11i64), Value::from(1i32), Value::from(3600i32)];
-    let result = client.delete(cse_table, rowk_keys.clone());
+    let result = client.delete(cse_table, rowk_keys.clone()).await;
+    assert!(result.is_ok());
     result.unwrap();
 
-    let result = client.insert(
-        cse_table,
-        rowk_keys.clone(),
-        vec!["value".to_owned()],
-        vec![Value::from("aa")],
-    );
+    let result = client
+        .insert(
+            cse_table,
+            rowk_keys.clone(),
+            vec!["value".to_owned()],
+            vec![Value::from("aa")],
+        )
+        .await;
     let result = result.unwrap();
     assert_eq!(1, result);
 
-    let result = client.get(cse_table, rowk_keys.clone(), vec!["value".to_owned()]);
+    let result = client
+        .get(cse_table, rowk_keys.clone(), vec!["value".to_owned()])
+        .await;
     let mut result = result.unwrap();
     assert_eq!(1, result.len());
     let value = result.remove("value").unwrap();
     assert!(value.is_bytes());
     assert_eq!("aa".to_owned().into_bytes(), value.as_bytes());
 
-    let result = client.update(
-        cse_table,
-        rowk_keys.clone(),
-        vec!["value".to_owned()],
-        vec![Value::from("bb")],
-    );
+    let result = client
+        .update(
+            cse_table,
+            rowk_keys.clone(),
+            vec!["value".to_owned()],
+            vec![Value::from("bb")],
+        )
+        .await;
 
     let result = result.unwrap();
 
     assert_eq!(1, result);
 
-    let result = client.get(cse_table, rowk_keys, vec!["value".to_owned()]);
+    let result = client
+        .get(cse_table, rowk_keys, vec!["value".to_owned()])
+        .await;
     let mut result = result.unwrap();
     assert_eq!(1, result.len());
     let value = result.remove("value").unwrap();
@@ -96,10 +106,11 @@ fn test_cse_data_range_table() {
     assert_eq!("bb".to_owned().into_bytes(), value.as_bytes());
 }
 
-#[test]
+#[tokio::test]
 #[serial]
-fn test_data_range_part() {
-    let client = utils::common::build_normal_client();
+async fn test_data_range_part() {
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
+    let client = client_handle.await.unwrap();
     let cse_table = "cse_data_20190308_1";
     client
         .truncate_table(cse_table)
@@ -131,11 +142,13 @@ fn test_data_range_part() {
 //      interval_ms INT DEFAULT 0,
 //      PRIMARY KEY(id), UNIQUE KEY data_table_loc(data_table_name, data_table_start_time_ms));
 // ```
-#[test]
+#[tokio::test]
 #[serial]
-fn test_cse_meta_data_table() {
-    let client = utils::common::build_normal_client();
+async fn test_cse_meta_data_table() {
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
+    let client = client_handle.await.unwrap();
     let cse_table = "cse_meta_data_0";
+
     client
         .truncate_table(cse_table)
         .expect("Fail to truncate table");
@@ -151,6 +164,7 @@ fn test_cse_meta_data_table() {
             ],
             vec![Value::from("data_000_0"), Value::from(0i32)],
         )
+        .await
         .expect("Fail to insert one test entry");
 
     let mut batch_op = client.batch_operation(1);
@@ -177,6 +191,7 @@ fn test_cse_meta_data_table() {
     );
     client
         .execute_batch(cse_table, batch_op)
+        .await
         .expect("Fail to update row");
 }
 
@@ -189,10 +204,11 @@ fn test_cse_meta_data_table() {
 //      PRIMARY KEY(measurement, tag_key, tag_value))
 // partition by key(measurement, tag_key, tag_value) partitions 13;
 // ```
-#[test]
+#[tokio::test]
 #[serial]
-fn test_cse_index_key_table() {
-    let client = utils::common::build_normal_client();
+async fn test_cse_index_key_table() {
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
+    let client = client_handle.await.unwrap();
     let cse_table = "cse_index_1";
 
     client
@@ -228,6 +244,7 @@ fn test_cse_index_key_table() {
     }
     let res = client
         .execute_batch(cse_table, batch_ops)
+        .await
         .expect("Fail to execute batch operations");
     assert_eq!(100, res.len());
 
@@ -244,29 +261,43 @@ fn test_cse_index_key_table() {
         vec![Value::get_max(), Value::get_max(), Value::get_max()],
         false,
     );
-    let result_set = query.execute().expect("Fail to execute");
+    let mut result_set = query.execute().await.expect("Fail to execute");
 
-    for res in result_set {
-        let mut res = res.expect("fail to query");
-        let row: Vec<String> = columns
-            .iter()
-            .map(|name| String::from_utf8(res.remove(name).unwrap().as_bytes().to_vec()).unwrap())
-            .collect();
-        let (m, k, v, series_ids) = (
-            row[0].to_owned(),
-            row[1].to_owned(),
-            row[2].to_owned(),
-            row[3].to_owned(),
-        );
-        assert!(rows.contains(&vec![m, k, v]));
-        assert_eq!(ids, series_ids);
+    for i in 0..result_set.cache_size() {
+        match result_set.next().await {
+            Some(Ok(mut res)) => {
+                let row: Vec<String> = columns
+                    .iter()
+                    .map(|name| {
+                        String::from_utf8(res.remove(name).unwrap().as_bytes().to_vec()).unwrap()
+                    })
+                    .collect();
+                let (m, k, v, series_ids) = (
+                    row[0].to_owned(),
+                    row[1].to_owned(),
+                    row[2].to_owned(),
+                    row[3].to_owned(),
+                );
+                assert!(rows.contains(&vec![m, k, v]));
+                assert_eq!(ids, series_ids);
+            }
+            None => {
+                assert_eq!(i, 100);
+                break;
+            }
+            Some(Err(e)) => {
+                panic!("Error: {e:?}");
+            }
+        }
     }
+    result_set.close().await.expect("Fail to close result set");
 }
 
-#[test]
+#[tokio::test]
 #[serial]
-fn test_index_key_part() {
-    let client = utils::common::build_normal_client();
+async fn test_index_key_part() {
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
+    let client = client_handle.await.unwrap();
     let cse_table = "cse_index_1";
 
     client
@@ -295,10 +326,11 @@ fn test_index_key_part() {
 //  PRIMARY KEY(measurement, field_name))
 // partition by key(measurement, field_name) partitions 13;
 // ```
-#[test]
+#[tokio::test]
 #[serial]
-fn test_cse_field_key_table() {
-    let client = utils::common::build_normal_client();
+async fn test_cse_field_key_table() {
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
+    let client = client_handle.await.unwrap();
     let cse_table = "cse_field_1";
 
     client
@@ -309,23 +341,27 @@ fn test_cse_field_key_table() {
         vec!["measurement".to_string(), "field_name".to_string()],
     );
     let rowk_keys = vec![Value::from("a"), Value::from("site")];
-    let result = client.delete(cse_table, rowk_keys.clone());
+    let result = client.delete(cse_table, rowk_keys.clone()).await;
     result.unwrap();
 
-    let result = client.insert(
-        cse_table,
-        rowk_keys.clone(),
-        vec!["field_type".to_owned(), "id".to_owned()],
-        vec![Value::from(1i32), Value::from(2i32)],
-    );
+    let result = client
+        .insert(
+            cse_table,
+            rowk_keys.clone(),
+            vec!["field_type".to_owned(), "id".to_owned()],
+            vec![Value::from(1i32), Value::from(2i32)],
+        )
+        .await;
     let result = result.unwrap();
     assert_eq!(1, result);
 
-    let result = client.get(
-        cse_table,
-        rowk_keys.clone(),
-        vec!["field_type".to_owned(), "id".to_owned()],
-    );
+    let result = client
+        .get(
+            cse_table,
+            rowk_keys.clone(),
+            vec!["field_type".to_owned(), "id".to_owned()],
+        )
+        .await;
     let mut result = result.unwrap();
     assert_eq!(2, result.len());
     let value = result.remove("field_type").unwrap();
@@ -335,22 +371,26 @@ fn test_cse_field_key_table() {
     assert!(value.is_i32());
     assert_eq!(2i32, value.as_i32());
 
-    let result = client.update(
-        cse_table,
-        rowk_keys.clone(),
-        vec!["field_type".to_owned(), "id".to_owned()],
-        vec![Value::from(3i32), Value::from(4i32)],
-    );
+    let result = client
+        .update(
+            cse_table,
+            rowk_keys.clone(),
+            vec!["field_type".to_owned(), "id".to_owned()],
+            vec![Value::from(3i32), Value::from(4i32)],
+        )
+        .await;
 
     let result = result.unwrap();
 
     assert_eq!(1, result);
 
-    let result = client.get(
-        cse_table,
-        rowk_keys,
-        vec!["field_type".to_owned(), "id".to_owned()],
-    );
+    let result = client
+        .get(
+            cse_table,
+            rowk_keys,
+            vec!["field_type".to_owned(), "id".to_owned()],
+        )
+        .await;
     let mut result = result.unwrap();
     assert_eq!(2, result.len());
     let value = result.remove("field_type").unwrap();
@@ -361,10 +401,11 @@ fn test_cse_field_key_table() {
     assert_eq!(4i32, value.as_i32());
 }
 
-#[test]
+#[tokio::test]
 #[serial]
-fn test_field_key_part() {
-    let client = utils::common::build_normal_client();
+async fn test_field_key_part() {
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
+    let client = client_handle.await.unwrap();
     let cse_table = "cse_field_1";
 
     client
@@ -388,30 +429,36 @@ fn test_field_key_part() {
 //  series_id BIGINT NOT NULL,
 // PRIMARY KEY(series_key), KEY index_id(series_id));
 // ```
-#[test]
+#[tokio::test]
 #[serial]
-fn test_series_key_table() {
-    let client = utils::common::build_normal_client();
-
+async fn test_series_key_table() {
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
+    let client = client_handle.await.unwrap();
     let cse_table = "cse_series_key_to_id_1";
+
     client
         .truncate_table(cse_table)
         .expect("Fail to truncate table");
     client.add_row_key_element(cse_table, vec!["series_key".to_string()]);
     let rowk_keys = vec![Value::from("a")];
-    let result = client.delete(cse_table, rowk_keys.clone());
+    let result = client.delete(cse_table, rowk_keys.clone()).await;
+    assert!(result.is_ok());
     result.unwrap();
 
-    let result = client.insert(
-        cse_table,
-        rowk_keys.clone(),
-        vec!["series_id".to_owned()],
-        vec![Value::from(1i64)],
-    );
+    let result = client
+        .insert(
+            cse_table,
+            rowk_keys.clone(),
+            vec!["series_id".to_owned()],
+            vec![Value::from(1i64)],
+        )
+        .await;
     let result = result.unwrap();
     assert_eq!(1i64, result);
 
-    let result = client.get(cse_table, rowk_keys.clone(), vec!["series_id".to_owned()]);
+    let result = client
+        .get(cse_table, rowk_keys.clone(), vec!["series_id".to_owned()])
+        .await;
     let mut result = result.unwrap();
     assert_eq!(1, result.len());
     println!("result get:{result:?}");
@@ -419,18 +466,22 @@ fn test_series_key_table() {
     assert!(value.is_i64());
     assert_eq!(1i64, value.as_i64());
 
-    let result = client.update(
-        cse_table,
-        rowk_keys.clone(),
-        vec!["series_id".to_owned()],
-        vec![Value::from(3i64)],
-    );
+    let result = client
+        .update(
+            cse_table,
+            rowk_keys.clone(),
+            vec!["series_id".to_owned()],
+            vec![Value::from(3i64)],
+        )
+        .await;
 
     let result = result.unwrap();
 
     assert_eq!(1i64, result);
 
-    let result = client.get(cse_table, rowk_keys, vec!["series_id".to_owned()]);
+    let result = client
+        .get(cse_table, rowk_keys, vec!["series_id".to_owned()])
+        .await;
     let mut result = result.unwrap();
     assert_eq!(1, result.len());
     let value = result.remove("series_id").unwrap();

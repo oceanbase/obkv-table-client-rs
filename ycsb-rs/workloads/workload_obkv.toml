@@ -24,10 +24,15 @@ measurementtype = "histogram"
 
 readallfields = true
 
+# The number of operation in one batch
+batchcount = 100
+
 insertproportion = 0
 readproportion = 1.0
 scanproportion = 0
 updateproportion = 0
+batchreadproportion = 0
+batchinsertupproportion = 0
 
 requestdistribution = "uniform"
 
@@ -50,7 +55,9 @@ rpc_retry_interval = 0
 refresh_workers_num = 1
 max_conns_per_server = 10
 min_idle_conns_per_server = 10
-conn_init_thread_num = 1
 
-conn_reader_thread_num = 6
-conn_writer_thread_num = 4
+ycsb_thread_num = 10
+
+bg_thread_num = 2
+tcp_recv_thread_num = 6
+tcp_send_thread_num = 4

@@ -27,16 +27,14 @@ use std::{
     time::{Duration, Instant},
 };
 
-use futures::{future, Future};
-use futures_cpupool::{Builder as CpuPoolBuilder, CpuPool};
 use rand::{seq::SliceRandom, thread_rng};
 use scheduled_thread_pool::ScheduledThreadPool;
 
 use super::{
     ocp::{ObOcpModelManager, OcpModel},
-    query::{QueryResultSet, QueryStreamResult, StreamQuerier, TableQuery},
+    query::{QueryResultSet, QueryStreamResult},
     table::{self, ObTable},
-    ClientConfig, Table, TableOpResult,
+    ClientConfig, TableOpResult,
 };
 use crate::{
     error::{self, CommonErrCode, Error::Common as CommonErr, Result},
@@ -216,10 +214,6 @@ struct ObTableClientInner {
     refresh_metadata_mutex: Lock,
     last_refresh_metadata_ts: AtomicUsize,
 
-    conn_init_thread_pool: Arc<ScheduledThreadPool>,
-
-    // table_name => thread pool
-    table_batch_op_thread_pools: Arc<RwLock<HashMap<String, Arc<CpuPool>>>>,
     // query concurrency control
     query_permits: Option<Permits>,
 }
@@ -238,7 +232,6 @@ impl ObTableClientInner {
         config: ClientConfig,
         runtimes: Arc<ObClientRuntimes>,
     ) -> Result<Self> {
-        let conn_init_thread_num = config.conn_init_thread_num;
         let ocp_manager =
             ObOcpModelManager::new(config.rslist_acquire_timeout, &config.ocp_model_cache_file)?;
 
@@ -275,13 +268,6 @@ impl ObTableClientInner {
             refresh_metadata_mutex: Mutex::new(0),
             last_refresh_metadata_ts: AtomicUsize::new(0),
 
-            conn_init_thread_pool: Arc::new(
-                ScheduledThreadPool::builder()
-                    .num_threads(conn_init_thread_num)
-                    .thread_name_pattern("conn_init_{}")
-                    .build(),
-            ),
-            table_batch_op_thread_pools: Arc::new(RwLock::new(HashMap::new())),
             query_permits,
         })
     }
@@ -614,7 +600,6 @@ impl ObTableClientInner {
                 ConnPoolBuilder::new()
                     .max_conn_num(self.config.max_conns_per_server)
                     .min_conn_num(self.config.min_idle_conns_per_server)
-                    .conn_init_thread_pool(self.conn_init_thread_pool.clone())
                     .conn_builder(conn_builder)
                     .build()?,
             );
@@ -1055,29 +1040,6 @@ impl ObTableClientInner {
         }
     }
 
-    fn get_or_create_batch_op_thread_pool(&self, table_name: &str) -> Arc<CpuPool> {
-        let pools = self.table_batch_op_thread_pools.rl();
-        if let Some(pool) = pools.get(table_name) {
-            pool.clone()
-        } else {
-            drop(pools);
-            let mut pools = self.table_batch_op_thread_pools.wl();
-            if let Some(pool) = pools.get(table_name) {
-                pool.clone()
-            } else {
-                let pool = Arc::new(
-                    CpuPoolBuilder::new()
-                        .name_prefix(format!("batch-ops-for-{table_name}"))
-                        .pool_size(self.config.table_batch_op_thread_num)
-                        .create(),
-                );
-
-                pools.insert(table_name.to_owned(), pool.clone());
-                pool
-            }
-        }
-    }
-
     fn invalidate_table(&self, table_name: &str) {
         let mutex = {
             let table_mutexs = self.table_mutexs.rl();
@@ -1093,7 +1055,6 @@ impl ObTableClientInner {
         self.table_row_key_element.wl().remove(table_name);
         self.table_continuous_failures.wl().remove(table_name);
         self.table_mutexs.wl().remove(table_name);
-        self.table_batch_op_thread_pools.wl().remove(table_name);
     }
 
     fn execute_sql(&self, sql: &str) -> Result<()> {
@@ -1376,7 +1337,7 @@ impl ObTableClientInner {
         Ok(())
     }
 
-    fn execute_once(
+    async fn execute_once(
         &self,
         table_name: &str,
         operation_type: ObTableOperationType,
@@ -1401,14 +1362,14 @@ impl ObTableClientInner {
         );
         payload.set_partition_id(part_id);
         let mut result = ObTableOperationResult::new();
-        table.execute_payload(&mut payload, &mut result)?;
+        table.execute_payload(&mut payload, &mut result).await?;
 
         OBKV_CLIENT_METRICS.observe_operation_opt_rt(operation_type, start.elapsed());
 
         Ok(result)
     }
 
-    fn execute(
+    async fn execute(
         &self,
         table_name: &str,
         operation_type: ObTableOperationType,
@@ -1419,17 +1380,20 @@ impl ObTableClientInner {
         let mut retry_num = 0;
         loop {
             retry_num += 1;
-            match self.execute_once(
-                table_name,
-                operation_type,
-                row_keys.clone(),
-                columns.clone(),
-                properties.clone(),
-            ) {
+            return match self
+                .execute_once(
+                    table_name,
+                    operation_type,
+                    row_keys.clone(),
+                    columns.clone(),
+                    properties.clone(),
+                )
+                .await
+            {
                 Ok(result) => {
                     let error_no = result.header().errorno();
                     let result_code = ResultCodes::from_i32(error_no);
-                    let result = if result_code == ResultCodes::OB_SUCCESS {
+                    if result_code == ResultCodes::OB_SUCCESS {
                         self.reset_table_failure(table_name);
                         Ok(result)
                     } else {
@@ -1440,8 +1404,7 @@ impl ObTableClientInner {
                                 result.header().message()
                             ),
                         ))
-                    };
-                    return result;
+                    }
                 }
                 Err(e) => {
                     debug!(
@@ -1470,9 +1433,9 @@ impl ObTableClientInner {
                          table_name:{}, op_type:{:?}, retry_num:{}, err:{}",
                         table_name, operation_type, retry_num, e
                     );
-                    return Err(e);
+                    Err(e)
                 }
-            }
+            };
         }
     }
 }
@@ -1492,19 +1455,19 @@ pub type RuntimesRef = Arc<ObClientRuntimes>;
 #[derive(Clone, Debug)]
 pub struct ObClientRuntimes {
     /// Runtime for connection to read data
-    pub reader_runtime: RuntimeRef,
+    pub tcp_send_runtime: RuntimeRef,
     /// Runtime for connection to write data
-    pub writer_runtime: RuntimeRef,
-    /// Runtime for some other tasks
-    pub default_runtime: RuntimeRef,
+    pub tcp_recv_runtime: RuntimeRef,
+    /// Runtime for background task such as: conn_init / batch operation
+    pub bg_runtime: RuntimeRef,
 }
 
 impl ObClientRuntimes {
     pub fn test_default() -> ObClientRuntimes {
         ObClientRuntimes {
-            reader_runtime: Arc::new(build_runtime("ob-conn-reader", 1)),
-            writer_runtime: Arc::new(build_runtime("ob-conn-writer", 1)),
-            default_runtime: Arc::new(build_runtime("ob-default", 1)),
+            tcp_recv_runtime: Arc::new(build_runtime("ob-tcp-reviever", 1)),
+            tcp_send_runtime: Arc::new(build_runtime("ob-tcp-sender", 1)),
+            bg_runtime: Arc::new(build_runtime("ob-default", 1)),
         }
     }
 }
@@ -1520,15 +1483,9 @@ fn build_runtime(name: &str, threads_num: usize) -> runtime::Runtime {
 
 fn build_obkv_runtimes(config: &ClientConfig) -> ObClientRuntimes {
     ObClientRuntimes {
-        reader_runtime: Arc::new(build_runtime(
-            "ob-conn-reader",
-            config.conn_reader_thread_num,
-        )),
-        writer_runtime: Arc::new(build_runtime(
-            "ob-conn-writer",
-            config.conn_writer_thread_num,
-        )),
-        default_runtime: Arc::new(build_runtime("ob-default", config.default_thread_num)),
+        tcp_recv_runtime: Arc::new(build_runtime("ob-tcp-reviever", config.tcp_recv_thread_num)),
+        tcp_send_runtime: Arc::new(build_runtime("ob-tcp-sender", config.tcp_send_thread_num)),
+        bg_runtime: Arc::new(build_runtime("ob-bg", config.bg_thread_num)),
     }
 }
 
@@ -1536,7 +1493,6 @@ fn build_obkv_runtimes(config: &ClientConfig) -> ObClientRuntimes {
 #[derive(Clone)]
 #[allow(dead_code)]
 pub struct ObTableClient {
-    runtimes: Arc<ObClientRuntimes>,
     inner: Arc<ObTableClientInner>,
     refresh_thread_pool: Arc<ScheduledThreadPool>,
 }
@@ -1553,7 +1509,7 @@ impl ObTableClient {
     }
 
     /// Create a TableQuery instance for table.
-    pub fn query(&self, table_name: &str) -> impl TableQuery {
+    pub fn query(&self, table_name: &str) -> ObTableClientQueryImpl {
         ObTableClientQueryImpl::new(table_name, self.inner.clone())
     }
 
@@ -1607,7 +1563,7 @@ impl ObTableClient {
         self.inner.get_table(table_name, row_key, refresh)
     }
 
-    fn execute_batch_once(
+    async fn execute_batch_once(
         &self,
         table_name: &str,
         batch_op: ObTableBatchOperation,
@@ -1633,8 +1589,6 @@ impl ObTableClient {
             return Ok(Vec::new());
         }
 
-        let start = Instant::now();
-
         OBKV_CLIENT_METRICS.observe_misc("partitioned_batch_ops", part_batch_ops.len() as f64);
 
         // fast path: to process batch operations involving only one partition
@@ -1646,7 +1600,7 @@ impl ObTableClient {
             let (_, table) = self
                 .inner
                 .get_or_create_table(table_name, &table_entry, part_id)?;
-            return table.execute_batch(table_name, part_batch_op);
+            return table.execute_batch(table_name, part_batch_op).await;
         }
 
         // atomic now only support single partition
@@ -1661,37 +1615,31 @@ impl ObTableClient {
 
         // slow path: have to process operations involving multiple partitions
         // concurrent send the batch ops by partition
-        let pool = self.inner.get_or_create_batch_op_thread_pool(table_name);
+        let mut all_results = Vec::new();
+        let mut handles = Vec::with_capacity(part_batch_ops.len());
 
-        // prepare all the runners
-        let mut runners = Vec::with_capacity(part_batch_ops.len());
         for (part_id, mut batch_op) in part_batch_ops {
             let (_, table) = self
                 .inner
                 .get_or_create_table(table_name, &table_entry, part_id)?;
             let table_name = table_name.to_owned();
-            runners.push(move || {
+            handles.push(self.inner.runtimes.bg_runtime.spawn(async move {
                 batch_op.set_partition_id(part_id);
                 batch_op.set_table_name(table_name.clone());
-                table.execute_batch(&table_name, batch_op)
-            });
+                table.execute_batch(&table_name, batch_op).await
+            }));
         }
 
-        // join all runners into one future
-        let put_all = future::join_all(runners.into_iter().map(|runner| pool.spawn_fn(runner)));
+        for handle in handles {
+            let results = handle.await??;
+            all_results.extend(results);
+        }
 
-        // wait for all futures done
-        let results = put_all.wait()?;
-
-        OBKV_CLIENT_METRICS.observe_operation_ort_rt(ObClientOpRecordType::Batch, start.elapsed());
-
-        Ok(results.into_iter().flatten().collect())
+        Ok(all_results)
     }
-}
 
-impl Table for ObTableClient {
     #[inline]
-    fn insert(
+    pub async fn insert(
         &self,
         table_name: &str,
         row_keys: Vec<Value>,
@@ -1706,12 +1654,13 @@ impl Table for ObTableClient {
                 row_keys,
                 Some(columns),
                 Some(properties),
-            )?
+            )
+            .await?
             .affected_rows())
     }
 
     #[inline]
-    fn update(
+    pub async fn update(
         &self,
         table_name: &str,
         row_keys: Vec<Value>,
@@ -1726,12 +1675,13 @@ impl Table for ObTableClient {
                 row_keys,
                 Some(columns),
                 Some(properties),
-            )?
+            )
+            .await?
             .affected_rows())
     }
 
     #[inline]
-    fn insert_or_update(
+    pub async fn insert_or_update(
         &self,
         table_name: &str,
         row_keys: Vec<Value>,
@@ -1746,12 +1696,13 @@ impl Table for ObTableClient {
                 row_keys,
                 Some(columns),
                 Some(properties),
-            )?
+            )
+            .await?
             .affected_rows())
     }
 
     #[inline]
-    fn replace(
+    pub async fn replace(
         &self,
         table_name: &str,
         row_keys: Vec<Value>,
@@ -1766,12 +1717,13 @@ impl Table for ObTableClient {
                 row_keys,
                 Some(columns),
                 Some(properties),
-            )?
+            )
+            .await?
             .affected_rows())
     }
 
     #[inline]
-    fn append(
+    pub async fn append(
         &self,
         table_name: &str,
         row_keys: Vec<Value>,
@@ -1786,12 +1738,13 @@ impl Table for ObTableClient {
                 row_keys,
                 Some(columns),
                 Some(properties),
-            )?
+            )
+            .await?
             .affected_rows())
     }
 
     #[inline]
-    fn increment(
+    pub async fn increment(
         &self,
         table_name: &str,
         row_keys: Vec<Value>,
@@ -1806,20 +1759,22 @@ impl Table for ObTableClient {
                 row_keys,
                 Some(columns),
                 Some(properties),
-            )?
+            )
+            .await?
             .affected_rows())
     }
 
     #[inline]
-    fn delete(&self, table_name: &str, row_keys: Vec<Value>) -> Result<i64> {
+    pub async fn delete(&self, table_name: &str, row_keys: Vec<Value>) -> Result<i64> {
         Ok(self
             .inner
-            .execute(table_name, ObTableOperationType::Del, row_keys, None, None)?
+            .execute(table_name, ObTableOperationType::Del, row_keys, None, None)
+            .await?
             .affected_rows())
     }
 
     #[inline]
-    fn get(
+    pub async fn get(
         &self,
         table_name: &str,
         row_keys: Vec<Value>,
@@ -1833,17 +1788,18 @@ impl Table for ObTableClient {
                 row_keys,
                 Some(columns),
                 None,
-            )?
+            )
+            .await?
             .take_entity()
             .take_properties())
     }
 
     #[inline]
-    fn batch_operation(&self, ops_num_hint: usize) -> ObTableBatchOperation {
+    pub fn batch_operation(&self, ops_num_hint: usize) -> ObTableBatchOperation {
         ObTableBatchOperation::with_ops_num_raw(ops_num_hint)
     }
 
-    fn execute_batch(
+    pub async fn execute_batch(
         &self,
         table_name: &str,
         batch_op: ObTableBatchOperation,
@@ -1851,7 +1807,7 @@ impl Table for ObTableClient {
         let mut retry_num = 0;
         loop {
             retry_num += 1;
-            match self.execute_batch_once(table_name, batch_op.clone()) {
+            match self.execute_batch_once(table_name, batch_op.clone()).await {
                 Ok(res) => {
                     self.inner.reset_table_failure(table_name);
                     return Ok(res);
@@ -1891,23 +1847,13 @@ impl Table for ObTableClient {
     }
 }
 
-struct ObTableClientStreamQuerier {
+pub struct StreamQuerier {
     client: Arc<ObTableClientInner>,
     table_name: String,
     start_execute_ts: AtomicI64,
 }
 
-impl ObTableClientStreamQuerier {
-    fn new(table_name: &str, client: Arc<ObTableClientInner>) -> Self {
-        Self {
-            client,
-            table_name: table_name.to_owned(),
-            start_execute_ts: AtomicI64::new(0),
-        }
-    }
-}
-
-impl Drop for ObTableClientStreamQuerier {
+impl Drop for StreamQuerier {
     fn drop(&mut self) {
         let start_ts = self.start_execute_ts.load(Ordering::Relaxed);
 
@@ -1921,8 +1867,16 @@ impl Drop for ObTableClientStreamQuerier {
     }
 }
 
-impl StreamQuerier for ObTableClientStreamQuerier {
-    fn execute_query(
+impl StreamQuerier {
+    fn new(table_name: &str, client: Arc<ObTableClientInner>) -> Self {
+        Self {
+            client,
+            table_name: table_name.to_owned(),
+            start_execute_ts: AtomicI64::new(0),
+        }
+    }
+
+    pub async fn execute_query(
         &self,
         stream_result: &mut QueryStreamResult,
         (part_id, ob_table): (i64, Arc<ObTable>),
@@ -1934,12 +1888,12 @@ impl StreamQuerier for ObTableClientStreamQuerier {
             .store(current_time_millis(), Ordering::Relaxed);
 
         let mut result = ObTableQueryResult::new();
-        match ob_table.execute_payload(payload, &mut result) {
+        match ob_table.execute_payload(payload, &mut result).await {
             Ok(()) => self.client.reset_table_failure(&self.table_name),
             Err(e) => {
                 if let Err(e) = self.client.on_table_op_failure(&self.table_name, &e) {
                     error!(
-                        "ObTableClientStreamQuerier::execute_query on_table_op_failure err: {}.",
+                        "StreamQuerier::execute_query on_table_op_failure err: {}.",
                         e
                     );
                 }
@@ -1952,7 +1906,7 @@ impl StreamQuerier for ObTableClientStreamQuerier {
         Ok(row_count)
     }
 
-    fn execute_stream(
+    pub async fn execute_stream(
         &self,
         stream_result: &mut QueryStreamResult,
         (part_id, ob_table): (i64, Arc<ObTable>),
@@ -1961,12 +1915,12 @@ impl StreamQuerier for ObTableClientStreamQuerier {
         let is_stream_next = payload.is_stream_next();
 
         let mut result = ObTableQueryResult::new();
-        match ob_table.execute_payload(payload, &mut result) {
+        match ob_table.execute_payload(payload, &mut result).await {
             Ok(()) => self.client.reset_table_failure(&self.table_name),
             Err(e) => {
                 if let Err(e) = self.client.on_table_op_failure(&self.table_name, &e) {
                     error!(
-                        "ObTableClientStreamQuerier::execute_query on_table_op_failure err: {}.",
+                        "StreamQuerier::execute_query on_table_op_failure err: {}.",
                         e
                     );
                 }
@@ -1983,8 +1937,9 @@ impl StreamQuerier for ObTableClientStreamQuerier {
     }
 }
 
-/// TODO refactor with ObTableQueryImpl
-struct ObTableClientQueryImpl {
+pub const PRIMARY_INDEX_NAME: &str = "PRIMARY";
+
+pub struct ObTableClientQueryImpl {
     operation_timeout: Option<Duration>,
     entity_type: ObTableEntityType,
     table_name: String,
@@ -2006,10 +1961,8 @@ impl ObTableClientQueryImpl {
     fn reset(&mut self) {
         self.table_query = ObTableQuery::new();
     }
-}
 
-impl TableQuery for ObTableClientQueryImpl {
-    fn execute(&self) -> Result<QueryResultSet> {
+    pub async fn execute(&self) -> Result<QueryResultSet> {
         let mut partition_table: HashMap<i64, (i64, Arc<ObTable>)> = HashMap::new();
 
         self.table_query.verify()?;
@@ -2026,6 +1979,9 @@ impl TableQuery for ObTableClientQueryImpl {
             )?;
 
             for (part_id, ob_table) in pairs {
+                if partition_table.contains_key(&part_id) {
+                    continue;
+                }
                 partition_table.insert(part_id, (part_id, ob_table));
             }
         }
@@ -2033,10 +1989,7 @@ impl TableQuery for ObTableClientQueryImpl {
         let start = Instant::now();
 
         let mut stream_result = QueryStreamResult::new(
-            Arc::new(ObTableClientStreamQuerier::new(
-                &self.table_name,
-                self.client.clone(),
-            )),
+            Arc::new(StreamQuerier::new(&self.table_name, self.client.clone())),
             self.table_query.clone(),
         );
 
@@ -2045,7 +1998,7 @@ impl TableQuery for ObTableClientQueryImpl {
         stream_result.set_expectant(partition_table);
         stream_result.set_operation_timeout(self.operation_timeout);
         stream_result.set_flag(self.client.config.log_level_flag);
-        stream_result.init()?;
+        stream_result.init().await?;
 
         let result = QueryResultSet::from_stream_result(stream_result);
 
@@ -2055,22 +2008,22 @@ impl TableQuery for ObTableClientQueryImpl {
     }
 
     #[inline]
-    fn get_table_name(&self) -> String {
+    pub fn get_table_name(&self) -> String {
         self.table_name.to_owned()
     }
 
     #[inline]
-    fn set_entity_type(&mut self, entity_type: ObTableEntityType) {
+    pub fn set_entity_type(&mut self, entity_type: ObTableEntityType) {
         self.entity_type = entity_type;
     }
 
     #[inline]
-    fn entity_type(&self) -> ObTableEntityType {
+    pub fn entity_type(&self) -> ObTableEntityType {
         self.entity_type
     }
 
     #[inline]
-    fn select(mut self, columns: Vec<String>) -> Self
+    pub fn select(mut self, columns: Vec<String>) -> Self
     where
         Self: Sized,
     {
@@ -2079,7 +2032,7 @@ impl TableQuery for ObTableClientQueryImpl {
     }
 
     #[inline]
-    fn limit(mut self, offset: Option<i32>, limit: i32) -> Self
+    pub fn limit(mut self, offset: Option<i32>, limit: i32) -> Self
     where
         Self: Sized,
     {
@@ -2090,7 +2043,7 @@ impl TableQuery for ObTableClientQueryImpl {
         self
     }
 
-    fn add_scan_range(
+    pub fn add_scan_range(
         mut self,
         start: Vec<Value>,
         start_equals: bool,
@@ -2117,7 +2070,7 @@ impl TableQuery for ObTableClientQueryImpl {
         self
     }
 
-    fn add_scan_range_starts_with(mut self, start: Vec<Value>, start_equals: bool) -> Self
+    pub fn add_scan_range_starts_with(mut self, start: Vec<Value>, start_equals: bool) -> Self
     where
         Self: Sized,
     {
@@ -2139,7 +2092,7 @@ impl TableQuery for ObTableClientQueryImpl {
         self
     }
 
-    fn add_scan_range_ends_with(mut self, end: Vec<Value>, end_equals: bool) -> Self
+    pub fn add_scan_range_ends_with(mut self, end: Vec<Value>, end_equals: bool) -> Self
     where
         Self: Sized,
     {
@@ -2162,7 +2115,7 @@ impl TableQuery for ObTableClientQueryImpl {
     }
 
     #[inline]
-    fn scan_order(mut self, forward: bool) -> Self
+    pub fn scan_order(mut self, forward: bool) -> Self
     where
         Self: Sized,
     {
@@ -2172,7 +2125,7 @@ impl TableQuery for ObTableClientQueryImpl {
     }
 
     #[inline]
-    fn index_name(mut self, index_name: &str) -> Self
+    pub fn index_name(mut self, index_name: &str) -> Self
     where
         Self: Sized,
     {
@@ -2181,7 +2134,15 @@ impl TableQuery for ObTableClientQueryImpl {
     }
 
     #[inline]
-    fn filter_string(mut self, filter_string: &str) -> Self
+    pub fn primary_index(self) -> Self
+    where
+        Self: Sized,
+    {
+        self.index_name(PRIMARY_INDEX_NAME)
+    }
+
+    #[inline]
+    pub fn filter_string(mut self, filter_string: &str) -> Self
     where
         Self: Sized,
     {
@@ -2190,7 +2151,7 @@ impl TableQuery for ObTableClientQueryImpl {
     }
 
     #[inline]
-    fn htable_filter(mut self, filter: ObHTableFilter) -> Self
+    pub fn htable_filter(mut self, filter: ObHTableFilter) -> Self
     where
         Self: Sized,
     {
@@ -2199,7 +2160,7 @@ impl TableQuery for ObTableClientQueryImpl {
     }
 
     #[inline]
-    fn batch_size(mut self, batch_size: i32) -> Self
+    pub fn batch_size(mut self, batch_size: i32) -> Self
     where
         Self: Sized,
     {
@@ -2208,7 +2169,7 @@ impl TableQuery for ObTableClientQueryImpl {
     }
 
     #[inline]
-    fn operation_timeout(mut self, timeout: Duration) -> Self
+    pub fn operation_timeout(mut self, timeout: Duration) -> Self
     where
         Self: Sized,
     {
@@ -2217,7 +2178,7 @@ impl TableQuery for ObTableClientQueryImpl {
     }
 
     #[inline]
-    fn clear(&mut self) {
+    pub fn clear(&mut self) {
         self.reset();
     }
 }
@@ -2386,7 +2347,6 @@ impl Builder {
         let runtimes = Arc::new(build_obkv_runtimes(&self.config));
 
         Ok(ObTableClient {
-            runtimes: runtimes.clone(),
             inner: Arc::new(ObTableClientInner::internal_new(
                 self.param_url,
                 self.full_user_name,

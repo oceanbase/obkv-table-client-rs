@@ -39,7 +39,7 @@ impl Proxy {
         Proxy(conn_pool)
     }
 
-    pub fn execute<T: ObPayload, R: ObPayload>(
+    pub async fn execute<T: ObPayload, R: ObPayload>(
         &self,
         payload: &mut T,
         response: &mut R,
@@ -50,7 +50,7 @@ impl Proxy {
 
         OBKV_PROXY_METRICS.observe_proxy_misc("conn_load", conn.load() as f64);
 
-        let res = conn.execute(payload, response);
+        let res = conn.execute(payload, response).await;
         if res.is_ok() || conn.is_active() {
             return res;
         }
@@ -81,7 +81,7 @@ impl Proxy {
             );
 
             let conn = self.0.get()?;
-            let res = conn.execute(payload, response);
+            let res = conn.execute(payload, response).await;
             if res.is_ok() || conn.is_active() {
                 OBKV_PROXY_METRICS.observe_proxy_misc("retry_times", retry_cnt as f64);
                 return res;

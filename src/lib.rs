@@ -51,15 +51,15 @@ pub mod error;
 mod location;
 pub mod monitors;
 mod rpc;
-mod runtime;
+pub mod runtime;
 pub mod serde_obkv;
 mod util;
 pub use self::{
     client::{
-        query::{QueryResultSet, TableQuery},
+        query::QueryResultSet,
         table::ObTable,
         table_client::{Builder, ObTableClient, RunningMode},
-        ClientConfig, Table, TableOpResult,
+        ClientConfig, TableOpResult,
     },
     monitors::prometheus::dump_metrics,
     rpc::{

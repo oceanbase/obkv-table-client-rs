@@ -5,7 +5,7 @@ export OBKV_YCSB_BINARY ?= $(ROOT)/../target/$(MODE)/obkv-ycsb
 
 database ?= obkv
 workload ?= $(ROOT)/workloads/workload_obkv.toml
-threads ?= 200
+threads ?= 400
 
 build-test:
 	cargo build --$(MODE)

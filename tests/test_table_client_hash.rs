@@ -20,9 +20,9 @@ pub mod test_table_client_base;
 #[allow(unused)]
 mod utils;
 
-use obkv::{Table, Value};
+use obkv::Value;
 use serial_test_derive::serial;
-use test_log::test;
+use tokio::task;
 
 // ```sql
 // CREATE TABLE `TEST_VARCHAR_TABLE_HASH_CONCURRENT` (
@@ -32,16 +32,17 @@ use test_log::test;
 // ) DEFAULT CHARSET = utf8mb4 COMPRESSION = 'lz4_1.0' REPLICA_NUM = 3 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 10
 // partition by hash(c1) partitions 16;
 // ```
-#[test]
+#[tokio::test]
 #[serial]
-fn test_concurrent() {
-    let client = utils::common::build_normal_client();
+async fn test_concurrent() {
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
+    let client = client_handle.await.unwrap();
     const TABLE_NAME: &str = "TEST_VARCHAR_TABLE_HASH_CONCURRENT";
     client.add_row_key_element(TABLE_NAME, vec!["c1".to_string()]);
     let test = test_table_client_base::BaseTest::new(client);
 
-    test.test_bigint_concurrent(TABLE_NAME);
-    test.clean_bigint_table(TABLE_NAME);
+    test.test_bigint_concurrent(TABLE_NAME).await;
+    test.clean_bigint_table(TABLE_NAME).await;
 }
 
 // ```sql
@@ -52,9 +53,10 @@ fn test_concurrent() {
 // PRIMARY KEY (`c1`, `c1sk`)) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'lz4_1.0' REPLICA_NUM = 3 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 10
 // partition by hash(`c1`) partitions 16;
 // ```
-#[test]
-fn test_obtable_client_hash() {
-    let client = utils::common::build_normal_client();
+#[tokio::test]
+async fn test_obtable_client_hash() {
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
+    let client = client_handle.await.unwrap();
     const TABLE_NAME: &str = "TEST_TABLE_BATCH_HASH";
     client.add_row_key_element(TABLE_NAME, vec!["c1".to_string(), "c1sb".to_string()]);
 
@@ -74,6 +76,6 @@ fn test_obtable_client_hash() {
         vec!["c2".to_owned()],
         vec![Value::from("batchValue_1")],
     );
-    let result = client.execute_batch(TABLE_NAME, batch_op);
+    let result = client.execute_batch(TABLE_NAME, batch_op).await;
     assert!(result.is_ok());
 }

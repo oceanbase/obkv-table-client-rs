@@ -19,32 +19,39 @@
 #[allow(unused)]
 mod utils;
 
-use obkv::{ResultCodes, Table, TableQuery, Value};
-use test_log::test;
+use obkv::{ResultCodes, Value};
+use tokio::task;
 
-#[test]
-fn test_obtable_client_curd() {
-    let client = utils::common::build_normal_client();
+#[tokio::test]
+async fn test_obtable_client_curd() {
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
+    let client = client_handle.await.unwrap();
     const TEST_TABLE_NAME: &str = "test_varchar_table";
 
-    let result = client.delete(TEST_TABLE_NAME, vec![Value::from("foo")]);
+    let result = client
+        .delete(TEST_TABLE_NAME, vec![Value::from("foo")])
+        .await;
     assert!(result.is_ok());
 
-    let result = client.insert(
-        TEST_TABLE_NAME,
-        vec![Value::from("foo")],
-        vec!["c2".to_owned()],
-        vec![Value::from("bar")],
-    );
+    let result = client
+        .insert(
+            TEST_TABLE_NAME,
+            vec![Value::from("foo")],
+            vec!["c2".to_owned()],
+            vec![Value::from("bar")],
+        )
+        .await;
     assert!(result.is_ok());
     let result = result.unwrap();
     assert_eq!(1, result);
 
-    let result = client.get(
-        TEST_TABLE_NAME,
-        vec![Value::from("foo")],
-        vec!["c2".to_owned()],
-    );
+    let result = client
+        .get(
+            TEST_TABLE_NAME,
+            vec![Value::from("foo")],
+            vec!["c2".to_owned()],
+        )
+        .await;
     assert!(result.is_ok());
     let mut result = result.unwrap();
     assert_eq!(1, result.len());
@@ -52,29 +59,27 @@ fn test_obtable_client_curd() {
     assert!(value.is_string());
     assert_eq!("bar", value.as_string());
 
-    let result = client.update(
-        TEST_TABLE_NAME,
-        vec![Value::from("foo")],
-        vec!["c2".to_owned()],
-        vec![Value::from("car")],
-    );
+    let result = client
+        .update(
+            TEST_TABLE_NAME,
+            vec![Value::from("foo")],
+            vec!["c2".to_owned()],
+            vec![Value::from("car")],
+        )
+        .await;
 
     let query = client
         .query(TEST_TABLE_NAME)
         .select(vec!["c1".to_owned(), "c2".to_owned()])
         .add_scan_range(vec![Value::get_min()], true, vec![Value::get_max()], true);
 
-    let result_set = query.execute();
+    let result_set = query.execute().await;
 
     assert!(result_set.is_ok());
 
-    let result_set = result_set.unwrap();
+    let mut result_set = result_set.unwrap();
 
     assert!(result_set.cache_size() > 0);
-
-    for row in result_set {
-        println!("{row:?}");
-    }
 
     assert!(result.is_ok());
 
@@ -82,11 +87,19 @@ fn test_obtable_client_curd() {
 
     assert_eq!(1, result);
 
-    let result = client.get(
-        TEST_TABLE_NAME,
-        vec![Value::from("foo")],
-        vec!["c2".to_owned()],
-    );
+    if let Err(e) = result_set.close().await {
+        println!("Error: {e}");
+    }
+
+    drop(result_set);
+
+    let result = client
+        .get(
+            TEST_TABLE_NAME,
+            vec![Value::from("foo")],
+            vec!["c2".to_owned()],
+        )
+        .await;
     assert!(result.is_ok());
     let mut result = result.unwrap();
     assert_eq!(1, result.len());
@@ -94,13 +107,16 @@ fn test_obtable_client_curd() {
     assert!(value.is_string());
     assert_eq!("car", value.as_string());
 
-    let result = client.delete(TEST_TABLE_NAME, vec![Value::from("foo")]);
+    let result = client
+        .delete(TEST_TABLE_NAME, vec![Value::from("foo")])
+        .await;
     assert!(result.is_ok());
 }
 
-#[test]
-fn test_obtable_client_batch_op() {
-    let client = utils::common::build_normal_client();
+#[tokio::test]
+async fn test_obtable_client_batch_op() {
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
+    let client = client_handle.await.unwrap();
     const TEST_TABLE_NAME: &str = "test_varchar_table";
 
     let test_key1 = "batchop-row-key-1";
@@ -119,14 +135,16 @@ fn test_obtable_client_batch_op() {
         vec!["c2".to_owned()],
         vec![Value::from("p2")],
     );
-    let result = client.execute_batch(TEST_TABLE_NAME, batch_op);
+    let result = client.execute_batch(TEST_TABLE_NAME, batch_op).await;
     assert!(result.is_ok());
 
-    let result = client.get(
-        TEST_TABLE_NAME,
-        vec![Value::from(test_key1)],
-        vec!["c2".to_owned()],
-    );
+    let result = client
+        .get(
+            TEST_TABLE_NAME,
+            vec![Value::from(test_key1)],
+            vec!["c2".to_owned()],
+        )
+        .await;
     assert!(result.is_ok());
     let mut result = result.unwrap();
     assert_eq!(1, result.len());
@@ -152,14 +170,16 @@ fn test_obtable_client_batch_op() {
         vec![Value::from("p4")],
     );
 
-    let result = client.execute_batch(TEST_TABLE_NAME, batch_op);
+    let result = client.execute_batch(TEST_TABLE_NAME, batch_op).await;
     assert!(result.is_ok());
 
-    let result = client.get(
-        TEST_TABLE_NAME,
-        vec![Value::from(test_key2)],
-        vec!["c2".to_owned()],
-    );
+    let result = client
+        .get(
+            TEST_TABLE_NAME,
+            vec![Value::from(test_key2)],
+            vec!["c2".to_owned()],
+        )
+        .await;
     assert!(result.is_ok());
     let mut result = result.unwrap();
     assert_eq!(1, result.len());
@@ -186,16 +206,18 @@ fn test_obtable_client_batch_op() {
         vec![Value::from("p0")],
     );
 
-    let result = client.execute_batch(TEST_TABLE_NAME, batch_op);
+    let result = client.execute_batch(TEST_TABLE_NAME, batch_op).await;
     assert!(result.is_err());
     let code = result.err().unwrap().ob_result_code().unwrap();
     assert_eq!(code, ResultCodes::OB_ERR_PRIMARY_KEY_DUPLICATE);
 
-    let result = client.get(
-        TEST_TABLE_NAME,
-        vec![Value::from(test_key2)],
-        vec!["c2".to_owned()],
-    );
+    let result = client
+        .get(
+            TEST_TABLE_NAME,
+            vec![Value::from(test_key2)],
+            vec!["c2".to_owned()],
+        )
+        .await;
     assert!(result.is_ok());
     let mut result = result.unwrap();
     assert_eq!(1, result.len());

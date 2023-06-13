@@ -28,7 +28,7 @@ use std::{
 
 #[allow(unused)]
 use obkv::error::CommonErrCode;
-use obkv::{Builder, ObTableClient, RunningMode, Table};
+use obkv::{Builder, ObTableClient, RunningMode};
 
 // TODO: use test conf to control which environments to test.
 const TEST_FULL_USER_NAME: &str = "test";
