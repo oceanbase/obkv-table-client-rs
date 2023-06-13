@@ -57,7 +57,7 @@ use crate::{
     error::{CommonErrCode, Error, Error::Common as CommonErr, Result},
     monitors::{prometheus::OBKV_CLIENT_REGISTRY, rpc_metrics::RpcMetrics},
     rpc::{protocol::TraceId, util::checksum::ob_crc64::ObCrc64Sse42},
-    runtime::{AbortOnDropMany, JoinHandle, RuntimeRef},
+    runtime::{JoinHandle, RuntimeRef},
 };
 
 lazy_static! {
@@ -188,7 +188,6 @@ impl ConnectionSender {
         if let Some(writer) = mem::take(&mut self.writer) {
             writer.await??
         }
-        self.sender.closed().await;
         Ok(())
     }
 
@@ -196,7 +195,7 @@ impl ConnectionSender {
     /// Requests in the requests map will be not be cancelled
     fn shutdown(&mut self) -> Result<()> {
         if let Some(writer) = mem::take(&mut self.writer) {
-            let _drop_helper = AbortOnDropMany(vec![writer]);
+            writer.abort()
         }
         Ok(())
     }
