@@ -245,7 +245,7 @@ impl ObjMeta {
     }
 
     pub fn new_numeric_meta(obj_type: ObjType) -> ObjMeta {
-        ObjMeta::new(obj_type, CollationLevel::Numeric, CollationType::Binary, 10)
+        ObjMeta::new(obj_type, CollationLevel::Numeric, CollationType::Binary, -1)
     }
 
     fn default_obj_meta(t: ObjType) -> ObjMeta {
@@ -379,6 +379,13 @@ impl Value {
         self.as_i64() as u64
     }
 
+    pub fn as_f64(&self) -> f64 {
+        match self {
+            Value::Double(i, _) => *i,
+            _ => panic!("Fail to cast: {self:?}"),
+        }
+    }
+
     pub fn as_i32(&self) -> i32 {
         match self {
             Value::Int32(i, _) => *i,
@@ -389,6 +396,13 @@ impl Value {
 
     pub fn as_u32(&self) -> u32 {
         self.as_i32() as u32
+    }
+
+    pub fn as_f32(&self) -> f32 {
+        match self {
+            Value::Float(i, _) => *i,
+            _ => panic!("Fail to cast: {self:?}"),
+        }
     }
 
     pub fn as_i16(&self) -> i16 {
