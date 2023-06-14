@@ -23,16 +23,15 @@ pub mod util;
 use std::{
     collections::HashMap,
     mem,
-    net::{SocketAddr, ToSocketAddrs},
+    net::{IpAddr, SocketAddr, ToSocketAddrs},
     ops::Drop,
     sync::{
-        atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
         Arc, Mutex,
     },
     time::{Duration, Instant},
 };
 
-use byteorder::{BigEndian, ByteOrder};
 use bytes::BytesMut;
 use socket2::{Domain, Protocol, Socket, TcpKeepalive, Type};
 use tokio::{
@@ -45,7 +44,6 @@ use tokio::{
     time::Duration as TokioDuration,
 };
 use tokio_util::codec::{Decoder, Encoder};
-use uuid::Uuid;
 
 use self::protocol::{
     payloads::{ObRpcResultCode, ObTableLoginRequest, ObTableLoginResult},
@@ -222,8 +220,8 @@ pub struct Connection {
     credential: Option<Vec<u8>>,
     tenant_id: Option<u64>,
     active: Arc<AtomicBool>,
-    id: u32,
-    trace_id_counter: AtomicU32,
+    id: u64,
+    trace_id_counter: AtomicU64,
     load: AtomicUsize,
 }
 
@@ -247,7 +245,7 @@ impl<'a> Drop for LoadCounter<'a> {
 
 impl Connection {
     fn internal_new(
-        id: u32,
+        id: u64,
         addr: SocketAddr,
         stream: TcpStream,
         runtimes: RuntimesRef,
@@ -293,7 +291,7 @@ impl Connection {
             tenant_id: None,
             active,
             id,
-            trace_id_counter: AtomicU32::new(0),
+            trace_id_counter: AtomicU64::new(0),
             load: AtomicUsize::new(0),
         })
     }
@@ -441,11 +439,9 @@ impl Connection {
 
     #[inline]
     fn gen_trace_id(&self) -> TraceId {
-        // NOTE: TraceId actually uses two numbers with type u32 but its type in
-        // protocol is u64  for extensibility.
         TraceId(
-            self.id as u64,
-            self.trace_id_counter.fetch_add(1, Ordering::Relaxed) as u64,
+            self.id,
+            self.trace_id_counter.fetch_add(1, Ordering::Relaxed),
         )
     }
 
@@ -891,13 +887,32 @@ impl Builder {
         self
     }
 
-    pub async fn build(self) -> Result<Connection> {
-        let uuid = Uuid::new_v4();
-        let id = BigEndian::read_u32(uuid.as_bytes());
-        self.build_with_id(id).await
+    fn generate_uniqueid(addr: SocketAddr) -> u64 {
+        /* uniqueId(64 bytes)
+         * ip_: 32
+         * port_: 16;
+         * is_user_request_: 1;
+         * is_ipv6_:1;
+         * reserved_: 14;
+         */
+        let mut unique_id: u64 = 0;
+        let ip = addr.ip();
+        let reserved = 0u64;
+        match ip {
+            IpAddr::V4(ipv4) => {
+                unique_id |= u32::from_be_bytes(ipv4.octets()) as u64;
+            }
+            IpAddr::V6(_) => {
+                warn!("ipv6 is not supported, use ipv4 instead");
+            }
+        }
+        unique_id |= (addr.port() as u64) << 32;
+        unique_id |= 1 << 48;
+        unique_id |= reserved;
+        unique_id
     }
 
-    pub async fn build_with_id(self, id: u32) -> Result<Connection> {
+    pub async fn build(self) -> Result<Connection> {
         let addr = (&self.ip[..], self.port).to_socket_addrs()?.next();
 
         if let Some(addr) = addr {
@@ -926,6 +941,8 @@ impl Builder {
                 })
                 .unwrap();
 
+            let id = Self::generate_uniqueid(stream.local_addr().unwrap());
+
             debug!("Builder::build succeeds in connecting to {}.", addr);
 
             let result = Connection::internal_new(
@@ -950,6 +967,8 @@ impl Builder {
 
 #[cfg(test)]
 mod test {
+    use std::net::Ipv4Addr;
+
     use bytes::{BufMut, BytesMut};
 
     use super::*;
@@ -966,6 +985,15 @@ mod test {
             content,
             header: None,
         }
+    }
+
+    #[test]
+    fn test_unique_id() {
+        let id = Builder::generate_uniqueid(SocketAddr::new(
+            IpAddr::V4(Ipv4Addr::new(192, 128, 0, 1)),
+            2109,
+        ));
+        assert_eq!(290536292352001u64, id);
     }
 
     #[tokio::test]
