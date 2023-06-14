@@ -22,12 +22,13 @@ use std::{
     u32,
 };
 
-use scheduled_thread_pool::ScheduledThreadPool;
+use tokio::time::sleep;
 
 use super::{Builder as ConnBuilder, Connection};
 use crate::{
     error::{CommonErrCode, Error::Common as CommonErr, Result},
     proxy::OBKV_PROXY_METRICS,
+    runtime::RuntimeRef,
 };
 
 const MIN_BUILD_RETRY_INTERVAL_MS: u64 = 50 * 1000;
@@ -50,7 +51,7 @@ impl PoolInner {
         }
     }
 
-    // TODO: use more random/fair policy to pick a connection
+    // TODO: use more random / fair policy to pick a connection / async remove conn
     fn try_get(&mut self) -> (Option<Arc<Connection>>, usize) {
         let mut removed = 0usize;
         while !self.conns.is_empty() {
@@ -114,13 +115,11 @@ impl ConnPool {
     fn internal_new(
         min_conn_num: usize,
         max_conn_num: usize,
-        conn_init_thread_pool: Arc<ScheduledThreadPool>,
         builder: ConnBuilder,
     ) -> Result<Self> {
         let shared_pool = Arc::new(SharedPool::internal_new(
             min_conn_num,
             max_conn_num,
-            conn_init_thread_pool,
             builder,
         )?);
         Ok(Self {
@@ -169,34 +168,36 @@ impl ConnPool {
             shared_pool: &Arc<SharedPool>,
             delay: Duration,
             min_build_retry_interval: Duration,
-            retry_num: usize,
+            mut retry_num: usize,
             build_retry_limit: usize,
         ) {
-            if retry_num > build_retry_limit {
-                let mut inner = shared_pool.inner.lock().unwrap();
-                inner.unpend_conn();
-                error!("ConnPool::add_connection_background::bg_add fail to build connection after {} retries", retry_num);
-                return;
-            }
-
             let weak_shared_pool = Arc::downgrade(shared_pool);
-            shared_pool.conn_init_thread_pool.execute_after(delay, move || {
-                let shared_pool = match weak_shared_pool.upgrade() {
-                    None => return,
-                    Some(p) => p,
-                };
-
-                match shared_pool.build_conn() {
-                    Ok(conn) => {
-                        let mut inner = shared_pool.inner.lock().unwrap();
-                        inner.add_conn(conn);
-                        shared_pool.cond.notify_all();
-                    }
-                    Err(e) => {
-                        error!("ConnPool::add_connection_background::bg_add fail to build a connection after {} retries, err:{}", retry_num, e);
-                        let delay = cmp::max(min_build_retry_interval, delay);
-                        let delay = cmp::min(shared_pool.conn_builder.connect_timeout / 2, delay * 2);
-                        bg_add(&shared_pool, delay, min_build_retry_interval, retry_num + 1, build_retry_limit);
+            shared_pool.clone().runtime.spawn(async move {
+                loop {
+                    let shared_pool = match weak_shared_pool.upgrade() {
+                        None => return,
+                        Some(p) => p,
+                    };
+                    match shared_pool.build_conn().await {
+                        Ok(conn) => {
+                            let mut inner = shared_pool.inner.lock().unwrap();
+                            inner.add_conn(conn);
+                            shared_pool.cond.notify_all();
+                            break;
+                        }
+                        Err(e) => {
+                            retry_num += 1;
+                            if retry_num > build_retry_limit {
+                                let mut inner = shared_pool.inner.lock().unwrap();
+                                inner.unpend_conn();
+                                error!("ConnPool::add_connection_background::bg_add fail to build connection after {} retries", retry_num);
+                                return;
+                            }
+                            error!("ConnPool::add_connection_background::bg_add fail to build a connection after {} retries, err:{}", retry_num, e);
+                            let delay = cmp::max(min_build_retry_interval, delay);
+                            let delay = cmp::min(shared_pool.conn_builder.connect_timeout / 2, delay * 2);
+                            sleep(delay).await;
+                        }
                     }
                 }
             });
@@ -319,34 +320,35 @@ struct SharedPool {
     conn_builder: ConnBuilder,
     inner: Mutex<PoolInner>,
     cond: Condvar,
-    conn_init_thread_pool: Arc<ScheduledThreadPool>,
+    runtime: RuntimeRef,
 }
 
 impl SharedPool {
     fn internal_new(
         min_conn_num: usize,
         max_conn_num: usize,
-        conn_init_thread_pool: Arc<ScheduledThreadPool>,
         builder: ConnBuilder,
     ) -> Result<Self> {
+        let runtimes = builder.runtimes.as_ref().unwrap().clone();
         Ok(Self {
             min_conn_num,
             max_conn_num,
             conn_builder: builder,
             inner: Mutex::new(PoolInner::new(max_conn_num)),
             cond: Condvar::new(),
-            conn_init_thread_pool,
+            runtime: runtimes.bg_runtime.clone(),
         })
     }
 
-    fn build_conn(&self) -> Result<Connection> {
-        let mut conn = self.conn_builder.clone().build()?;
+    async fn build_conn(&self) -> Result<Connection> {
+        let mut conn = self.conn_builder.clone().build().await?;
         conn.connect(
             &self.conn_builder.tenant_name,
             &self.conn_builder.user_name,
             &self.conn_builder.database_name,
             &self.conn_builder.password,
-        )?;
+        )
+        .await?;
         Ok(conn)
     }
 }
@@ -354,7 +356,6 @@ impl SharedPool {
 pub struct Builder {
     min_conn_num: usize,
     max_conn_num: usize,
-    conn_init_thread_pool: Option<Arc<ScheduledThreadPool>>,
     conn_builder: Option<ConnBuilder>,
 }
 
@@ -363,7 +364,6 @@ impl Default for Builder {
         Self {
             min_conn_num: 1,
             max_conn_num: 3,
-            conn_init_thread_pool: None,
             conn_builder: None,
         }
     }
@@ -389,19 +389,10 @@ impl Builder {
         self
     }
 
-    pub fn conn_init_thread_pool(mut self, thread_pool: Arc<ScheduledThreadPool>) -> Self {
-        self.conn_init_thread_pool = Some(thread_pool);
-        self
-    }
-
     pub fn build(self) -> Result<ConnPool> {
         assert!(
             self.conn_builder.is_some(),
             "missing necessary conn builder"
-        );
-        assert!(
-            self.conn_init_thread_pool.is_some(),
-            "missing necessary conn init thread pool"
         );
         assert!(
             self.min_conn_num <= self.max_conn_num,
@@ -412,7 +403,6 @@ impl Builder {
         let pool = ConnPool::internal_new(
             self.min_conn_num,
             self.max_conn_num,
-            self.conn_init_thread_pool.unwrap(),
             self.conn_builder.unwrap(),
         )?;
         pool.wait_for_initialized()?;
@@ -425,6 +415,7 @@ mod test {
     use std::sync::atomic::Ordering;
 
     use super::*;
+    use crate::client::table_client::ObClientRuntimes;
 
     fn gen_test_conn_builder() -> ConnBuilder {
         ConnBuilder::new()
@@ -439,22 +430,21 @@ mod test {
             .user_name("test")
             .database_name("test")
             .password("test")
+            .runtimes(Arc::new(ObClientRuntimes::test_default()))
     }
 
     fn gen_test_conn_pool(min_conn_num: usize, max_conn_num: usize) -> ConnPool {
         let conn_builder = gen_test_conn_builder();
-        let thread_pool = ScheduledThreadPool::new(2);
         let builder = Builder::new()
             .min_conn_num(min_conn_num)
             .max_conn_num(max_conn_num)
-            .conn_init_thread_pool(Arc::new(thread_pool))
             .conn_builder(conn_builder);
         builder.build().expect("fail to build ConnPool")
     }
 
-    #[test]
+    #[tokio::test]
     #[ignore]
-    fn check_conn_valid() {
+    async fn check_conn_valid() {
         let (min_conn_num, max_conn_num) = (2, 3);
         let pool = gen_test_conn_pool(min_conn_num, max_conn_num);
         let conn_num = pool.idle_conn_num();
@@ -467,9 +457,9 @@ mod test {
         assert!(conn.is_active(), "conn should be active");
     }
 
-    #[test]
+    #[tokio::test]
     #[ignore]
-    fn rebuild_conn() {
+    async fn rebuild_conn() {
         let (min_conn_num, max_conn_num) = (3, 5);
         let pool = gen_test_conn_pool(min_conn_num, max_conn_num);
         for _ in 0..max_conn_num * 2 {
@@ -479,9 +469,9 @@ mod test {
         }
     }
 
-    #[test]
+    #[tokio::test]
     #[ignore]
-    fn test_pool_inner_remove() {
+    async fn test_pool_inner_remove() {
         let max_conn_num = 2;
         let mut pool_inner = PoolInner::new(max_conn_num);
         let conn_builder = gen_test_conn_builder();
@@ -489,6 +479,7 @@ mod test {
             let conn = conn_builder
                 .clone()
                 .build()
+                .await
                 .expect("fail to build connection");
             assert!(!conn.is_active(), "should be inactive");
             pool_inner.pend_conn();

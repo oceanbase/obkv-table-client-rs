@@ -17,11 +17,7 @@
 
 use std::{collections::HashMap, time::Duration};
 
-use crate::{
-    error::Result,
-    rpc::protocol::{payloads::ObTableBatchOperation, DEFAULT_FLAG},
-    serde_obkv::value::Value,
-};
+use crate::{rpc::protocol::DEFAULT_FLAG, serde_obkv::value::Value};
 
 mod ocp;
 pub mod query;
@@ -33,83 +29,6 @@ use self::table::ObTable;
 pub enum TableOpResult {
     AffectedRows(i64),
     RetrieveRows(HashMap<String, Value>),
-}
-
-pub trait Table {
-    /// Insert a record
-    fn insert(
-        &self,
-        table_name: &str,
-        row_keys: Vec<Value>,
-        columns: Vec<String>,
-        properties: Vec<Value>,
-    ) -> Result<i64>;
-
-    /// Update a record
-    fn update(
-        &self,
-        table_name: &str,
-        row_keys: Vec<Value>,
-        columns: Vec<String>,
-        properties: Vec<Value>,
-    ) -> Result<i64>;
-
-    /// Insert or update a record, if the record exists, update it.
-    /// Otherwise insert a new one.
-    fn insert_or_update(
-        &self,
-        table_name: &str,
-        row_keys: Vec<Value>,
-        columns: Vec<String>,
-        properties: Vec<Value>,
-    ) -> Result<i64>;
-
-    /// Replace a record.
-    fn replace(
-        &self,
-        table_name: &str,
-        row_keys: Vec<Value>,
-        columns: Vec<String>,
-        properties: Vec<Value>,
-    ) -> Result<i64>;
-
-    /// Append
-    fn append(
-        &self,
-        table_name: &str,
-        row_keys: Vec<Value>,
-        columns: Vec<String>,
-        properties: Vec<Value>,
-    ) -> Result<i64>;
-
-    /// Increment
-    fn increment(
-        &self,
-        table_name: &str,
-        row_keys: Vec<Value>,
-        columns: Vec<String>,
-        properties: Vec<Value>,
-    ) -> Result<i64>;
-
-    /// Delete records by row keys.
-    fn delete(&self, table_name: &str, row_keys: Vec<Value>) -> Result<i64>;
-
-    /// Retrieve a record by row keys.
-    fn get(
-        &self,
-        table_name: &str,
-        row_keys: Vec<Value>,
-        columns: Vec<String>,
-    ) -> Result<HashMap<String, Value>>;
-
-    /// Create a batch operation
-    fn batch_operation(&self, ops_num_hint: usize) -> ObTableBatchOperation;
-    // Execute a batch operation
-    fn execute_batch(
-        &self,
-        table_name: &str,
-        batch_op: ObTableBatchOperation,
-    ) -> Result<Vec<TableOpResult>>;
 }
 
 /// ObTable client config
@@ -136,8 +55,6 @@ pub struct ClientConfig {
     pub table_entry_refresh_try_interval: Duration,
     pub table_entry_refresh_continuous_failure_ceiling: usize,
 
-    pub table_batch_op_thread_num: usize,
-
     pub server_address_priority_timeout: Duration,
     pub runtime_continuous_failure_ceiling: usize,
 
@@ -152,8 +69,13 @@ pub struct ClientConfig {
 
     pub max_conns_per_server: usize,
     pub min_idle_conns_per_server: usize,
-    pub conn_init_thread_num: usize,
     pub query_concurrency_limit: Option<usize>,
+
+    pub tcp_recv_thread_num: usize,
+    pub tcp_send_thread_num: usize,
+    pub bg_thread_num: usize,
+
+    pub max_inflight_reqs_per_conn: usize,
 
     pub log_level_flag: u16,
 }
@@ -180,8 +102,6 @@ impl Default for ClientConfig {
             table_entry_refresh_try_interval: Duration::from_millis(20),
             table_entry_refresh_continuous_failure_ceiling: 10,
 
-            table_batch_op_thread_num: 16,
-
             server_address_priority_timeout: Duration::from_secs(1800),
             runtime_continuous_failure_ceiling: 100,
 
@@ -196,8 +116,13 @@ impl Default for ClientConfig {
 
             max_conns_per_server: 10,
             min_idle_conns_per_server: 5,
-            conn_init_thread_num: 2,
             query_concurrency_limit: None,
+
+            tcp_recv_thread_num: 4,
+            tcp_send_thread_num: 2,
+            bg_thread_num: 2,
+
+            max_inflight_reqs_per_conn: 100,
 
             log_level_flag: DEFAULT_FLAG,
         }

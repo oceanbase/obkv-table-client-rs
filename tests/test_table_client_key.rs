@@ -20,10 +20,10 @@ pub mod test_table_client_base;
 #[allow(unused)]
 mod utils;
 
-use obkv::{ObTableClient, Table, TableQuery, Value};
+use obkv::{ObTableClient, Value};
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use serial_test_derive::serial;
-use test_log::test;
+use tokio::task;
 
 // ```sql
 // CREATE TABLE `TEST_VARCHAR_TABLE_KEY` (
@@ -33,24 +33,25 @@ use test_log::test;
 // ) DEFAULT CHARSET = utf8mb4 COMPRESSION = 'lz4_1.0' REPLICA_NUM = 3 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 10
 // partition by key(c1) partitions 16;
 // ```
-#[test]
-fn test_varchar_all_ob() {
-    let client = utils::common::build_normal_client();
+#[tokio::test]
+async fn test_varchar_all_ob() {
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
+    let client = client_handle.await.unwrap();
     const TABLE_NAME: &str = "TEST_VARCHAR_TABLE_KEY";
     client.add_row_key_element(TABLE_NAME, vec!["c1".to_string()]);
     let test = test_table_client_base::BaseTest::new(client);
 
-    test.clean_varchar_table(TABLE_NAME);
-    test.test_varchar_insert(TABLE_NAME);
+    test.clean_varchar_table(TABLE_NAME).await;
+    test.test_varchar_insert(TABLE_NAME).await;
     for _ in 0..10 {
-        test.test_varchar_get(TABLE_NAME);
+        test.test_varchar_get(TABLE_NAME).await;
     }
-    test.test_varchar_update(TABLE_NAME);
-    test.test_varchar_insert_or_update(TABLE_NAME);
-    test.test_varchar_replace(TABLE_NAME);
-    test.test_varchar_append(TABLE_NAME);
-    test.test_varchar_increment(TABLE_NAME);
-    test.clean_varchar_table(TABLE_NAME);
+    test.test_varchar_update(TABLE_NAME).await;
+    test.test_varchar_insert_or_update(TABLE_NAME).await;
+    test.test_varchar_replace(TABLE_NAME).await;
+    test.test_varchar_append(TABLE_NAME).await;
+    test.test_varchar_increment(TABLE_NAME).await;
+    test.clean_varchar_table(TABLE_NAME).await;
 }
 
 // ```sql
@@ -61,41 +62,50 @@ fn test_varchar_all_ob() {
 // ) DEFAULT CHARSET = utf8mb4 COMPRESSION = 'lz4_1.0' REPLICA_NUM = 3 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 10
 // partition by key(c1) partitions 16;
 // ```
-#[test]
-fn test_blob_all() {
-    let client = utils::common::build_normal_client();
+#[tokio::test]
+async fn test_blob_all() {
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
+    let client = client_handle.await.unwrap();
     const TABLE_NAME: &str = "TEST_BLOB_TABLE_KEY";
     client.add_row_key_element(TABLE_NAME, vec!["c1".to_string()]);
     let test = test_table_client_base::BaseTest::new(client);
 
-    test.clean_blob_table(TABLE_NAME);
-    test.test_blob_insert(TABLE_NAME);
+    test.clean_blob_table(TABLE_NAME).await;
+    test.test_blob_insert(TABLE_NAME).await;
     for _ in 0..10 {
-        test.test_blob_get(TABLE_NAME);
+        test.test_blob_get(TABLE_NAME).await;
     }
-    test.test_blob_update(TABLE_NAME);
-    test.test_blob_insert_or_update(TABLE_NAME);
-    test.test_blob_replace(TABLE_NAME);
-    test.clean_blob_table(TABLE_NAME);
+    test.test_blob_update(TABLE_NAME).await;
+    test.test_blob_insert_or_update(TABLE_NAME).await;
+    test.test_blob_replace(TABLE_NAME).await;
+    test.clean_blob_table(TABLE_NAME).await;
 }
 
-#[test]
-fn test_ob_exceptions() {
-    let client = utils::common::build_normal_client();
+#[tokio::test]
+async fn test_ob_exceptions() {
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
+    let client = client_handle.await.unwrap();
     const TABLE_NAME: &str = "TEST_VARCHAR_TABLE_KEY";
     client.add_row_key_element(TABLE_NAME, vec!["c1".to_string()]);
     let test = test_table_client_base::BaseTest::new(client);
 
-    test.test_varchar_exceptions(TABLE_NAME);
+    test.test_varchar_exceptions(TABLE_NAME).await;
 }
 
-fn insert_query_test_record(client: &ObTableClient, table_name: &str, row_key: &str, value: &str) {
-    let result = client.insert_or_update(
-        table_name,
-        vec![Value::from(row_key)],
-        vec!["c2".to_owned()],
-        vec![Value::from(value)],
-    );
+async fn insert_query_test_record(
+    client: &ObTableClient,
+    table_name: &str,
+    row_key: &str,
+    value: &str,
+) {
+    let result = client
+        .insert_or_update(
+            table_name,
+            vec![Value::from(row_key)],
+            vec!["c2".to_owned()],
+            vec![Value::from(value)],
+        )
+        .await;
     assert!(result.is_ok());
     assert_eq!(1, result.unwrap());
 }
@@ -108,18 +118,22 @@ fn insert_query_test_record(client: &ObTableClient, table_name: &str, row_key: &
 // ) DEFAULT CHARSET = utf8mb4 COMPRESSION = 'lz4_1.0' REPLICA_NUM = 3 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 10
 // partition by key(c1) partitions 16;
 // ```
-#[test]
+#[tokio::test]
 #[serial]
-fn test_query() {
-    let client = utils::common::build_normal_client();
-    const TABLE_NAME: &str = "TEST_QUERY_TABLE_KEY";
-    client.add_row_key_element(TABLE_NAME, vec!["c1".to_string()]);
-    insert_query_test_record(&client, TABLE_NAME, "123", "123c2");
-    insert_query_test_record(&client, TABLE_NAME, "124", "124c2");
-    insert_query_test_record(&client, TABLE_NAME, "234", "234c2");
-    insert_query_test_record(&client, TABLE_NAME, "456", "456c2");
-    insert_query_test_record(&client, TABLE_NAME, "567", "567c2");
+async fn test_query() {
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
+    let client = client_handle.await.unwrap();
 
+    const TABLE_NAME: &str = "TEST_QUERY_TABLE_KEY";
+    clean_table(client.to_owned(), TABLE_NAME);
+    client.add_row_key_element(TABLE_NAME, vec!["c1".to_string()]);
+    insert_query_test_record(&client, TABLE_NAME, "123", "123c2").await;
+    insert_query_test_record(&client, TABLE_NAME, "124", "124c2").await;
+    insert_query_test_record(&client, TABLE_NAME, "234", "234c2").await;
+    insert_query_test_record(&client, TABLE_NAME, "456", "456c2").await;
+    insert_query_test_record(&client, TABLE_NAME, "567", "567c2").await;
+
+    println!("test_query");
     let query = client
         .query(TABLE_NAME)
         .select(vec!["c2".to_owned()])
@@ -131,7 +145,8 @@ fn test_query() {
             true,
         );
 
-    let result_set = query.execute();
+    let result_set = query.execute().await;
+    println!("result_set: {result_set:?}");
     assert!(result_set.is_ok());
     let result_set = result_set.unwrap();
     assert_eq!(5, result_set.cache_size());
@@ -148,7 +163,7 @@ fn test_query() {
             true,
         );
 
-    let result_set = query.execute();
+    let result_set = query.execute().await;
     assert!(result_set.is_ok());
     let mut result_set = result_set.unwrap();
     assert_eq!(1, result_set.cache_size());
@@ -156,6 +171,7 @@ fn test_query() {
         "123c2",
         result_set
             .next()
+            .await
             .unwrap()
             .unwrap()
             .remove("c2")
@@ -175,7 +191,7 @@ fn test_query() {
             true,
         );
 
-    let result_set = query.execute();
+    let result_set = query.execute().await;
     assert!(result_set.is_ok());
     let result_set = result_set.unwrap();
     assert_eq!(3, result_set.cache_size());
@@ -192,7 +208,7 @@ fn test_query() {
             false,
         );
 
-    let result_set = query.execute();
+    let result_set = query.execute().await;
     assert!(result_set.is_ok());
     let result_set = result_set.unwrap();
     assert_eq!(3, result_set.cache_size());
@@ -209,7 +225,7 @@ fn test_query() {
             true,
         );
 
-    let result_set = query.execute();
+    let result_set = query.execute().await;
     assert!(result_set.is_ok());
     let result_set = result_set.unwrap();
     assert_eq!(4, result_set.cache_size());
@@ -226,7 +242,7 @@ fn test_query() {
             false,
         );
 
-    let result_set = query.execute();
+    let result_set = query.execute().await;
     assert!(result_set.is_ok());
     let result_set = result_set.unwrap();
     assert_eq!(4, result_set.cache_size());
@@ -243,7 +259,7 @@ fn test_query() {
             true,
         );
 
-    let result_set = query.execute();
+    let result_set = query.execute().await;
     assert!(result_set.is_ok());
     let result_set = result_set.unwrap();
     assert_eq!(2, result_set.cache_size());
@@ -266,7 +282,7 @@ fn test_query() {
             true,
         );
 
-    let result_set = query.execute();
+    let result_set = query.execute().await;
     assert!(result_set.is_ok());
     let result_set = result_set.unwrap();
     assert_eq!(4, result_set.cache_size());
@@ -283,7 +299,7 @@ fn test_query() {
             true,
         );
 
-    let result_set = query.execute();
+    let result_set = query.execute().await;
     assert!(result_set.is_ok());
     let mut result_set = result_set.unwrap();
     assert_eq!(1, result_set.cache_size());
@@ -291,6 +307,7 @@ fn test_query() {
         "124c2",
         result_set
             .next()
+            .await
             .unwrap()
             .unwrap()
             .remove("c2")
@@ -310,7 +327,7 @@ fn test_query() {
             true,
         );
 
-    let result_set = query.execute();
+    let result_set = query.execute().await;
     assert!(result_set.is_ok());
     let result_set = result_set.unwrap();
     assert_eq!(0, result_set.cache_size());
@@ -326,15 +343,16 @@ fn test_query() {
 // ) DEFAULT CHARSET = utf8mb4 COMPRESSION = 'lz4_1.0' REPLICA_NUM = 3 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 10
 // partition by key(c1) partitions 16;
 // ```
-#[test]
+#[tokio::test]
 #[serial]
-fn test_stream_query() {
-    let client = utils::common::build_normal_client();
+async fn test_stream_query() {
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
+    let client = client_handle.await.unwrap();
     const TABLE_NAME: &str = "TEST_STREAM_QUERY_TABLE_KEY";
     client.add_row_key_element(TABLE_NAME, vec!["c1".to_string()]);
     let test = test_table_client_base::BaseTest::new(client);
 
-    test.test_stream_query(TABLE_NAME);
+    test.test_stream_query(TABLE_NAME).await;
 }
 
 // ```sql
@@ -345,15 +363,16 @@ fn test_stream_query() {
 // ) DEFAULT CHARSET = utf8mb4 COMPRESSION = 'lz4_1.0' REPLICA_NUM = 3 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 10
 // partition by key(c1) partitions 16;
 // ```
-#[test]
-fn test_concurrent() {
-    let client = utils::common::build_normal_client();
+#[tokio::test]
+async fn test_concurrent() {
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
+    let client = client_handle.await.unwrap();
     const TABLE_NAME: &str = "TEST_VARCHAR_TABLE_KEY_CONCURRENT";
     client.add_row_key_element(TABLE_NAME, vec!["c1".to_string()]);
     let test = test_table_client_base::BaseTest::new(client);
 
-    test.test_varchar_concurrent(TABLE_NAME);
-    test.clean_varchar_table(TABLE_NAME);
+    test.test_varchar_concurrent(TABLE_NAME).await;
+    test.clean_varchar_table(TABLE_NAME).await;
 }
 
 // ```sql
@@ -364,9 +383,10 @@ fn test_concurrent() {
 // PRIMARY KEY (`c1`, `c1sk`)) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'lz4_1.0' REPLICA_NUM = 3 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 10
 // partition by key(`c1`) partitions 16;
 // ```
-#[test]
-fn test_batch() {
-    let client = utils::common::build_normal_client();
+#[tokio::test]
+async fn test_batch() {
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
+    let client = client_handle.await.unwrap();
     const TABLE_NAME: &str = "TEST_TABLE_BATCH_KEY";
     client.add_row_key_element(TABLE_NAME, vec!["c1".to_string(), "c1sb".to_string()]);
 
@@ -384,7 +404,7 @@ fn test_batch() {
         vec!["c2".to_owned()],
         vec![Value::from("batchValue_1")],
     );
-    let result = client.execute_batch(TABLE_NAME, batch_op);
+    let result = client.execute_batch(TABLE_NAME, batch_op).await;
     assert!(result.is_ok());
 }
 
@@ -393,27 +413,32 @@ fn clean_table(client: ObTableClient, table_name: &str) {
     client.execute_sql(&sql).expect("clean table failed");
 }
 
-#[test]
-fn test_partition_varchar_general_ci() {
-    let client = utils::common::build_normal_client();
+#[tokio::test]
+async fn test_partition_varchar_general_ci() {
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
+    let client = client_handle.await.unwrap();
     const VARCHAR_TABLE_NAME: &str = "TEST_TABLE_PARTITION_VARCHAR_KEY";
     client.add_row_key_element(VARCHAR_TABLE_NAME, vec!["c1".to_string()]);
 
     // test varchar partition
     for i in 926..977 {
         let rowkey = format!("{i}");
-        let result = client.delete(VARCHAR_TABLE_NAME, vec![Value::from(rowkey.to_owned())]);
+        let result = client
+            .delete(VARCHAR_TABLE_NAME, vec![Value::from(rowkey.to_owned())])
+            .await;
         assert!(result.is_ok());
         let insert_sql = format!("insert into {VARCHAR_TABLE_NAME} values({rowkey}, 'value');");
         client.execute_sql(&insert_sql).expect("fail to insert");
     }
     for i in 926..977 {
         let rowkey = format!("{i}");
-        let result = client.get(
-            VARCHAR_TABLE_NAME,
-            vec![Value::from(rowkey.to_owned())],
-            vec!["c2".to_owned()],
-        );
+        let result = client
+            .get(
+                VARCHAR_TABLE_NAME,
+                vec![Value::from(rowkey.to_owned())],
+                vec!["c2".to_owned()],
+            )
+            .await;
         assert!(result.is_ok());
         let result = result.unwrap();
         assert_eq!(1, result.len());
@@ -425,24 +450,29 @@ fn test_partition_varchar_general_ci() {
             .take(512)
             .collect();
         let sql_rowkey = format!("'{rowkey}'");
-        let result = client.delete(VARCHAR_TABLE_NAME, vec![Value::from(rowkey.to_owned())]);
+        let result = client
+            .delete(VARCHAR_TABLE_NAME, vec![Value::from(rowkey.to_owned())])
+            .await;
         assert!(result.is_ok());
         let insert_sql = format!("insert into {VARCHAR_TABLE_NAME} values({sql_rowkey}, 'value');");
         client.execute_sql(&insert_sql).expect("fail to insert");
-        let result = client.get(
-            VARCHAR_TABLE_NAME,
-            vec![Value::from(rowkey.to_owned())],
-            vec!["c2".to_owned()],
-        );
+        let result = client
+            .get(
+                VARCHAR_TABLE_NAME,
+                vec![Value::from(rowkey.to_owned())],
+                vec!["c2".to_owned()],
+            )
+            .await;
         assert!(result.is_ok());
         let result = result.unwrap();
         assert_eq!(1, result.len());
     }
 }
 
-#[test]
-fn test_partition_complex() {
-    let client = utils::common::build_normal_client();
+#[tokio::test]
+async fn test_partition_complex() {
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
+    let client = client_handle.await.unwrap();
     const TABLE_NAME: &str = "TEST_TABLE_PARTITION_COMPLEX_KEY";
     client.add_row_key_element(
         TABLE_NAME,
@@ -462,37 +492,42 @@ fn test_partition_complex() {
             .collect();
         let sql_rowkeyc2 = format!("'{rowkey_c2}'");
         let sql_rowkeyc3 = format!("'{rowkey_c3}'");
-        let result = client.delete(
-            TABLE_NAME,
-            vec![
-                Value::from(i as u64),
-                Value::from(rowkey_c2.to_owned()),
-                Value::from(rowkey_c3.to_owned()),
-            ],
-        );
+        let result = client
+            .delete(
+                TABLE_NAME,
+                vec![
+                    Value::from(i as u64),
+                    Value::from(rowkey_c2.to_owned()),
+                    Value::from(rowkey_c3.to_owned()),
+                ],
+            )
+            .await;
         assert!(result.is_ok());
         let insert_sql = format!(
             "insert into {TABLE_NAME} values({i}, {sql_rowkeyc2}, {sql_rowkeyc3}, 'value');"
         );
         client.execute_sql(&insert_sql).expect("fail to insert");
-        let result = client.get(
-            TABLE_NAME,
-            vec![
-                Value::from(i as u64),
-                Value::from(rowkey_c2.to_owned()),
-                Value::from(rowkey_c3.to_owned()),
-            ],
-            vec!["c4".to_owned()],
-        );
+        let result = client
+            .get(
+                TABLE_NAME,
+                vec![
+                    Value::from(i as u64),
+                    Value::from(rowkey_c2.to_owned()),
+                    Value::from(rowkey_c3.to_owned()),
+                ],
+                vec!["c4".to_owned()],
+            )
+            .await;
         assert!(result.is_ok());
         let result = result.unwrap();
         assert_eq!(1, result.len());
     }
 }
 
-#[test]
-fn test_sub_partition_complex() {
-    let client = utils::common::build_normal_client();
+#[tokio::test]
+async fn test_sub_partition_complex() {
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
+    let client = client_handle.await.unwrap();
     const TABLE_NAME: &str = "TEST_TABLE_SUB_PARTITION_COMPLEX_KEY";
     client.add_row_key_element(
         TABLE_NAME,
@@ -505,6 +540,7 @@ fn test_sub_partition_complex() {
     );
 
     clean_table(client.to_owned(), TABLE_NAME);
+
     for i in 0..16 {
         let rowkey_c2: String = thread_rng()
             .sample_iter(&Alphanumeric)
@@ -524,28 +560,32 @@ fn test_sub_partition_complex() {
         let sql_rowkeyc2 = format!("'{rowkey_c2}'");
         let sql_rowkeyc3 = format!("'{rowkey_c3}'");
         let sql_rowkeyc4 = format!("'{rowkey_c4}'");
-        let result = client.delete(
-            TABLE_NAME,
-            vec![
-                Value::from(i as i64),
-                Value::from(rowkey_c2.to_owned()),
-                Value::from(rowkey_c3.to_owned()),
-                Value::from(rowkey_c4.to_owned()),
-            ],
-        );
+        let result = client
+            .delete(
+                TABLE_NAME,
+                vec![
+                    Value::from(i as i64),
+                    Value::from(rowkey_c2.to_owned()),
+                    Value::from(rowkey_c3.to_owned()),
+                    Value::from(rowkey_c4.to_owned()),
+                ],
+            )
+            .await;
         assert!(result.is_ok());
-        let insert_sql =  format!("insert into {TABLE_NAME} values({i}, {sql_rowkeyc2}, {sql_rowkeyc3}, {sql_rowkeyc4}, 'value');");
+        let insert_sql = format!("insert into {TABLE_NAME} values({i}, {sql_rowkeyc2}, {sql_rowkeyc3}, {sql_rowkeyc4}, 'value');");
         client.execute_sql(&insert_sql).expect("fail to insert");
-        let result = client.get(
-            TABLE_NAME,
-            vec![
-                Value::from(i as i64),
-                Value::from(rowkey_c2.to_owned()),
-                Value::from(rowkey_c3.to_owned()),
-                Value::from(rowkey_c4.to_owned()),
-            ],
-            vec!["c5".to_owned()],
-        );
+        let result = client
+            .get(
+                TABLE_NAME,
+                vec![
+                    Value::from(i as i64),
+                    Value::from(rowkey_c2.to_owned()),
+                    Value::from(rowkey_c3.to_owned()),
+                    Value::from(rowkey_c4.to_owned()),
+                ],
+                vec!["c5".to_owned()],
+            )
+            .await;
         assert!(result.is_ok());
         let result = result.unwrap();
         assert_eq!(1, result.len());

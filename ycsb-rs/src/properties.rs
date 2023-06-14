@@ -20,6 +20,10 @@ fn field_length_default() -> u64 {
     100
 }
 
+fn batch_count_default() -> u64 {
+    100
+}
+
 fn read_proportion_default() -> f64 {
     0.95
 }
@@ -37,6 +41,14 @@ fn scan_proportion_default() -> f64 {
 }
 
 fn read_modify_write_proportion_default() -> f64 {
+    0.0
+}
+
+fn batch_read_proportion_default() -> f64 {
+    0.0
+}
+
+fn batch_insertup_proportion_default() -> f64 {
     0.0
 }
 
@@ -100,8 +112,20 @@ fn min_idle_conns_per_server_default() -> usize {
     1
 }
 
-fn conn_init_thread_num_default() -> usize {
+fn bg_thread_num_default() -> usize {
     2
+}
+
+fn tcp_recv_thread_num_default() -> usize {
+    6
+}
+
+fn tcp_send_thread_num_default() -> usize {
+    4
+}
+
+fn ycsb_thread_num_default() -> usize {
+    16
 }
 
 #[derive(Deserialize, Debug)]
@@ -133,6 +157,8 @@ pub struct Properties {
     pub request_distribution: String,
     #[serde(default = "field_length_default", rename = "fieldlength")]
     pub field_length: u64,
+    #[serde(default = "batch_count_default", rename = "batchcount")]
+    pub batch_count: u64,
 
     // read, update, insert, scan, read-modify-write
     #[serde(default = "read_proportion_default", rename = "readproportion")]
@@ -148,6 +174,16 @@ pub struct Properties {
         rename = "readmodifywriteproportion"
     )]
     pub read_modify_write_proportion: f64,
+    #[serde(
+        default = "batch_read_proportion_default",
+        rename = "batchreadproportion"
+    )]
+    pub batch_read_proportion: f64,
+    #[serde(
+        default = "batch_insertup_proportion_default",
+        rename = "batchinsertupproportion"
+    )]
+    pub batch_insertup_proportion: f64,
 
     #[serde(default = "full_user_name_default", rename = "full_user_name")]
     pub full_user_name: String,
@@ -196,9 +232,18 @@ pub struct Properties {
         rename = "min_idle_conns_per_server"
     )]
     pub min_idle_conns_per_server: usize,
+    #[serde(default = "bg_thread_num_default", rename = "bg_thread_num")]
+    pub bg_thread_num: usize,
     #[serde(
-        default = "conn_init_thread_num_default",
-        rename = "conn_init_thread_num"
+        default = "tcp_recv_thread_num_default",
+        rename = "tcp_recv_thread_num"
     )]
-    pub conn_init_thread_num: usize,
+    pub tcp_recv_thread_num: usize,
+    #[serde(
+        default = "tcp_send_thread_num_default",
+        rename = "tcp_send_thread_num"
+    )]
+    pub tcp_send_thread_num: usize,
+    #[serde(default = "ycsb_thread_num_default", rename = "ycsb_thread_num")]
+    pub ycsb_thread_num: usize,
 }

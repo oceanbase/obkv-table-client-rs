@@ -20,15 +20,11 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 use anyhow::Result;
 #[allow(unused)]
 use obkv::error::CommonErrCode;
-use obkv::{Builder, ClientConfig, ObTableClient, RunningMode, Table, TableQuery, Value};
+use obkv::{Builder, ClientConfig, ObTableClient, RunningMode, TableOpResult, Value};
 
-use crate::{db::DB, properties::Properties};
+use crate::properties::Properties;
 
 const PRIMARY_KEY: &str = "ycsb_key";
-const COLUMN_NAMES: [&str; 10] = [
-    "field0", "field1", "field2", "field3", "field4", "field5", "field6", "field7", "field8",
-    "field9",
-];
 
 pub struct OBKVClientInitStruct {
     pub full_user_name: String,
@@ -48,7 +44,10 @@ pub struct OBKVClientInitStruct {
 
     pub max_conns_per_server: usize,
     pub min_idle_conns_per_server: usize,
-    pub conn_init_thread_num: usize,
+
+    pub bg_thread_num: usize,
+    pub tcp_recv_thread_num: usize,
+    pub tcp_send_thread_num: usize,
 }
 
 impl OBKVClientInitStruct {
@@ -68,7 +67,9 @@ impl OBKVClientInitStruct {
             refresh_workers_num: props.refresh_workers_num,
             max_conns_per_server: props.max_conns_per_server,
             min_idle_conns_per_server: props.min_idle_conns_per_server,
-            conn_init_thread_num: props.conn_init_thread_num,
+            bg_thread_num: props.bg_thread_num,
+            tcp_recv_thread_num: props.tcp_recv_thread_num,
+            tcp_send_thread_num: props.tcp_send_thread_num,
         }
     }
 }
@@ -89,7 +90,9 @@ impl OBKVClient {
             refresh_workers_num: config.refresh_workers_num,
             max_conns_per_server: config.max_conns_per_server,
             min_idle_conns_per_server: config.min_idle_conns_per_server,
-            conn_init_thread_num: config.conn_init_thread_num,
+            bg_thread_num: config.bg_thread_num,
+            tcp_recv_thread_num: config.tcp_recv_thread_num,
+            tcp_send_thread_num: config.tcp_send_thread_num,
             ..Default::default()
         };
         let builder = Builder::new()
@@ -120,14 +123,17 @@ impl OBKVClient {
     pub fn build_hbase_client(config: Arc<OBKVClientInitStruct>) -> Result<Self> {
         Self::build_client(config, RunningMode::HBase)
     }
-}
 
-impl DB for OBKVClient {
-    fn init(&self) -> Result<()> {
+    pub fn init(&self) -> Result<()> {
         Ok(())
     }
 
-    fn insert(&self, table: &str, key: &str, values: &HashMap<&str, String>) -> Result<()> {
+    pub async fn insert(
+        &self,
+        table: &str,
+        key: &str,
+        values: &HashMap<&str, String>,
+    ) -> Result<()> {
         let mut columns: Vec<String> = Vec::new();
         let mut properties: Vec<Value> = Vec::new();
         for (key, value) in values {
@@ -142,6 +148,7 @@ impl DB for OBKVClient {
                 columns,
                 properties,
             )
+            .await
             .expect("fail to insert_or update");
         assert_eq!(1, result);
 
@@ -149,18 +156,29 @@ impl DB for OBKVClient {
     }
 
     #[allow(unused)]
-    fn read(&self, table: &str, key: &str, result: &mut HashMap<String, String>) -> Result<()> {
-        let result = self.client.get(
-            table,
-            vec![Value::from(key)],
-            COLUMN_NAMES.iter().map(|s| s.to_string()).collect(),
-        );
+    pub async fn read(
+        &self,
+        table: &str,
+        key: &str,
+        columns: &Vec<String>,
+        result: &mut HashMap<String, String>,
+    ) -> Result<()> {
+        let result = self
+            .client
+            .get(table, vec![Value::from(key)], columns.to_owned())
+            .await;
+        assert!(result.is_ok());
         assert_eq!(10, result?.len());
 
         Ok(())
     }
 
-    fn update(&self, table: &str, key: &str, values: &HashMap<&str, String>) -> Result<()> {
+    pub async fn update(
+        &self,
+        table: &str,
+        key: &str,
+        values: &HashMap<&str, String>,
+    ) -> Result<()> {
         let mut columns: Vec<String> = Vec::new();
         let mut properties: Vec<Value> = Vec::new();
         for (key, value) in values {
@@ -175,33 +193,110 @@ impl DB for OBKVClient {
                 columns,
                 properties,
             )
-            .expect("fail to insert_or update");
+            .await
+            .expect("fail to insert or update");
         assert_eq!(10, result);
 
         Ok(())
     }
 
     #[allow(unused)]
-    fn scan(
+    pub async fn scan(
         &self,
         table: &str,
         startkey: &str,
         endkey: &str,
+        columns: &Vec<String>,
         result: &mut HashMap<String, String>,
     ) -> Result<()> {
-        let result = self
+        let query = self
             .client
             .query(table)
-            .select(COLUMN_NAMES.iter().map(|s| s.to_string()).collect())
+            .select(columns.to_owned())
             .primary_index()
             .add_scan_range(
                 vec![Value::from(startkey)],
                 true,
                 vec![Value::from(endkey)],
                 true,
-            )
-            .execute();
+            );
+        let result = query.execute().await;
         assert!(result.is_ok());
+        Ok(())
+    }
+
+    #[allow(unused)]
+    pub async fn batch_read(
+        &self,
+        table: &str,
+        keys: &Vec<String>,
+        columns: &Vec<String>,
+        result: &mut HashMap<String, String>,
+    ) -> Result<()> {
+        let mut batch_op = self.client.batch_operation(keys.len());
+        for key in keys {
+            batch_op.get(vec![Value::from(key.to_owned())], columns.to_owned());
+        }
+        let results = self.client.execute_batch(table, batch_op).await;
+
+        // Verify the results
+        assert!(results.is_ok());
+        let results = results.unwrap();
+        assert_eq!(results.len(), keys.len());
+        for result in results {
+            match result {
+                TableOpResult::RetrieveRows(rows) => {
+                    assert_eq!(10, rows.len());
+                }
+                _ => {
+                    unreachable!()
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    #[allow(unused)]
+    pub async fn batch_insertup(
+        &self,
+        table: &str,
+        keys: &Vec<String>,
+        fields: &Vec<String>,
+        values: &Vec<String>,
+    ) -> Result<()> {
+        let mut batch_op = self.client.batch_operation(keys.len());
+        for key in keys {
+            let mut properties: Vec<Value> = Vec::new();
+            for value in values {
+                properties.push(Value::from(value.to_owned()));
+            }
+            batch_op.insert_or_update(
+                vec![Value::from(key.to_owned())],
+                fields.to_owned(),
+                properties,
+            );
+        }
+        let results = self.client.execute_batch(table, batch_op).await;
+
+        // Verify the results
+        if results.is_err() {
+            println!("Error: {:?}", results.as_ref().err());
+        }
+        assert!(results.is_ok());
+        let results = results.unwrap();
+        assert_eq!(results.len(), keys.len());
+        for result in results {
+            match result {
+                TableOpResult::AffectedRows(affected_rows) => {
+                    assert_eq!(1, affected_rows);
+                }
+                _ => {
+                    unreachable!()
+                }
+            }
+        }
+
         Ok(())
     }
 }

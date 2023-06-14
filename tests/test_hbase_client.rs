@@ -19,8 +19,8 @@
 #[allow(unused)]
 mod utils;
 
-use obkv::{Table, Value};
-use test_log::test;
+use obkv::Value;
+use tokio::task;
 
 // ```sql
 // CREATE TABLE TEST_HBASE_HASH(
@@ -31,9 +31,10 @@ use test_log::test;
 //   PRIMARY KEY (K, Q, T)
 // ) partition by hash(K) partitions 16;
 // ```
-#[test]
-fn test_obtable_partition_hash_crud() {
-    let client = utils::common::build_hbase_client();
+#[tokio::test]
+async fn test_obtable_partition_hash_crud() {
+    let client_handle = task::spawn_blocking(utils::common::build_hbase_client);
+    let client = client_handle.await.unwrap();
     const TEST_TABLE: &str = "TEST_HBASE_HASH";
 
     let rowk_keys = vec![
@@ -41,20 +42,24 @@ fn test_obtable_partition_hash_crud() {
         Value::from("partition"),
         Value::from(1550225864000i64),
     ];
-    let result = client.delete(TEST_TABLE, rowk_keys.clone());
+    let result = client.delete(TEST_TABLE, rowk_keys.clone()).await;
     assert!(result.is_ok());
 
-    let result = client.insert(
-        TEST_TABLE,
-        rowk_keys.clone(),
-        vec!["V".to_owned()],
-        vec![Value::from("aa")],
-    );
+    let result = client
+        .insert(
+            TEST_TABLE,
+            rowk_keys.clone(),
+            vec!["V".to_owned()],
+            vec![Value::from("aa")],
+        )
+        .await;
     assert!(result.is_ok());
     let result = result.unwrap();
     assert_eq!(1, result);
 
-    let result = client.get(TEST_TABLE, rowk_keys.clone(), vec!["V".to_owned()]);
+    let result = client
+        .get(TEST_TABLE, rowk_keys.clone(), vec!["V".to_owned()])
+        .await;
     assert!(result.is_ok());
     let mut result = result.unwrap();
     assert_eq!(1, result.len());
@@ -62,12 +67,14 @@ fn test_obtable_partition_hash_crud() {
     assert!(value.is_bytes());
     assert_eq!("aa".to_owned().into_bytes(), value.as_bytes());
 
-    let result = client.update(
-        TEST_TABLE,
-        rowk_keys.clone(),
-        vec!["V".to_owned()],
-        vec![Value::from("bb")],
-    );
+    let result = client
+        .update(
+            TEST_TABLE,
+            rowk_keys.clone(),
+            vec!["V".to_owned()],
+            vec![Value::from("bb")],
+        )
+        .await;
 
     assert!(result.is_ok());
 
@@ -75,7 +82,9 @@ fn test_obtable_partition_hash_crud() {
 
     assert_eq!(1, result);
 
-    let result = client.get(TEST_TABLE, rowk_keys, vec!["V".to_owned()]);
+    let result = client
+        .get(TEST_TABLE, rowk_keys, vec!["V".to_owned()])
+        .await;
     assert!(result.is_ok());
     let mut result = result.unwrap();
     assert_eq!(1, result.len());
@@ -94,9 +103,10 @@ fn test_obtable_partition_hash_crud() {
 //  ) DEFAULT CHARSET = utf8mb4 COLLATE UTF8MB4_BIN COMPRESSION = 'lz4_1.0' REPLICA_NUM = 3  BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 10
 // partition by key(k) partitions 15;
 // ```
-#[test]
-fn test_obtable_partition_key_varbinary_crud() {
-    let client = utils::common::build_hbase_client();
+#[tokio::test]
+async fn test_obtable_partition_key_varbinary_crud() {
+    let client_handle = task::spawn_blocking(utils::common::build_hbase_client);
+    let client = client_handle.await.unwrap();
     const TEST_TABLE: &str = "TEST_HBASE_PARTITION";
 
     // same as java sdk, when k = partitionKey, after get_partition(&table_entry,
@@ -106,21 +116,25 @@ fn test_obtable_partition_key_varbinary_crud() {
         Value::from("partition"),
         Value::from(1550225864000i64),
     ];
-    let result = client.delete(TEST_TABLE, rowk_keys.clone());
+    let result = client.delete(TEST_TABLE, rowk_keys.clone()).await;
     result.unwrap();
     // assert!(result.is_ok());
 
-    let result = client.insert(
-        TEST_TABLE,
-        rowk_keys.clone(),
-        vec!["V".to_owned()],
-        vec![Value::from("aa")],
-    );
+    let result = client
+        .insert(
+            TEST_TABLE,
+            rowk_keys.clone(),
+            vec!["V".to_owned()],
+            vec![Value::from("aa")],
+        )
+        .await;
     assert!(result.is_ok());
     let result = result.unwrap();
     assert_eq!(1, result);
 
-    let result = client.get(TEST_TABLE, rowk_keys.clone(), vec!["V".to_owned()]);
+    let result = client
+        .get(TEST_TABLE, rowk_keys.clone(), vec!["V".to_owned()])
+        .await;
     assert!(result.is_ok());
     let mut result = result.unwrap();
     assert_eq!(1, result.len());
@@ -128,12 +142,14 @@ fn test_obtable_partition_key_varbinary_crud() {
     assert!(value.is_bytes());
     assert_eq!("aa".to_owned().into_bytes(), value.as_bytes());
 
-    let result = client.update(
-        TEST_TABLE,
-        rowk_keys.clone(),
-        vec!["V".to_owned()],
-        vec![Value::from("bb")],
-    );
+    let result = client
+        .update(
+            TEST_TABLE,
+            rowk_keys.clone(),
+            vec!["V".to_owned()],
+            vec![Value::from("bb")],
+        )
+        .await;
 
     assert!(result.is_ok());
 
@@ -141,7 +157,9 @@ fn test_obtable_partition_key_varbinary_crud() {
 
     assert_eq!(1, result);
 
-    let result = client.get(TEST_TABLE, rowk_keys, vec!["V".to_owned()]);
+    let result = client
+        .get(TEST_TABLE, rowk_keys, vec!["V".to_owned()])
+        .await;
     assert!(result.is_ok());
     let mut result = result.unwrap();
     assert_eq!(1, result.len());
@@ -162,9 +180,10 @@ fn test_obtable_partition_key_varbinary_crud() {
 // REPLICA_NUM = 3  BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE =
 // 134217728 PCTFREE = 10 partition by key(k) partitions 15;
 // ```
-#[test]
-fn test_obtable_partition_key_varchar_crud() {
-    let client = utils::common::build_hbase_client();
+#[tokio::test]
+async fn test_obtable_partition_key_varchar_crud() {
+    let client_handle = task::spawn_blocking(utils::common::build_hbase_client);
+    let client = client_handle.await.unwrap();
     const TABLE_NAME: &str = "TEST_HBASE_PARTITION";
 
     // same as java sdk, when k = partitionKey2, part_id = 9
@@ -173,21 +192,25 @@ fn test_obtable_partition_key_varchar_crud() {
         Value::from("partition"),
         Value::from(1550225864000i64),
     ];
-    let result = client.delete(TABLE_NAME, rowk_keys.clone());
+    let result = client.delete(TABLE_NAME, rowk_keys.clone()).await;
     result.unwrap();
     // assert!(result.is_ok());
 
-    let result = client.insert(
-        TABLE_NAME,
-        rowk_keys.clone(),
-        vec!["V".to_owned()],
-        vec![Value::from("aa")],
-    );
+    let result = client
+        .insert(
+            TABLE_NAME,
+            rowk_keys.clone(),
+            vec!["V".to_owned()],
+            vec![Value::from("aa")],
+        )
+        .await;
     assert!(result.is_ok());
     let result = result.unwrap();
     assert_eq!(1, result);
 
-    let result = client.get(TABLE_NAME, rowk_keys.clone(), vec!["V".to_owned()]);
+    let result = client
+        .get(TABLE_NAME, rowk_keys.clone(), vec!["V".to_owned()])
+        .await;
     assert!(result.is_ok());
     let mut result = result.unwrap();
     assert_eq!(1, result.len());
@@ -195,12 +218,14 @@ fn test_obtable_partition_key_varchar_crud() {
     assert!(value.is_bytes());
     assert_eq!("aa".to_owned().into_bytes(), value.as_bytes());
 
-    let result = client.update(
-        TABLE_NAME,
-        rowk_keys.clone(),
-        vec!["V".to_owned()],
-        vec![Value::from("bb")],
-    );
+    let result = client
+        .update(
+            TABLE_NAME,
+            rowk_keys.clone(),
+            vec!["V".to_owned()],
+            vec![Value::from("bb")],
+        )
+        .await;
 
     assert!(result.is_ok());
 
@@ -208,7 +233,9 @@ fn test_obtable_partition_key_varchar_crud() {
 
     assert_eq!(1, result);
 
-    let result = client.get(TABLE_NAME, rowk_keys, vec!["V".to_owned()]);
+    let result = client
+        .get(TABLE_NAME, rowk_keys, vec!["V".to_owned()])
+        .await;
     assert!(result.is_ok());
     let mut result = result.unwrap();
     assert_eq!(1, result.len());
@@ -226,9 +253,10 @@ fn test_obtable_partition_key_varchar_crud() {
 // primary key(K, Q, T)) DEFAULT CHARSET = utf8mb4 COLLATE UTF8MB4_BIN COMPRESSION = 'lz4_1.0' REPLICA_NUM = 3  BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 10
 // PARTITION BY RANGE columns (K) (PARTITION p0 VALUES LESS THAN ('a'), PARTITION p1 VALUES LESS THAN ('w'), PARTITION p2 VALUES LESS THAN MAXVALUE);
 // ```
-#[test]
-fn test_obtable_partition_range_crud() {
-    let client = utils::common::build_hbase_client();
+#[tokio::test]
+async fn test_obtable_partition_range_crud() {
+    let client_handle = task::spawn_blocking(utils::common::build_hbase_client);
+    let client = client_handle.await.unwrap();
     const TABLE_NAME: &str = "TEST_HBASE_RANGE";
 
     let rowk_keys = vec![
@@ -236,21 +264,25 @@ fn test_obtable_partition_range_crud() {
         Value::from("partition"),
         Value::from(1550225864000i64),
     ];
-    let result = client.delete(TABLE_NAME, rowk_keys.clone());
+    let result = client.delete(TABLE_NAME, rowk_keys.clone()).await;
+    assert!(result.is_ok());
     result.unwrap();
-    //        assert!(result.is_ok());
 
-    let result = client.insert(
-        TABLE_NAME,
-        rowk_keys.clone(),
-        vec!["V".to_owned()],
-        vec![Value::from("aa")],
-    );
+    let result = client
+        .insert(
+            TABLE_NAME,
+            rowk_keys.clone(),
+            vec!["V".to_owned()],
+            vec![Value::from("aa")],
+        )
+        .await;
     assert!(result.is_ok());
     let result = result.unwrap();
     assert_eq!(1, result);
 
-    let result = client.get(TABLE_NAME, rowk_keys.clone(), vec!["V".to_owned()]);
+    let result = client
+        .get(TABLE_NAME, rowk_keys.clone(), vec!["V".to_owned()])
+        .await;
     assert!(result.is_ok());
     let mut result = result.unwrap();
     assert_eq!(1, result.len());
@@ -258,12 +290,14 @@ fn test_obtable_partition_range_crud() {
     assert!(value.is_bytes());
     assert_eq!("aa".to_owned().into_bytes(), value.as_bytes());
 
-    let result = client.update(
-        TABLE_NAME,
-        rowk_keys.clone(),
-        vec!["V".to_owned()],
-        vec![Value::from("bb")],
-    );
+    let result = client
+        .update(
+            TABLE_NAME,
+            rowk_keys.clone(),
+            vec!["V".to_owned()],
+            vec![Value::from("bb")],
+        )
+        .await;
 
     assert!(result.is_ok());
 
@@ -271,7 +305,9 @@ fn test_obtable_partition_range_crud() {
 
     assert_eq!(1, result);
 
-    let result = client.get(TABLE_NAME, rowk_keys, vec!["V".to_owned()]);
+    let result = client
+        .get(TABLE_NAME, rowk_keys, vec!["V".to_owned()])
+        .await;
     assert!(result.is_ok());
     let mut result = result.unwrap();
     assert_eq!(1, result.len());

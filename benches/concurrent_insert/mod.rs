@@ -17,9 +17,10 @@
 
 extern crate obkv;
 
-use std::{sync::Arc, thread, time};
+use std::{sync::Arc, time};
 
-use obkv::{serde_obkv::value::Value, Builder, ObTableClient, RunningMode, Table};
+use obkv::{serde_obkv::value::Value, Builder, ObTableClient, RunningMode};
+use tokio::task;
 
 // TODO: use test conf to control which environments to test.
 const TEST_FULL_USER_NAME: &str = "test";
@@ -54,11 +55,11 @@ const TABLE_NAME: &str = "series_key_to_id_0";
 //  PRIMARY KEY(series_key),
 //  KEY index_id(series_id)
 // );
-fn concurrent_insert(client: Arc<ObTableClient>) {
+async fn concurrent_insert(client: Arc<ObTableClient>) {
     let mut thds = Vec::with_capacity(20);
     for i in 0..50 {
         let client = client.clone();
-        let thd = thread::spawn(move || {
+        let thd = task::spawn(async move {
             for j in i * 100..(i * 100 + 50) {
                 let series_key = format!("series_key_test_padding_padding_{j}");
                 let series_id = j * j;
@@ -69,6 +70,7 @@ fn concurrent_insert(client: Arc<ObTableClient>) {
                         vec!["series_id".to_owned()],
                         vec![Value::from(series_id as i64)],
                     )
+                    .await
                     .unwrap_or_else(|err| {
                         panic!("fail to insert row:{series_key} {series_id}, err:{err}")
                     });
@@ -78,18 +80,20 @@ fn concurrent_insert(client: Arc<ObTableClient>) {
     }
 
     for (i, thd) in thds.into_iter().enumerate() {
-        thd.join()
+        thd.await
             .unwrap_or_else(|_| panic!("thread#{i} fail to join"));
     }
 }
 
-fn main() {
-    let client = build_client(RunningMode::Normal);
+#[tokio::main]
+async fn main() {
+    let client_handle = task::spawn_blocking(|| build_client(RunningMode::Normal));
+    let client = client_handle.await.unwrap();
     client
         .truncate_table(TABLE_NAME)
         .expect("fail to truncate the table");
     let start = time::Instant::now();
-    concurrent_insert(Arc::new(client));
+    concurrent_insert(Arc::new(client)).await;
     let elapsed = time::Instant::now() - start;
     println!("Benches::concurrent_insert cost time:{elapsed:?}");
 }

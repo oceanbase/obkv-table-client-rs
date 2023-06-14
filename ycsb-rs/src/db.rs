@@ -21,10 +21,9 @@ pub trait DB {
     ) -> Result<()>;
 }
 
-pub fn create_db(db: &str, config: Arc<OBKVClientInitStruct>) -> Result<Rc<dyn DB>> {
+pub fn create_db(db: &str, _config: Arc<OBKVClientInitStruct>) -> Result<Rc<dyn DB>> {
     match db {
         "sqlite" => Ok(Rc::new(SQLite::new()?)),
-        "obkv" => Ok(Rc::new(OBKVClient::build_normal_client(config)?)),
         db => Err(anyhow!("{} is an invalid database name", db)),
     }
 }
