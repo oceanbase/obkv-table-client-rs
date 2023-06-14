@@ -889,11 +889,11 @@ impl Builder {
 
     fn generate_uniqueid(addr: SocketAddr) -> u64 {
         /* uniqueId(64 bytes)
-         * ip_: 32
-         * port_: 16;
-         * is_user_request_: 1;
-         * is_ipv6_:1;
-         * reserved_: 14;
+         * ip: 32
+         * port: 16;
+         * is_user_request: 1;
+         * is_ipv6: 1;
+         * reserved: 14;
          */
         let mut unique_id: u64 = 0;
         let ip = addr.ip();
@@ -906,8 +906,11 @@ impl Builder {
                 warn!("ipv6 is not supported, use ipv4 instead");
             }
         }
+        // set port
         unique_id |= (addr.port() as u64) << 32;
+        // set isUserRequest
         unique_id |= 1 << 48;
+        // set reserved
         unique_id |= reserved;
         unique_id
     }
