@@ -39,7 +39,8 @@ impl ObTableClient {
 A simple operation example is shown below:
 ```rust simple operation example
 async fn simple_operation() {
-    let client = build_normal_client();
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
+    let client = client_handle.await.unwrap();
 
     let result = client.insert(
         "your_table_name",
@@ -71,7 +72,8 @@ impl ObTableBatchOperation {
 A simple batch operation example is shown below:
 ```rust batch operation example
 async fn batch_operation() {
-    let client = utils::common::build_normal_client();
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
+    let client = client_handle.await.unwrap();
 
     //  set number of operations in batch_op
     let mut batch_op = client.batch_operation(2);
@@ -105,7 +107,8 @@ impl ObTableClientQueryImpl {
 A simple query example is shown below:
 ```rust query example
 async fn query() {
-    let client = utils::common::build_normal_client();
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
+    let client = client_handle.await.unwrap();
 
     let query = client
         .query("your_table_name")

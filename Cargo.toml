@@ -1,11 +1,11 @@
 [package]
 name = "obkv-table-client-rs"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["OceanBase OBKV Developers", "CeresDB Authors <ceresdbservice@gmail.com>"]
 edition = "2021"
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.0"
 authors = ["OceanBase OBKV Developers", "CeresDB Authors <ceresdbservice@gmail.com>"]
 edition = "2021"
 
