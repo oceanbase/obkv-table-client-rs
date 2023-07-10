@@ -240,7 +240,7 @@ PRIMARY KEY(series_key), KEY index_id(series_id));
 
 CREATE TABLE test_aggregation (
     `c1` int NOT NULL,
-    `c2` tinyint NOT NULL,
+    `c2` tinyint unsigned NOT NULL,
     `c3` double DEFAULT NULL,
     PRIMARY KEY(`c1`, `c2`)
 ) PARTITION BY KEY(`c1`) PARTITIONS 200;

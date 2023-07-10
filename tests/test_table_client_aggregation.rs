@@ -14,7 +14,7 @@ async fn test_obtable_client_aggregation() {
     /*
      * CREATE TABLE test_aggregation (
      *   `c1` int NOT NULL,
-     *   `c2` tinyint NOT NULL,
+     *   `c2` tinyint unsigned NOT NULL,
      *   `c3` double DEFAULT NULL,
      *   PRIMARY KEY(`c1`, `c2`)
      * ) PARTITION BY KEY(`c1`) PARTITIONS 200;
@@ -27,23 +27,23 @@ async fn test_obtable_client_aggregation() {
 
     // clear data
     client.delete(TEST_TABLE_NAME,
-                  vec![Value::from(200i32), Value::from(50i8)]).await.expect("delete failed");
+                  vec![Value::from(200i32), Value::from(50u8)]).await.expect("delete failed");
     client.delete(TEST_TABLE_NAME,
-                  vec![Value::from(200i32), Value::from(70i8)]).await.expect("delete failed");
+                  vec![Value::from(200i32), Value::from(70u8)]).await.expect("delete failed");
     client.delete(TEST_TABLE_NAME,
-                  vec![Value::from(300i32), Value::from(120i8)]).await.expect("delete failed");
+                  vec![Value::from(300i32), Value::from(120u8)]).await.expect("delete failed");
 
     // prepare data
     client.insert(TEST_TABLE_NAME,
-                  vec![Value::from(200i32), Value::from(50i8)],
+                  vec![Value::from(200i32), Value::from(50u8)],
                   vec!["c3".to_owned()],
                   vec![Value::from(50.0)]).await.expect("insert failed");
     client.insert(TEST_TABLE_NAME,
-                  vec![Value::from(200i32), Value::from(70i8)],
+                  vec![Value::from(200i32), Value::from(70u8)],
                   vec!["c3".to_owned()],
                   vec![Value::from(150.0)]).await.expect("insert failed");
     client.insert(TEST_TABLE_NAME,
-                  vec![Value::from(300i32), Value::from(120i8)],
+                  vec![Value::from(300i32), Value::from(120u8)],
                   vec!["c3".to_owned()],
                   vec![Value::from(300.0)]).await.expect("insert failed");
 
@@ -59,7 +59,7 @@ async fn test_obtable_client_aggregation() {
         .max("c3".to_owned())
         .sum("c3".to_owned())
         .avg("c3".to_owned())
-        .add_scan_range(vec![Value::from(200i32), Value::from(0i8)], true, vec![Value::from(200i32), Value::from(127i8)], true);
+        .add_scan_range(vec![Value::from(200i32), Value::from(0u8)], true, vec![Value::from(200i32), Value::from(127u8)], true);
 
     // get result
     let result_set = aggregation.execute().await;
@@ -68,8 +68,8 @@ async fn test_obtable_client_aggregation() {
     let result_set = result_set.unwrap();
 
     // test tinyint
-    assert_eq!(70, result_set.get("max(c2)".to_owned()).as_i8());
-    assert_eq!(50, result_set.get("min(c2)".to_owned()).as_i8());
+    assert_eq!(70, result_set.get("max(c2)".to_owned()).as_u8());
+    assert_eq!(50, result_set.get("min(c2)".to_owned()).as_u8());
     assert_eq!(2, result_set.get("count(*)".to_owned()).as_i64());
     assert_eq!(120, result_set.get("sum(c2)".to_owned()).as_i64());
     assert_eq!(60.0, result_set.get("avg(c2)".to_owned()).as_f64());
@@ -82,11 +82,11 @@ async fn test_obtable_client_aggregation() {
 
     // clear data
     client.delete(TEST_TABLE_NAME,
-                  vec![Value::from(200i32), Value::from(50i8)]).await.expect("delete failed");
+                  vec![Value::from(200i32), Value::from(50u8)]).await.expect("delete failed");
     client.delete(TEST_TABLE_NAME,
-                  vec![Value::from(200i32), Value::from(70i8)]).await.expect("delete failed");
+                  vec![Value::from(200i32), Value::from(70u8)]).await.expect("delete failed");
     client.delete(TEST_TABLE_NAME,
-                  vec![Value::from(300i32), Value::from(120i8)]).await.expect("delete failed");
+                  vec![Value::from(300i32), Value::from(120u8)]).await.expect("delete failed");
 }
 
 #[tokio::test]
