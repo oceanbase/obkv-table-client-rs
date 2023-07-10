@@ -237,3 +237,18 @@ create table cse_series_key_to_id_1 (
     series_key VARBINARY(8096) NOT NULL,
     series_id BIGINT NOT NULL,
 PRIMARY KEY(series_key), KEY index_id(series_id));
+
+CREATE TABLE test_aggregation (
+    `c1` int NOT NULL,
+    `c2` tinyint NOT NULL,
+    `c3` double DEFAULT NULL,
+    PRIMARY KEY(`c1`, `c2`)
+) PARTITION BY KEY(`c1`) PARTITIONS 200;
+
+CREATE TABLE test_partition_aggregation (
+    `c1` int NOT NULL,
+    `c2` bigint NOT NULL,
+    `c3` double DEFAULT NULL,
+    `c4` varchar(5) DEFAULT NULL,
+    PRIMARY KEY(`c1`, `c2`)
+) PARTITION BY KEY(`c1`) PARTITIONS 200;

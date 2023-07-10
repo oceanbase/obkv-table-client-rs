@@ -70,8 +70,18 @@ use crate::{
         HandyRwLock,
     },
     ResultCodes,
+    client::{
+      query::{
+          ObTableAggregationResult,
+      }
+    },
+    query::{
+        ObTableAggregationType,
+    },
+    ResultCodes::{
+        OB_NOT_SUPPORTED,
+    },
 };
-
 lazy_static! {
     pub static ref OBKV_CLIENT_METRICS: ClientMetrics = {
         let client_metrics = ClientMetrics::default();
@@ -1305,8 +1315,8 @@ impl ObTableClientInner {
         if conn_count == 0 {
             return Err(CommonErr(
                 CommonErrCode::InvalidServerAddr,
-                    "ObTableClientInner::init_metadata failed because all ob server address are invalid!".to_string()
-                ));
+                "ObTableClientInner::init_metadata failed because all ob server address are invalid!".to_string()
+            ));
         }
 
         self.server_roster.reset(servers);
@@ -1485,7 +1495,7 @@ fn build_obkv_runtimes(config: &ClientConfig) -> ObClientRuntimes {
     ObClientRuntimes {
         tcp_recv_runtime: Arc::new(build_runtime("ob-tcp-reviever", config.tcp_recv_thread_num)),
         tcp_send_runtime: Arc::new(build_runtime("ob-tcp-sender", config.tcp_send_thread_num)),
-        bg_runtime: Arc::new(build_runtime("ob-bg", config.bg_thread_num)),
+        bg_runtime: Arc::new(build_runtime("ob_bg", config.bg_thread_num)),
     }
 }
 
@@ -1511,6 +1521,11 @@ impl ObTableClient {
     /// Create a TableQuery instance for table.
     pub fn query(&self, table_name: &str) -> ObTableClientQueryImpl {
         ObTableClientQueryImpl::new(table_name, self.inner.clone())
+    }
+
+    /// Create a TableAggregation instacne for table.
+    pub fn aggregate(&self, table_name: &str) -> ObTableAggregation {
+        ObTableAggregation::new(table_name, self.inner.clone())
     }
 
     pub fn truncate_table(&self, table_name: &str) -> Result<()> {
@@ -1962,6 +1977,15 @@ impl ObTableClientQueryImpl {
         self.table_query = ObTableQuery::new();
     }
 
+    fn add_aggregation(mut self, aggtype: ObTableAggregationType, aggcolumn: String) -> Self {
+        self.table_query = self.table_query.add_aggregation(aggtype, aggcolumn);
+        self
+    }
+
+    fn is_aggregation(&self) -> bool {
+        self.table_query.is_aggregation()
+    }
+
     pub async fn execute(&self) -> Result<QueryResultSet> {
         let mut partition_table: HashMap<i64, (i64, Arc<ObTable>)> = HashMap::new();
 
@@ -1983,6 +2007,19 @@ impl ObTableClientQueryImpl {
                     continue;
                 }
                 partition_table.insert(part_id, (part_id, ob_table));
+            }
+        }
+
+        if self.is_aggregation() {
+            if partition_table.len() > 1 {
+                error!(
+                    "do not support aggregation of multiple partitions"
+                );
+                return Err(CommonErr(
+                    CommonErrCode::ObException(OB_NOT_SUPPORTED),
+                    "do not support aggregation of multiple partitions"
+                        .to_owned(),
+                ));
             }
         }
 
@@ -2372,5 +2409,183 @@ impl Builder {
 impl Default for Builder {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+pub struct ObTableAggregation {
+    table_query: ObTableClientQueryImpl,
+    /// this message is used to record the aggregation order and the corresponding aggregation name
+    message: Vec<String>,
+}
+
+impl ObTableAggregation {
+    fn new(table_name: &str, client: Arc<ObTableClientInner>) -> Self {
+        Self {
+            table_query: ObTableClientQueryImpl::new(table_name, client),
+            message: Vec::new(),
+        }
+    }
+
+    pub fn max(mut self, column_name: String) -> Self {
+        let column_bak= column_name.clone();
+        self.table_query = self.table_query.add_aggregation(ObTableAggregationType::MAX, column_name);
+        self.message.push("max(".to_owned() + &*column_bak + &*")".to_owned());
+        self
+    }
+
+    pub fn min(mut self, column_name: String) -> Self {
+        let column_bak= column_name.clone();
+        self.table_query = self.table_query.add_aggregation(ObTableAggregationType::MIN, column_name);
+        self.message.push("min(".to_owned() + &*column_bak + &*")".to_owned());
+        self
+    }
+
+    pub fn count(mut self) -> Self {
+        self.table_query = self.table_query.add_aggregation(ObTableAggregationType::COUNT, "*".to_owned());
+        self.message.push("count(*)".to_owned());
+        self
+    }
+
+    pub fn sum(mut self, column_name: String) -> Self {
+        let column_bak= column_name.clone();
+        self.table_query = self.table_query.add_aggregation(ObTableAggregationType::SUM, column_name);
+        self.message.push("sum(".to_owned() + &*column_bak + &*")".to_owned());
+        self
+    }
+
+    pub fn avg(mut self, column_name: String) -> Self {
+        let column_bak= column_name.clone();
+        self.table_query = self.table_query.add_aggregation(ObTableAggregationType::AVG, column_name);
+        self.message.push("avg(".to_owned() + &*column_bak + &*")".to_owned());
+        self
+    }
+
+    pub async fn execute(mut self) -> Result<ObTableAggregationResult> {
+        // In order to get cache size.
+        self.table_query = self.table_query.select(self.message);
+        let query_set = self.table_query.execute().await.map_err(|e| {
+            error!(
+                "fail to execute aggregate"
+            );
+            e
+        })?;
+        let aggregation_result = ObTableAggregationResult::new();
+        let aggregation_result = aggregation_result.init(query_set).await;
+        Ok(aggregation_result)
+    }
+
+    pub fn add_scan_range(
+        mut self,
+        start: Vec<Value>,
+        start_equals: bool,
+        end: Vec<Value>,
+        end_equals: bool,
+    ) -> Self
+    {
+        self.table_query = self.table_query.add_scan_range(start,start_equals,end,end_equals);
+        self
+    }
+
+    #[inline]
+    pub fn select(mut self, columns: Vec<String>) -> Self
+        where
+            Self: Sized,
+    {
+        self.table_query = self.table_query.select(columns);
+        self
+    }
+
+    #[inline]
+    fn get_table_name(&self) -> String {
+        self.table_query.get_table_name()
+    }
+
+    #[inline]
+    fn set_entity_type(&mut self, entity_type: ObTableEntityType) {
+        self.table_query.set_entity_type(entity_type)
+    }
+
+    #[inline]
+    fn entity_type(&self) -> ObTableEntityType {
+        self.table_query.entity_type()
+    }
+
+    #[inline]
+    fn limit(mut self, offset: Option<i32>, limit: i32) -> Self
+        where
+            Self: Sized,
+    {
+        self.table_query = self.table_query.limit(offset, limit);
+        self
+    }
+
+    fn add_scan_range_starts_with(mut self, start: Vec<Value>, start_equals: bool) -> Self
+        where
+            Self: Sized,
+    {
+        self.table_query = self.table_query.add_scan_range_starts_with(start, start_equals);
+        self
+    }
+
+    fn add_scan_range_ends_with(mut self, end: Vec<Value>, end_equals: bool) -> Self
+        where
+            Self: Sized,
+    {
+        self.table_query = self.table_query.add_scan_range_ends_with(end, end_equals);
+        self
+    }
+
+    #[inline]
+    fn scan_order(mut self, forward: bool) -> Self
+        where
+            Self: Sized,
+    {
+        self.table_query = self.table_query.scan_order(forward);
+        self
+    }
+
+    #[inline]
+    fn index_name(mut self, index_name: &str) -> Self
+        where
+            Self: Sized,
+    {
+        self.table_query = self.table_query.index_name(index_name);
+        self
+    }
+
+    #[inline]
+    fn filter_string(mut self, filter_string: &str) -> Self
+        where
+            Self: Sized,
+    {
+        self.table_query = self.table_query.filter_string(filter_string);
+        self
+    }
+
+    #[inline]
+    fn htable_filter(mut self, filter: ObHTableFilter) -> Self
+        where
+            Self: Sized,
+    {
+        self.table_query = self.table_query.htable_filter(filter);
+        self
+    }
+
+    #[inline]
+    fn batch_size(mut self, batch_size: i32) -> Self
+        where
+            Self: Sized,
+    {
+        self.table_query = self.table_query.batch_size(batch_size);
+        self
+    }
+
+    #[inline]
+    fn operation_timeout(mut self, timeout: Duration) -> Self
+        where
+            Self: Sized,
+    {
+        self.table_query = self.table_query.operation_timeout(timeout);
+        self
     }
 }

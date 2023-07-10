@@ -475,3 +475,27 @@ impl Drop for QueryResultSet {
         }
     }
 }
+
+pub struct ObTableAggregationResult {
+    /// use hash map to record the result of aggregation
+    aggregation_result: HashMap<String, Value>,
+}
+
+impl ObTableAggregationResult {
+    pub(crate) fn new() -> Self {
+        Self {
+            aggregation_result: HashMap::new(),
+        }
+    }
+
+    /// use query result to init the hash map
+    pub async fn init(mut self, mut query_result_set: QueryResultSet) -> Self {
+        self.aggregation_result = query_result_set.next().await.unwrap().unwrap();
+        self
+    }
+
+    /// get the aggregetion result by operation name
+    pub fn get(&self, operation_name: String) -> Value {
+        self.aggregation_result.get(&operation_name).unwrap().clone()
+    }
+}
