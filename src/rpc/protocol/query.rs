@@ -587,10 +587,12 @@ impl ObTableQuery {
         }
     }
 
+    /// check aggregation
     pub fn is_aggregation(&self) -> bool {
         !self.aggregations.is_empty()
     }
 
+    /// add single aggregate operation
     pub fn add_aggregation(mut self, aggtype: ObTableAggregationType, aggcolumn: String) -> Self {
         self.aggregations.push(ObTableAggregationSingle::new(aggtype, aggcolumn));
         self

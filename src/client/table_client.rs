@@ -1495,7 +1495,7 @@ fn build_obkv_runtimes(config: &ClientConfig) -> ObClientRuntimes {
     ObClientRuntimes {
         tcp_recv_runtime: Arc::new(build_runtime("ob-tcp-reviever", config.tcp_recv_thread_num)),
         tcp_send_runtime: Arc::new(build_runtime("ob-tcp-sender", config.tcp_send_thread_num)),
-        bg_runtime: Arc::new(build_runtime("ob_bg", config.bg_thread_num)),
+        bg_runtime: Arc::new(build_runtime("ob-bg", config.bg_thread_num)),
     }
 }
 
@@ -1977,11 +1977,13 @@ impl ObTableClientQueryImpl {
         self.table_query = ObTableQuery::new();
     }
 
+    /// add single aggregate operation
     fn add_aggregation(mut self, aggtype: ObTableAggregationType, aggcolumn: String) -> Self {
         self.table_query = self.table_query.add_aggregation(aggtype, aggcolumn);
         self
     }
 
+    /// check aggregation
     fn is_aggregation(&self) -> bool {
         self.table_query.is_aggregation()
     }
