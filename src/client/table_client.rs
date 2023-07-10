@@ -2009,17 +2009,15 @@ impl ObTableClientQueryImpl {
         }
 
         // defense for multiple partition aggreagtion
-        if self.aggregation_check() {
-            if partition_table.len() > 1 {
-                error!(
-                    "do not support aggregation of multiple partitions"
-                );
-                return Err(CommonErr(
-                    CommonErrCode::ObException(OB_NOT_SUPPORTED),
-                    "do not support aggregation of multiple partitions"
-                        .to_owned(),
-                ));
-            }
+        if self.aggregation_check() && partition_table.len() > 1 {
+            error!(
+                "do not support aggregation of multiple partitions"
+            );
+            return Err(CommonErr(
+                CommonErrCode::ObException(OB_NOT_SUPPORTED),
+                "do not support aggregation of multiple partitions"
+                    .to_owned(),
+            ));
         }
 
         let start = Instant::now();
@@ -2428,14 +2426,14 @@ impl ObTableAggregation {
     pub fn max(mut self, column_name: String) -> Self {
         let column_bak= column_name.clone();
         self.table_query = self.table_query.add_aggregation(ObTableAggregationType::MAX, column_name);
-        self.aggregation_operations.push(format!("max({})", column_bak));
+        self.aggregation_operations.push(format!("max({column_bak})"));
         self
     }
 
     pub fn min(mut self, column_name: String) -> Self {
         let column_bak= column_name.clone();
         self.table_query = self.table_query.add_aggregation(ObTableAggregationType::MIN, column_name);
-        self.aggregation_operations.push(format!("min({})", column_bak));
+        self.aggregation_operations.push(format!("min({column_bak})"));
         self
     }
 
@@ -2448,14 +2446,14 @@ impl ObTableAggregation {
     pub fn sum(mut self, column_name: String) -> Self {
         let column_bak= column_name.clone();
         self.table_query = self.table_query.add_aggregation(ObTableAggregationType::SUM, column_name);
-        self.aggregation_operations.push(format!("sum({})", column_bak));
+        self.aggregation_operations.push(format!("sum({column_bak})"));
         self
     }
 
     pub fn avg(mut self, column_name: String) -> Self {
         let column_bak= column_name.clone();
         self.table_query = self.table_query.add_aggregation(ObTableAggregationType::AVG, column_name);
-        self.aggregation_operations.push(format!("avg({})", column_bak));
+        self.aggregation_operations.push(format!("avg({column_bak})"));
         self
     }
 
@@ -2474,11 +2472,11 @@ impl ObTableAggregation {
                 aggregate_result
             }
             None => {
-                return Err(CommonErr(
+                Err(CommonErr(
                     CommonErrCode::ObException(OB_ERR_UNEXPECTED),
                     "aggregate failed"
                         .to_owned(),
-                ));
+                ))
             }
         }
     }
