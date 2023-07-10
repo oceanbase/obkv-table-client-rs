@@ -2012,6 +2012,7 @@ impl ObTableClientQueryImpl {
             }
         }
 
+        /// defense for multiple partition aggreagtion
         if self.is_aggregation() {
             if partition_table.len() > 1 {
                 error!(
