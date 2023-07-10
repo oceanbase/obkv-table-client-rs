@@ -594,7 +594,8 @@ impl ObTableQuery {
 
     /// add single aggregate operation
     pub fn add_aggregation(mut self, aggtype: ObTableAggregationType, aggcolumn: String) -> Self {
-        self.aggregations.push(ObTableAggregationSingle::new(aggtype, aggcolumn));
+        self.aggregations
+            .push(ObTableAggregationSingle::new(aggtype, aggcolumn));
         self
     }
 
