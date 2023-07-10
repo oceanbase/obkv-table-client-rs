@@ -25,7 +25,7 @@ async fn test_obtable_client_aggregation() {
     const TEST_TABLE_NAME: &str = "test_aggregation";
     client.add_row_key_element(TEST_TABLE_NAME, vec!["c1".to_owned(), "c2".to_owned()]);
 
-    /// clear data
+    // clear data
     client.delete(TEST_TABLE_NAME,
                   vec![Value::from(200i32), Value::from(50i8)]).await.expect("delete failed");
     client.delete(TEST_TABLE_NAME,
@@ -33,7 +33,7 @@ async fn test_obtable_client_aggregation() {
     client.delete(TEST_TABLE_NAME,
                   vec![Value::from(300i32), Value::from(120i8)]).await.expect("delete failed");
 
-    /// prepare data
+    // prepare data
     client.insert(TEST_TABLE_NAME,
                   vec![Value::from(200i32), Value::from(50i8)],
                   vec!["c3".to_owned()],
@@ -47,7 +47,7 @@ async fn test_obtable_client_aggregation() {
                   vec!["c3".to_owned()],
                   vec![Value::from(300.0)]).await.expect("insert failed");
 
-    /// aggregate
+    // aggregate
     let aggregation = client
         .aggregate(TEST_TABLE_NAME)
         .min("c2".to_owned())
@@ -61,26 +61,26 @@ async fn test_obtable_client_aggregation() {
         .avg("c3".to_owned())
         .add_scan_range(vec![Value::from(200i32), Value::from(0i8)], true, vec![Value::from(200i32), Value::from(127i8)], true);
 
-    /// get result
+    // get result
     let result_set = aggregation.execute().await;
 
     assert!(result_set.is_ok());
     let result_set = result_set.unwrap();
 
-    /// test tinyint
+    // test tinyint
     assert_eq!(70, result_set.get("max(c2)".to_owned()).as_i8());
     assert_eq!(50, result_set.get("min(c2)".to_owned()).as_i8());
     assert_eq!(2, result_set.get("count(*)".to_owned()).as_i64());
     assert_eq!(120, result_set.get("sum(c2)".to_owned()).as_i64());
     assert_eq!(60.0, result_set.get("avg(c2)".to_owned()).as_f64());
 
-    /// test double
+    // test double
     assert_eq!(150.0, result_set.get("max(c3)".to_owned()).as_f64());
     assert_eq!(50.0, result_set.get("min(c3)".to_owned()).as_f64());
     assert_eq!(200.0, result_set.get("sum(c3)".to_owned()).as_f64());
     assert_eq!(100.0, result_set.get("avg(c3)".to_owned()).as_f64());
 
-    /// clear data
+    // clear data
     client.delete(TEST_TABLE_NAME,
                   vec![Value::from(200i32), Value::from(50i8)]).await.expect("delete failed");
     client.delete(TEST_TABLE_NAME,
@@ -106,7 +106,7 @@ async fn test_obtable_client_multiple_partition() {
     const TEST_TABLE_NAME: &str = "test_partition_aggregation";
     client.add_row_key_element(TEST_TABLE_NAME, vec!["c1".to_owned(), "c2".to_owned()]);
 
-    /// clear data
+    // clear data
     client.delete(TEST_TABLE_NAME,
                   vec![Value::from(200i32), Value::from(50i64)]).await.expect("delete failed");
     client.delete(TEST_TABLE_NAME,
@@ -114,7 +114,7 @@ async fn test_obtable_client_multiple_partition() {
     client.delete(TEST_TABLE_NAME,
                   vec![Value::from(300i32), Value::from(300i64)]).await.expect("delete failed");
 
-    /// prepare data
+    // prepare data
     client.insert(TEST_TABLE_NAME,
                   vec![Value::from(200i32), Value::from(50i64)],
                   vec!["c3".to_owned()],
@@ -128,7 +128,7 @@ async fn test_obtable_client_multiple_partition() {
                   vec!["c3".to_owned()],
                   vec![Value::from(300.0)]).await.expect("insert failed");
 
-    /// aggregate
+    // aggregate
     let aggregation = client
         .aggregate(TEST_TABLE_NAME)
         .min("c2".to_owned())
@@ -142,26 +142,26 @@ async fn test_obtable_client_multiple_partition() {
         .avg("c3".to_owned())
         .add_scan_range(vec![Value::from(200i32), Value::from(0i64)], true, vec![Value::from(200i32), Value::from(1000i64)], true);
 
-    /// get result
+    // get result
     let result_set = aggregation.execute().await;
 
     assert!(result_set.is_ok());
     let result_set = result_set.unwrap();
 
-    /// test bigint
+    // test bigint
     assert_eq!(150, result_set.get("max(c2)".to_owned()).as_i64());
     assert_eq!(50, result_set.get("min(c2)".to_owned()).as_i64());
     assert_eq!(2, result_set.get("count(*)".to_owned()).as_i64());
     assert_eq!(200, result_set.get("sum(c2)".to_owned()).as_i64());
     assert_eq!(100.0, result_set.get("avg(c2)".to_owned()).as_f64());
 
-    /// test double
+    // test double
     assert_eq!(150.0, result_set.get("max(c3)".to_owned()).as_f64());
     assert_eq!(50.0, result_set.get("min(c3)".to_owned()).as_f64());
     assert_eq!(200.0, result_set.get("sum(c3)".to_owned()).as_f64());
     assert_eq!(100.0, result_set.get("avg(c3)".to_owned()).as_f64());
 
-    /// clear data
+    // clear data
     client.delete(TEST_TABLE_NAME,
                   vec![Value::from(200i32), Value::from(50i64)]).await.expect("delete failed");
     client.delete(TEST_TABLE_NAME,
@@ -187,7 +187,7 @@ async fn test_obtable_client_multiple_partition_illegal() {
     const TEST_TABLE_NAME: &str = "test_partition_aggregation";
     client.add_row_key_element(TEST_TABLE_NAME, vec!["c1".to_owned()]);
 
-    /// clear data
+    // clear data
     client.delete(TEST_TABLE_NAME,
                   vec![Value::from(200i32), Value::from(50i64)]).await.expect("delete failed");
     client.delete(TEST_TABLE_NAME,
@@ -195,7 +195,7 @@ async fn test_obtable_client_multiple_partition_illegal() {
     client.delete(TEST_TABLE_NAME,
                   vec![Value::from(300i32), Value::from(300i64)]).await.expect("delete failed");
 
-    /// prepare data
+    // prepare data
     client.insert(TEST_TABLE_NAME,
                   vec![Value::from(200i32), Value::from(50i64)],
                   vec!["c3".to_owned()],
@@ -209,7 +209,7 @@ async fn test_obtable_client_multiple_partition_illegal() {
                   vec!["c3".to_owned()],
                   vec![Value::from(300.0)]).await.expect("insert failed");
 
-    /// aggregate
+    // aggregate
     let aggregation = client
         .aggregate(TEST_TABLE_NAME)
         .min("c2".to_owned())
@@ -219,10 +219,10 @@ async fn test_obtable_client_multiple_partition_illegal() {
         .avg("c2".to_owned())
         .add_scan_range(vec![Value::from(200i32), Value::from(0i64)], true, vec![Value::from(201i32), Value::from(1000i64)], true);
 
-    /// get result
+    // get result
     let result_set = aggregation.execute().await;
 
-    /// test
+    // test
     assert!(result_set.is_err());
 
     match result_set {
@@ -232,7 +232,7 @@ async fn test_obtable_client_multiple_partition_illegal() {
         }
     }
 
-    /// clear data
+    // clear data
     client.delete(TEST_TABLE_NAME,
                   vec![Value::from(200i32), Value::from(50i64)]).await.expect("delete failed");
     client.delete(TEST_TABLE_NAME,
@@ -258,7 +258,7 @@ async fn test_obtable_client_aggregation_with_null() {
     const TEST_TABLE_NAME: &str = "test_partition_aggregation";
     client.add_row_key_element(TEST_TABLE_NAME, vec!["c1".to_owned()]);
 
-    /// clear data
+    // clear data
     client.delete(TEST_TABLE_NAME,
                   vec![Value::from(200i32), Value::from(50i64)]).await.expect("delete failed");
     client.delete(TEST_TABLE_NAME,
@@ -266,7 +266,7 @@ async fn test_obtable_client_aggregation_with_null() {
     client.delete(TEST_TABLE_NAME,
                   vec![Value::from(300i32), Value::from(50i64)]).await.expect("delete failed");
 
-    /// prepare data
+    // prepare data
     client
         .execute_sql("insert into test_partition_aggregation(c1, c2) values('200', '50')").expect("insert fail");
     client
@@ -274,7 +274,7 @@ async fn test_obtable_client_aggregation_with_null() {
     client
         .execute_sql("insert into test_partition_aggregation(c1, c2) values('300', '50')").expect("insert fail");
 
-    /// aggregate
+    // aggregate
     let aggregation = client
         .aggregate(TEST_TABLE_NAME)
         .min("c3".to_owned())
@@ -284,10 +284,10 @@ async fn test_obtable_client_aggregation_with_null() {
         .avg("c3".to_owned())
         .add_scan_range(vec![Value::from(200i32), Value::from(0i64)], true, vec![Value::from(200i32), Value::from(1000i64)], true);
 
-    /// get result
+    // get result
     let result_set = aggregation.execute().await;
 
-    /// test
+    // test
     let result_set = result_set.unwrap();
     if !result_set.get("min(c3)".to_owned()).is_none() {
         assert!(false);
@@ -304,7 +304,7 @@ async fn test_obtable_client_aggregation_with_null() {
 
     assert_eq!(2, result_set.get("count(*)".to_owned()).as_i64());
 
-    /// clear data
+    // clear data
     client.delete(TEST_TABLE_NAME,
                   vec![Value::from(200i32), Value::from(50i64)]).await.expect("delete failed");
     client.delete(TEST_TABLE_NAME,
@@ -331,7 +331,7 @@ async fn test_obtable_client_multiple_aggregation_some_null() {
     const TEST_TABLE_NAME: &str = "test_partition_aggregation";
     client.add_row_key_element(TEST_TABLE_NAME, vec!["c1".to_owned()]);
 
-    /// clear data
+    // clear data
     client.delete(TEST_TABLE_NAME,
                   vec![Value::from(200i32), Value::from(50i64)]).await.expect("delete failed");
     client.delete(TEST_TABLE_NAME,
@@ -339,7 +339,7 @@ async fn test_obtable_client_multiple_aggregation_some_null() {
     client.delete(TEST_TABLE_NAME,
                   vec![Value::from(300i32), Value::from(50i64)]).await.expect("delete failed");
 
-    /// prepare data
+    // prepare data
     client
         .execute_sql("insert into test_partition_aggregation(c1, c2, c3) values('200', '50', '50')").expect("insert fail");
     client
@@ -347,7 +347,7 @@ async fn test_obtable_client_multiple_aggregation_some_null() {
     client
         .execute_sql("insert into test_partition_aggregation(c1, c2, c3) values('300', '50', null)").expect("insert fail");
 
-    /// aggregate
+    // aggregate
     let aggregation = client
         .aggregate(TEST_TABLE_NAME)
         .min("c3".to_owned())
@@ -357,19 +357,19 @@ async fn test_obtable_client_multiple_aggregation_some_null() {
         .avg("c3".to_owned())
         .add_scan_range(vec![Value::from(200i32), Value::from(0i64)], true, vec![Value::from(200i32), Value::from(1000i64)], true);
 
-    /// get result
+    // get result
     let result_set = aggregation.execute().await;
 
     assert!(result_set.is_ok());
     let result_set = result_set.unwrap();
 
-    /// test
+    // test
     assert_eq!(150.0, result_set.get("max(c3)".to_owned()).as_f64());
     assert_eq!(50.0, result_set.get("min(c3)".to_owned()).as_f64());
     assert_eq!(200.0, result_set.get("sum(c3)".to_owned()).as_f64());
     assert_eq!(100.0, result_set.get("avg(c3)".to_owned()).as_f64());
 
-    /// clear data
+    // clear data
     client.delete(TEST_TABLE_NAME,
                   vec![Value::from(200i32), Value::from(50i64)]).await.expect("delete failed");
     client.delete(TEST_TABLE_NAME,
@@ -395,7 +395,7 @@ async fn test_obtable_client_aggregation_empty_table() {
     const TEST_TABLE_NAME: &str = "test_partition_aggregation";
     client.add_row_key_element(TEST_TABLE_NAME, vec!["c1".to_owned()]);
 
-    /// aggregate empty table
+    // aggregate empty table
     let aggregation = client
         .aggregate(TEST_TABLE_NAME)
         .min("c3".to_owned())
@@ -405,10 +405,10 @@ async fn test_obtable_client_aggregation_empty_table() {
         .avg("c3".to_owned())
         .add_scan_range(vec![Value::from(200i32), Value::from(0i64)], true, vec![Value::from(200i32), Value::from(1000i64)], true);
 
-    /// get result
+    // get result
     let result_set = aggregation.execute().await;
 
-    /// test
+    // test
     let result_set = result_set.unwrap();
     if !result_set.get("min(c3)".to_owned()).is_none() {
         assert!(false);
@@ -443,7 +443,7 @@ async fn test_obtable_client_aggregation_illegal_column() {
     const TEST_TABLE_NAME: &str = "test_partition_aggregation";
     client.add_row_key_element(TEST_TABLE_NAME, vec!["c1".to_owned()]);
 
-    /// clear data
+    // clear data
     client.delete(TEST_TABLE_NAME,
                   vec![Value::from(200i32), Value::from(50i64)]).await.expect("delete failed");
     client.delete(TEST_TABLE_NAME,
@@ -451,7 +451,7 @@ async fn test_obtable_client_aggregation_illegal_column() {
     client.delete(TEST_TABLE_NAME,
                   vec![Value::from(300i32), Value::from(50i64)]).await.expect("delete failed");
 
-    /// prepare data
+    // prepare data
     client
         .execute_sql("insert into test_partition_aggregation(c1, c2, c4) values('200', '50', 'a')").expect("insert fail");
     client
@@ -459,13 +459,13 @@ async fn test_obtable_client_aggregation_illegal_column() {
     client
         .execute_sql("insert into test_partition_aggregation(c1, c2, c4) values('300', '50', 'a')").expect("insert fail");
 
-    /// aggregate
+    // aggregate
     let aggregation = client
         .aggregate(TEST_TABLE_NAME)
         .sum("c4".to_owned())
         .add_scan_range(vec![Value::from(200i32), Value::from(0i64)], true, vec![Value::from(200i32), Value::from(1000i64)], true);
 
-    /// get result
+    // get result
     let result_set = aggregation.execute().await;
 
     assert!(result_set.is_err());
@@ -477,7 +477,7 @@ async fn test_obtable_client_aggregation_illegal_column() {
         }
     }
 
-    /// clear data
+    // clear data
     client.delete(TEST_TABLE_NAME,
                   vec![Value::from(200i32), Value::from(50i64)]).await.expect("delete failed");
     client.delete(TEST_TABLE_NAME,
@@ -503,7 +503,7 @@ async fn test_obtable_client_aggregation_not_exist_column() {
     const TEST_TABLE_NAME: &str = "test_partition_aggregation";
     client.add_row_key_element(TEST_TABLE_NAME, vec!["c1".to_owned()]);
 
-    /// clear data
+    // clear data
     client.delete(TEST_TABLE_NAME,
                   vec![Value::from(200i32), Value::from(50i64)]).await.expect("delete failed");
     client.delete(TEST_TABLE_NAME,
@@ -511,7 +511,7 @@ async fn test_obtable_client_aggregation_not_exist_column() {
     client.delete(TEST_TABLE_NAME,
                   vec![Value::from(300i32), Value::from(50i64)]).await.expect("delete failed");
 
-    /// prepare data
+    // prepare data
     client
         .execute_sql("insert into test_partition_aggregation(c1, c2, c4) values('200', '50', 'a')").expect("insert fail");
     client
@@ -519,13 +519,13 @@ async fn test_obtable_client_aggregation_not_exist_column() {
     client
         .execute_sql("insert into test_partition_aggregation(c1, c2, c4) values('300', '50', 'a')").expect("insert fail");
 
-    /// aggregate
+    // aggregate
     let aggregation = client
         .aggregate(TEST_TABLE_NAME)
         .sum("c9".to_owned())
         .add_scan_range(vec![Value::from(200i32), Value::from(0i64)], true, vec![Value::from(200i32), Value::from(1000i64)], true);
 
-    /// get result
+    // get result
     let result_set = aggregation.execute().await;
 
     assert!(result_set.is_err());
@@ -537,7 +537,7 @@ async fn test_obtable_client_aggregation_not_exist_column() {
         }
     }
 
-    /// clear data
+    // clear data
     client.delete(TEST_TABLE_NAME,
                   vec![Value::from(200i32), Value::from(50i64)]).await.expect("delete failed");
     client.delete(TEST_TABLE_NAME,
