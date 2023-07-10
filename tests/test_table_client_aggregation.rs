@@ -87,7 +87,7 @@ async fn test_obtable_client_aggregation() {
         Some(singel_value) => {
             assert_eq!(70, singel_value.as_u8());
         }
-        _ => assert!(false)
+        _ => unreachable!()
 
     }
 
@@ -96,7 +96,7 @@ async fn test_obtable_client_aggregation() {
         Some(singel_value) => {
             assert_eq!(50, singel_value.as_u8());
         }
-        _ => assert!(false)
+        _ => unreachable!()
 
     }
 
@@ -105,7 +105,7 @@ async fn test_obtable_client_aggregation() {
         Some(singel_value) => {
             assert_eq!(2, singel_value.as_i64());
         }
-        _ => assert!(false)
+        _ => unreachable!()
 
     }
 
@@ -114,7 +114,7 @@ async fn test_obtable_client_aggregation() {
         Some(singel_value) => {
             assert_eq!(120, singel_value.as_i64());
         }
-        _ => assert!(false)
+        _ => unreachable!()
 
     }
 
@@ -123,7 +123,7 @@ async fn test_obtable_client_aggregation() {
         Some(singel_value) => {
             assert_eq!(60.0, singel_value.as_f64());
         }
-        _ => assert!(false)
+        _ => unreachable!()
 
     }
 
@@ -133,7 +133,7 @@ async fn test_obtable_client_aggregation() {
         Some(singel_value) => {
             assert_eq!(150.0, singel_value.as_f64());
         }
-        _ => assert!(false)
+        _ => unreachable!()
 
     }
 
@@ -142,7 +142,7 @@ async fn test_obtable_client_aggregation() {
         Some(singel_value) => {
             assert_eq!(50.0, singel_value.as_f64());
         }
-        _ => assert!(false)
+        _ => unreachable!()
 
     }
 
@@ -151,7 +151,7 @@ async fn test_obtable_client_aggregation() {
         Some(singel_value) => {
             assert_eq!(200.0, singel_value.as_f64());
         }
-        _ => assert!(false)
+        _ => unreachable!()
 
     }
 
@@ -160,7 +160,7 @@ async fn test_obtable_client_aggregation() {
         Some(singel_value) => {
             assert_eq!(100.0, singel_value.as_f64());
         }
-        _ => assert!(false)
+        _ => unreachable!()
 
     }
 
@@ -237,7 +237,7 @@ async fn test_obtable_client_multiple_partition() {
         Some(singel_value) => {
             assert_eq!(150, singel_value.as_i64());
         }
-        _ => assert!(false)
+        _ => unreachable!()
 
     }
 
@@ -246,7 +246,7 @@ async fn test_obtable_client_multiple_partition() {
         Some(singel_value) => {
             assert_eq!(50, singel_value.as_i64());
         }
-        _ => assert!(false)
+        _ => unreachable!()
 
     }
 
@@ -255,7 +255,7 @@ async fn test_obtable_client_multiple_partition() {
         Some(singel_value) => {
             assert_eq!(2, singel_value.as_i64());
         }
-        _ => assert!(false)
+        _ => unreachable!()
 
     }
 
@@ -264,7 +264,7 @@ async fn test_obtable_client_multiple_partition() {
         Some(singel_value) => {
             assert_eq!(200, singel_value.as_i64());
         }
-        _ => assert!(false)
+        _ => unreachable!()
 
     }
 
@@ -273,7 +273,7 @@ async fn test_obtable_client_multiple_partition() {
         Some(singel_value) => {
             assert_eq!(100.0, singel_value.as_f64());
         }
-        _ => assert!(false)
+        _ => unreachable!()
 
     }
 
@@ -283,7 +283,7 @@ async fn test_obtable_client_multiple_partition() {
         Some(singel_value) => {
             assert_eq!(150.0, singel_value.as_f64());
         }
-        _ => assert!(false)
+        _ => unreachable!()
 
     }
 
@@ -292,7 +292,7 @@ async fn test_obtable_client_multiple_partition() {
         Some(singel_value) => {
             assert_eq!(50.0, singel_value.as_f64());
         }
-        _ => assert!(false)
+        _ => unreachable!()
 
     }
 
@@ -301,7 +301,7 @@ async fn test_obtable_client_multiple_partition() {
         Some(singel_value) => {
             assert_eq!(200.0, singel_value.as_f64());
         }
-        _ => assert!(false)
+        _ => unreachable!()
 
     }
 
@@ -310,7 +310,7 @@ async fn test_obtable_client_multiple_partition() {
         Some(singel_value) => {
             assert_eq!(100.0, singel_value.as_f64());
         }
-        _ => assert!(false)
+        _ => unreachable!()
 
     }
 
@@ -444,7 +444,7 @@ async fn test_obtable_client_aggregation_with_null() {
             assert!(e.is_none())
         }
         _ => {
-            assert!(false);
+            unreachable!();
         }
     }
 
@@ -453,7 +453,7 @@ async fn test_obtable_client_aggregation_with_null() {
             assert!(e.is_none())
         }
         _ => {
-            assert!(false);
+            unreachable!();
         }
     }
 
@@ -462,7 +462,7 @@ async fn test_obtable_client_aggregation_with_null() {
             assert!(e.is_none())
         }
         _ => {
-            assert!(false);
+            unreachable!();
         }
     }
 
@@ -471,7 +471,7 @@ async fn test_obtable_client_aggregation_with_null() {
             assert!(e.is_none())
         }
         _ => {
-            assert!(false);
+            unreachable!();
         }
     }
 
@@ -480,7 +480,7 @@ async fn test_obtable_client_aggregation_with_null() {
         Some(singel_value) => {
             assert_eq!(2, singel_value.as_i64());
         }
-        _ => assert!(false)
+        _ => unreachable!()
 
     }
 
@@ -544,7 +544,7 @@ async fn test_obtable_client_multiple_aggregation_some_null() {
         Some(singel_value) => {
             assert_eq!(150.0, singel_value.as_f64());
         }
-        _ => assert!(false)
+        _ => unreachable!()
 
     }
 
@@ -553,7 +553,7 @@ async fn test_obtable_client_multiple_aggregation_some_null() {
         Some(singel_value) => {
             assert_eq!(50.0, singel_value.as_f64());
         }
-        _ => assert!(false)
+        _ => unreachable!()
 
     }
 
@@ -562,7 +562,7 @@ async fn test_obtable_client_multiple_aggregation_some_null() {
         Some(singel_value) => {
             assert_eq!(200.0, singel_value.as_f64());
         }
-        _ => assert!(false)
+        _ => unreachable!()
 
     }
 
@@ -571,7 +571,7 @@ async fn test_obtable_client_multiple_aggregation_some_null() {
         Some(singel_value) => {
             assert_eq!(100.0, singel_value.as_f64());
         }
-        _ => assert!(false)
+        _ => unreachable!()
 
     }
 
@@ -624,7 +624,7 @@ async fn test_obtable_client_aggregation_empty_table() {
             assert!(e.is_none())
         }
         _ => {
-            assert!(false);
+            unreachable!();
         }
     }
 
@@ -633,7 +633,7 @@ async fn test_obtable_client_aggregation_empty_table() {
             assert!(e.is_none())
         }
         _ => {
-            assert!(false);
+            unreachable!();
         }
     }
 
@@ -642,7 +642,7 @@ async fn test_obtable_client_aggregation_empty_table() {
             assert!(e.is_none())
         }
         _ => {
-            assert!(false);
+            unreachable!();
         }
     }
 
@@ -651,7 +651,7 @@ async fn test_obtable_client_aggregation_empty_table() {
             assert!(e.is_none())
         }
         _ => {
-            assert!(false);
+            unreachable!();
         }
     }
 
@@ -660,7 +660,7 @@ async fn test_obtable_client_aggregation_empty_table() {
         Some(singel_value) => {
             assert_eq!(0, singel_value.as_i64());
         }
-        _ => assert!(false)
+        _ => unreachable!()
 
     }
 }
