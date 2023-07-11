@@ -2475,7 +2475,7 @@ impl ObTableAggregation {
             Some(aggregate_result) => aggregate_result,
             None => Err(CommonErr(
                 CommonErrCode::InvalidParam,
-                "fail to execute aggregate".to_owned(),
+                "get empty result from aggregation".to_owned(),
             )),
         }
     }
