@@ -1,11 +1,14 @@
 [# Demo for obkv-table-client-rs
-Edited by OBKV developers on July 10, 2023.
+Edited by OBKV developers on July 11, 2023.
 
 ## Introduction
 obkv-table-client-rs is Rust Library that can access table data from OceanBase storage layer.
 Now we provide an interface to access data from OceanBase, which we will introduce in this document.
 
 ***Notice that we will also provide another interface to access data from OceanBase in the future(Like [Mutation](https://github.com/oceanbase/obkv-table-client-java/tree/master/example/simple-mutation)).***
+
+## Notice
+**We only support aggregate on a single partition now. Aggregation across partitions may lead to consistency problems. You can limit your aggregation in one partition by restricting your scan range.**
 
 ## demo
 ### Aggregate
