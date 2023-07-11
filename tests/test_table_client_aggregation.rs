@@ -25,7 +25,7 @@ use tokio::task;
 
 #[tokio::test]
 #[serial]
-async fn test_obtable_client_aggregation() {
+async fn test_aggregation() {
     /*
      * CREATE TABLE test_aggregation (
      *   `c1` int NOT NULL,
@@ -199,7 +199,7 @@ async fn test_obtable_client_aggregation() {
 
 #[tokio::test]
 #[serial]
-async fn test_obtable_client_multiple_partition() {
+async fn test_multiple_partition() {
     /*
      * CREATE TABLE test_partition_aggregation (
      *  `c1` int NOT NULL,
@@ -372,7 +372,7 @@ async fn test_obtable_client_multiple_partition() {
 
 #[tokio::test]
 #[serial]
-async fn test_obtable_client_multiple_partition_illegal() {
+async fn test_multiple_partition_illegal() {
     /*
      * CREATE TABLE test_partition_aggregation (
      *  `c1` int NOT NULL,
@@ -477,7 +477,7 @@ async fn test_obtable_client_multiple_partition_illegal() {
 
 #[tokio::test]
 #[serial]
-async fn test_obtable_client_aggregation_with_null() {
+async fn test_aggregation_with_null() {
     /*
      * CREATE TABLE test_partition_aggregation (
      *  `c1` int NOT NULL,
@@ -598,7 +598,7 @@ async fn test_obtable_client_aggregation_with_null() {
 
 #[tokio::test]
 #[serial]
-async fn test_obtable_client_multiple_aggregation_some_null() {
+async fn test_multiple_aggregation_some_null() {
     /*
      * CREATE TABLE test_partition_aggregation (
      *  `c1` int NOT NULL,
@@ -711,7 +711,7 @@ async fn test_obtable_client_multiple_aggregation_some_null() {
 
 #[tokio::test]
 #[serial]
-async fn test_obtable_client_aggregation_empty_table() {
+async fn test_aggregation_empty_table() {
     /*
      * CREATE TABLE test_partition_aggregation (
      *  `c1` int NOT NULL,
@@ -743,6 +743,7 @@ async fn test_obtable_client_aggregation_empty_table() {
 
     // get result
     let result_set = aggregation.execute().await;
+    // todo:server behaviors must be compatible
     assert!(result_set.is_ok());
     let result_set = result_set.unwrap();
 
@@ -794,7 +795,7 @@ async fn test_obtable_client_aggregation_empty_table() {
 
 #[tokio::test]
 #[serial]
-async fn test_obtable_client_aggregation_illegal_column() {
+async fn test_aggregation_illegal_column() {
     /*
      * CREATE TABLE test_partition_aggregation (
      *  `c1` int NOT NULL,
@@ -877,7 +878,7 @@ async fn test_obtable_client_aggregation_illegal_column() {
 
 #[tokio::test]
 #[serial]
-async fn test_obtable_client_aggregation_not_exist_column() {
+async fn test_aggregation_not_exist_column() {
     /*
      * CREATE TABLE test_partition_aggregation (
      *  `c1` int NOT NULL,
