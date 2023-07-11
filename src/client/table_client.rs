@@ -46,6 +46,7 @@ use crate::{
         client_metrics::{ClientMetrics, ObClientOpRecordType, ObClientOpRetryType},
         prometheus::OBKV_CLIENT_REGISTRY,
     },
+    query::ObTableAggregationType,
     rpc::{
         conn_pool::{Builder as ConnPoolBuilder, ConnPool},
         protocol::{
@@ -71,7 +72,6 @@ use crate::{
     },
     ResultCodes,
 };
-
 lazy_static! {
     pub static ref OBKV_CLIENT_METRICS: ClientMetrics = {
         let client_metrics = ClientMetrics::default();
@@ -1513,6 +1513,11 @@ impl ObTableClient {
         ObTableClientQueryImpl::new(table_name, self.inner.clone())
     }
 
+    /// Create a TableAggregation instacne for table.
+    pub fn aggregate(&self, table_name: &str) -> ObTableAggregation {
+        ObTableAggregation::new(table_name, self.inner.clone())
+    }
+
     pub fn truncate_table(&self, table_name: &str) -> Result<()> {
         self.inner.truncate_table(table_name)
     }
@@ -1962,6 +1967,17 @@ impl ObTableClientQueryImpl {
         self.table_query = ObTableQuery::new();
     }
 
+    /// add single aggregate operation
+    fn add_aggregation(mut self, aggtype: ObTableAggregationType, aggcolumn: String) -> Self {
+        self.table_query = self.table_query.add_aggregation(aggtype, aggcolumn);
+        self
+    }
+
+    /// check aggregation
+    fn aggregation_check(&self) -> bool {
+        self.table_query.is_aggregation()
+    }
+
     pub async fn execute(&self) -> Result<QueryResultSet> {
         let mut partition_table: HashMap<i64, (i64, Arc<ObTable>)> = HashMap::new();
 
@@ -1984,6 +2000,16 @@ impl ObTableClientQueryImpl {
                 }
                 partition_table.insert(part_id, (part_id, ob_table));
             }
+        }
+
+        // defense for multiple partition aggreagtion
+        // partition table len > 1, should check aggregation
+        if partition_table.len() > 1 && self.aggregation_check() {
+            error!("do not support aggregation of multiple partitions");
+            return Err(CommonErr(
+                CommonErrCode::InvalidParam,
+                "do not support aggregation of multiple partitions".to_owned(),
+            ));
         }
 
         let start = Instant::now();
@@ -2372,5 +2398,157 @@ impl Builder {
 impl Default for Builder {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+pub struct ObTableAggregation {
+    table_query: ObTableClientQueryImpl,
+    /// this is used to record the aggregation operations
+    aggregation_operations: Vec<String>,
+}
+
+impl ObTableAggregation {
+    fn new(table_name: &str, client: Arc<ObTableClientInner>) -> Self {
+        Self {
+            table_query: ObTableClientQueryImpl::new(table_name, client),
+            aggregation_operations: Vec::new(),
+        }
+    }
+
+    pub fn max(mut self, column_name: String) -> Self {
+        let column_bak = column_name.clone();
+        self.table_query = self
+            .table_query
+            .add_aggregation(ObTableAggregationType::MAX, column_name);
+        self.aggregation_operations
+            .push(format!("max({column_bak})"));
+        self
+    }
+
+    pub fn min(mut self, column_name: String) -> Self {
+        let column_bak = column_name.clone();
+        self.table_query = self
+            .table_query
+            .add_aggregation(ObTableAggregationType::MIN, column_name);
+        self.aggregation_operations
+            .push(format!("min({column_bak})"));
+        self
+    }
+
+    pub fn count(mut self) -> Self {
+        self.table_query = self
+            .table_query
+            .add_aggregation(ObTableAggregationType::COUNT, "*".to_owned());
+        self.aggregation_operations.push("count(*)".to_owned());
+        self
+    }
+
+    pub fn sum(mut self, column_name: String) -> Self {
+        let column_bak = column_name.clone();
+        self.table_query = self
+            .table_query
+            .add_aggregation(ObTableAggregationType::SUM, column_name);
+        self.aggregation_operations
+            .push(format!("sum({column_bak})"));
+        self
+    }
+
+    pub fn avg(mut self, column_name: String) -> Self {
+        let column_bak = column_name.clone();
+        self.table_query = self
+            .table_query
+            .add_aggregation(ObTableAggregationType::AVG, column_name);
+        self.aggregation_operations
+            .push(format!("avg({column_bak})"));
+        self
+    }
+
+    pub async fn execute(mut self) -> Result<HashMap<String, Value>> {
+        // In order to get cache size.
+        self.table_query = self.table_query.select(self.aggregation_operations);
+        let mut query_set = self.table_query.execute().await.map_err(|e| {
+            error!("fail to execute aggregate");
+            e
+        })?;
+        let aggregate_option = query_set.next().await;
+        match aggregate_option {
+            Some(aggregate_result) => aggregate_result,
+            None => Err(CommonErr(
+                CommonErrCode::InvalidParam,
+                "fail to execute aggregate".to_owned(),
+            )),
+        }
+    }
+
+    pub fn add_scan_range(
+        mut self,
+        start: Vec<Value>,
+        start_equals: bool,
+        end: Vec<Value>,
+        end_equals: bool,
+    ) -> Self {
+        self.table_query = self
+            .table_query
+            .add_scan_range(start, start_equals, end, end_equals);
+        self
+    }
+
+    #[inline]
+    pub fn select(mut self, columns: Vec<String>) -> Self
+    where
+        Self: Sized,
+    {
+        self.table_query = self.table_query.select(columns);
+        self
+    }
+
+    #[inline]
+    #[allow(dead_code)]
+    fn limit(mut self, offset: Option<i32>, limit: i32) -> Self
+    where
+        Self: Sized,
+    {
+        self.table_query = self.table_query.limit(offset, limit);
+        self
+    }
+
+    #[allow(dead_code)]
+    fn add_scan_range_starts_with(mut self, start: Vec<Value>, start_equals: bool) -> Self
+    where
+        Self: Sized,
+    {
+        self.table_query = self
+            .table_query
+            .add_scan_range_starts_with(start, start_equals);
+        self
+    }
+
+    #[allow(dead_code)]
+    fn add_scan_range_ends_with(mut self, end: Vec<Value>, end_equals: bool) -> Self
+    where
+        Self: Sized,
+    {
+        self.table_query = self.table_query.add_scan_range_ends_with(end, end_equals);
+        self
+    }
+
+    #[inline]
+    #[allow(dead_code)]
+    fn filter_string(mut self, filter_string: &str) -> Self
+    where
+        Self: Sized,
+    {
+        self.table_query = self.table_query.filter_string(filter_string);
+        self
+    }
+
+    #[inline]
+    #[allow(dead_code)]
+    fn operation_timeout(mut self, timeout: Duration) -> Self
+    where
+        Self: Sized,
+    {
+        self.table_query = self.table_query.operation_timeout(timeout);
+        self
     }
 }
