@@ -1,4 +1,4 @@
-[# Demo for obkv-table-client-rs
+# Demo for obkv-table-client-rs
 Edited by OBKV developers on July 11, 2023.
 
 ## Introduction
