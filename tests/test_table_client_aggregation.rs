@@ -19,10 +19,7 @@
 #[allow(unused)]
 mod utils;
 
-use obkv::{
-    ResultCodes::{OB_ERR_UNEXPECTED, OB_NOT_SUPPORTED},
-    Value,
-};
+use obkv::{ResultCodes, Value};
 use serial_test_derive::serial;
 use tokio::task;
 
@@ -446,7 +443,7 @@ async fn test_obtable_client_multiple_partition_illegal() {
         Ok(_) => unreachable!(),
         Err(e) => {
             assert_eq!(
-                obkv::error::CommonErrCode::ObException(OB_NOT_SUPPORTED),
+                obkv::error::CommonErrCode::InvalidParam,
                 e.common_err_code().unwrap()
             );
         }
@@ -846,7 +843,7 @@ async fn test_obtable_client_aggregation_illegal_column() {
         Ok(_) => unreachable!(),
         Err(e) => {
             assert_eq!(
-                obkv::error::CommonErrCode::ObException(OB_ERR_UNEXPECTED),
+                obkv::error::CommonErrCode::ObException(ResultCodes::OB_ERR_UNEXPECTED),
                 e.common_err_code().unwrap()
             );
         }
@@ -929,7 +926,7 @@ async fn test_obtable_client_aggregation_not_exist_column() {
         Ok(_) => unreachable!(),
         Err(e) => {
             assert_eq!(
-                obkv::error::CommonErrCode::ObException(OB_ERR_UNEXPECTED),
+                obkv::error::CommonErrCode::ObException(ResultCodes::OB_ERR_UNEXPECTED),
                 e.common_err_code().unwrap()
             );
         }

@@ -71,7 +71,6 @@ use crate::{
         HandyRwLock,
     },
     ResultCodes,
-    ResultCodes::{OB_ERR_UNEXPECTED, OB_NOT_SUPPORTED},
 };
 lazy_static! {
     pub static ref OBKV_CLIENT_METRICS: ClientMetrics = {
@@ -2004,10 +2003,11 @@ impl ObTableClientQueryImpl {
         }
 
         // defense for multiple partition aggreagtion
-        if self.aggregation_check() && partition_table.len() > 1 {
+        // partition table len > 1, should check aggregation
+        if partition_table.len() > 1 && self.aggregation_check() {
             error!("do not support aggregation of multiple partitions");
             return Err(CommonErr(
-                CommonErrCode::ObException(OB_NOT_SUPPORTED),
+                CommonErrCode::InvalidParam,
                 "do not support aggregation of multiple partitions".to_owned(),
             ));
         }
@@ -2403,8 +2403,7 @@ impl Default for Builder {
 
 pub struct ObTableAggregation {
     table_query: ObTableClientQueryImpl,
-    /// this message is used to record the aggregation order and the
-    /// corresponding aggregation name
+    /// this is used to record the aggregation operations
     aggregation_operations: Vec<String>,
 }
 
@@ -2475,8 +2474,8 @@ impl ObTableAggregation {
         match aggregate_option {
             Some(aggregate_result) => aggregate_result,
             None => Err(CommonErr(
-                CommonErrCode::ObException(OB_ERR_UNEXPECTED),
-                "aggregate failed".to_owned(),
+                CommonErrCode::InvalidParam,
+                "fail to execute aggregate".to_owned(),
             )),
         }
     }

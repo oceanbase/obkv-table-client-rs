@@ -443,7 +443,7 @@ pub struct ObTableQuery {
     htable_filter: Option<ObHTableFilter>,
     is_hbase_query: bool,
     scan_range_columns: Vec<String>,
-    aggregations: Vec<ObTableAggregationSingle>,
+    aggregations: Vec<ObTableAggregationOp>,
 }
 
 const HTABLE_FILTER_DUMMY_BYTES: &[u8] = &[0x01, 0x00];
@@ -502,7 +502,7 @@ impl ObPayload for ObTableQuery {
 
         len += util::encoded_length_vi64(self.aggregations.len() as i64);
         for agg in &self.aggregations {
-            len += agg.clone().content_len()?;
+            len += agg.clone().encode_size()?;
         }
 
         Ok(len)
@@ -551,10 +551,7 @@ impl ProtoEncoder for ObTableQuery {
 
         util::encode_vi64(self.aggregations.len() as i64, buf)?;
         for agg in &self.aggregations {
-            util::encode_vi64(1, buf)?;
-            util::encode_vi64(agg.clone().content_size().unwrap() as i64, buf)?;
-            buf.put_i8(agg.agg_type.clone() as i8);
-            util::encode_vstring(&agg.agg_column, buf)?;
+            agg.encode(buf)?;
         }
 
         Ok(())
@@ -595,7 +592,7 @@ impl ObTableQuery {
     /// add single aggregate operation
     pub fn add_aggregation(mut self, aggtype: ObTableAggregationType, aggcolumn: String) -> Self {
         self.aggregations
-            .push(ObTableAggregationSingle::new(aggtype, aggcolumn));
+            .push(ObTableAggregationOp::new(aggtype, aggcolumn));
         self
     }
 
@@ -835,33 +832,61 @@ pub enum ObTableAggregationType {
     AVG = 5,
 }
 
+/// this struct is a single aggregation
 #[derive(Default, Debug, Clone, PartialEq)]
-pub struct ObTableAggregationSingle {
+pub struct ObTableAggregationOp {
+    base: BasePayLoad,
     agg_type: ObTableAggregationType,
     agg_column: String,
 }
 
-impl ObTableAggregationSingle {
+impl ObTableAggregationOp {
     pub(crate) fn new(aggtype: ObTableAggregationType, aggcolumn: String) -> Self {
         Self {
+            base: BasePayLoad::default(),
             agg_type: aggtype,
             agg_column: aggcolumn,
         }
     }
 
-    /// For serialize
-    pub fn content_size(self) -> Result<usize> {
-        let mut len: usize = 0;
-        len += util::encoded_length_vi8(self.agg_type as i8);
-        len += util::encoded_length_vstring(&self.agg_column);
-        Ok(len)
-    }
-
-    /// For serialize
-    pub fn content_len(self) -> Result<usize> {
+    /// Total size of aggregation op for encode
+    pub fn encode_size(self) -> Result<usize> {
         Ok(util::encoded_length_vi64(1) // version
-            + util::encoded_length_vi64(self.clone().content_size()? as i64)
+            + util::encoded_length_vi64(self.clone().content_len()? as i64)
             + util::encoded_length_vi8(self.agg_type as i8)
             + util::encoded_length_vstring(&self.agg_column))
+    }
+}
+
+impl ProtoEncoder for ObTableAggregationOp {
+    fn encode(&self, buf: &mut BytesMut) -> Result<()> {
+        self.encode_header(buf)?;
+        buf.put_i8(self.agg_type.clone() as i8);
+        util::encode_vstring(&self.agg_column, buf)?;
+        Ok(())
+    }
+}
+
+impl ProtoDecoder for ObTableAggregationOp {
+    fn decode(&mut self, _src: &mut BytesMut) -> Result<()> {
+        unimplemented!()
+    }
+}
+
+impl ObPayload for ObTableAggregationOp {
+    fn base(&self) -> &BasePayLoad {
+        &self.base
+    }
+
+    fn base_mut(&mut self) -> &mut BasePayLoad {
+        &mut self.base
+    }
+
+    //payload size, without header bytes
+    fn content_len(&self) -> Result<usize> {
+        let mut len: usize = 0;
+        len += util::encoded_length_vi8(self.agg_type.clone() as i8);
+        len += util::encoded_length_vstring(&self.agg_column);
+        Ok(len)
     }
 }
