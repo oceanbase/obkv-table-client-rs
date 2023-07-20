@@ -2507,7 +2507,7 @@ impl ObTableAggregation {
     where
         Self: Sized,
     {
-        //agg secondary index support
+        //agg local index support
         self.table_query = self.table_query.index_name(index_name);
         self
     }
