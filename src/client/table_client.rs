@@ -2503,6 +2503,16 @@ impl ObTableAggregation {
     }
 
     #[inline]
+    pub fn index_name(mut self, index_name: &str) -> Self
+    where
+        Self: Sized,
+    {
+        //agg local index support
+        self.table_query = self.table_query.index_name(index_name);
+        self
+    }
+
+    #[inline]
     #[allow(dead_code)]
     fn limit(mut self, offset: Option<i32>, limit: i32) -> Self
     where
