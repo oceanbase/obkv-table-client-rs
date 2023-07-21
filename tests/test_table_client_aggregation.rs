@@ -206,6 +206,7 @@ async fn test_multiple_partition() {
      *  `c2` bigint NOT NULL,
      *  `c3` double DEFAULT NULL,
      *  `c4` varchar(5) DEFAULT NULL,
+     *  INDEX i1(`c1`, `c3`) local,
      *  PRIMARY KEY(`c1`, `c2`)) PARTITION BY KEY(`c1`) PARTITIONS 200;
      */
 
@@ -372,6 +373,181 @@ async fn test_multiple_partition() {
 
 #[tokio::test]
 #[serial]
+async fn test_local_index() {
+    /*
+     * CREATE TABLE test_partition_aggregation (
+     *  `c1` int NOT NULL,
+     *  `c2` bigint NOT NULL,
+     *  `c3` double DEFAULT NULL,
+     *  `c4` varchar(5) DEFAULT NULL,
+     *  INDEX i1(`c1`, `c3`) local,
+     *  PRIMARY KEY(`c1`, `c2`)) PARTITION BY KEY(`c1`) PARTITIONS 200;
+     */
+
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
+    let client = client_handle.await.unwrap();
+    const TEST_TABLE_NAME: &str = "test_partition_aggregation";
+    client.add_row_key_element(TEST_TABLE_NAME, vec!["c1".to_owned(), "c2".to_owned()]);
+
+    // prepare data
+    let result = client
+        .insert(
+            TEST_TABLE_NAME,
+            vec![Value::from(200i32), Value::from(50i64)],
+            vec!["c3".to_owned()],
+            vec![Value::from(50.0)],
+        )
+        .await;
+    assert!(result.is_ok());
+
+    let result = client
+        .insert(
+            TEST_TABLE_NAME,
+            vec![Value::from(200i32), Value::from(150i64)],
+            vec!["c3".to_owned()],
+            vec![Value::from(150.0)],
+        )
+        .await;
+    assert!(result.is_ok());
+
+    let result = client
+        .insert(
+            TEST_TABLE_NAME,
+            vec![Value::from(300i32), Value::from(300i64)],
+            vec!["c3".to_owned()],
+            vec![Value::from(300.0)],
+        )
+        .await;
+    assert!(result.is_ok());
+
+    // aggregate
+    let aggregation = client
+        .aggregate(TEST_TABLE_NAME)
+        .min("c2".to_owned())
+        .max("c2".to_owned())
+        .count()
+        .sum("c2".to_owned())
+        .avg("c2".to_owned())
+        .min("c3".to_owned())
+        .max("c3".to_owned())
+        .sum("c3".to_owned())
+        .avg("c3".to_owned())
+        .add_scan_range(
+            vec![Value::from(200i32), Value::from(0f64)],
+            true,
+            vec![Value::from(200i32), Value::from(1000f64)],
+            true,
+        )
+        .index_name("i1");
+
+    // get result
+    let result_set = aggregation.execute().await;
+
+    assert!(result_set.is_ok());
+    let result_set = result_set.unwrap();
+
+    // test bigint
+    let single_result = result_set.get("max(c2)");
+    match single_result {
+        Some(singel_value) => {
+            assert_eq!(150, singel_value.as_i64());
+        }
+        _ => unreachable!(),
+    }
+
+    let single_result = result_set.get("min(c2)");
+    match single_result {
+        Some(singel_value) => {
+            assert_eq!(50, singel_value.as_i64());
+        }
+        _ => unreachable!(),
+    }
+
+    let single_result = result_set.get("count(*)");
+    match single_result {
+        Some(singel_value) => {
+            assert_eq!(2, singel_value.as_i64());
+        }
+        _ => unreachable!(),
+    }
+
+    let single_result = result_set.get("sum(c2)");
+    match single_result {
+        Some(singel_value) => {
+            assert_eq!(200, singel_value.as_i64());
+        }
+        _ => unreachable!(),
+    }
+
+    let single_result = result_set.get("avg(c2)");
+    match single_result {
+        Some(singel_value) => {
+            assert_eq!(100.0, singel_value.as_f64());
+        }
+        _ => unreachable!(),
+    }
+
+    // test double
+    let single_result = result_set.get("max(c3)");
+    match single_result {
+        Some(singel_value) => {
+            assert_eq!(150.0, singel_value.as_f64());
+        }
+        _ => unreachable!(),
+    }
+
+    let single_result = result_set.get("min(c3)");
+    match single_result {
+        Some(singel_value) => {
+            assert_eq!(50.0, singel_value.as_f64());
+        }
+        _ => unreachable!(),
+    }
+
+    let single_result = result_set.get("sum(c3)");
+    match single_result {
+        Some(singel_value) => {
+            assert_eq!(200.0, singel_value.as_f64());
+        }
+        _ => unreachable!(),
+    }
+
+    let single_result = result_set.get("avg(c3)");
+    match single_result {
+        Some(singel_value) => {
+            assert_eq!(100.0, singel_value.as_f64());
+        }
+        _ => unreachable!(),
+    }
+
+    // clear data
+    let result = client
+        .delete(
+            TEST_TABLE_NAME,
+            vec![Value::from(200i32), Value::from(50i64)],
+        )
+        .await;
+    assert!(result.is_ok());
+
+    let result = client
+        .delete(
+            TEST_TABLE_NAME,
+            vec![Value::from(200i32), Value::from(150i64)],
+        )
+        .await;
+    assert!(result.is_ok());
+
+    let result = client
+        .delete(
+            TEST_TABLE_NAME,
+            vec![Value::from(300i32), Value::from(300i64)],
+        )
+        .await;
+    assert!(result.is_ok());
+}
+
+#[tokio::test]
+#[serial]
 async fn test_multiple_partition_illegal() {
     /*
      * CREATE TABLE test_partition_aggregation (
@@ -379,6 +555,7 @@ async fn test_multiple_partition_illegal() {
      *  `c2` bigint NOT NULL,
      *  `c3` double DEFAULT NULL,
      *  `c4` varchar(5) DEFAULT NULL,
+     *  INDEX i1(`c1`, `c3`) local,
      *  PRIMARY KEY(`c1`, `c2`)) PARTITION BY KEY(`c1`) PARTITIONS 200;
      */
 
@@ -484,6 +661,7 @@ async fn test_aggregation_with_null() {
      *  `c2` bigint NOT NULL,
      *  `c3` double DEFAULT NULL,
      *  `c4` varchar(5) DEFAULT NULL,
+     *  INDEX i1(`c1`, `c3`) local,
      *  PRIMARY KEY(`c1`, `c2`)) PARTITION BY KEY(`c1`) PARTITIONS 200;
      */
 
@@ -605,6 +783,7 @@ async fn test_multiple_aggregation_some_null() {
      *  `c2` bigint NOT NULL,
      *  `c3` double DEFAULT NULL,
      *  `c4` varchar(5) DEFAULT NULL,
+     *  INDEX i1(`c1`, `c3`) local,
      *  PRIMARY KEY(`c1`, `c2`)) PARTITION BY KEY(`c1`) PARTITIONS 200;
      */
 
@@ -718,6 +897,7 @@ async fn test_aggregation_empty_table() {
      *  `c2` bigint NOT NULL,
      *  `c3` double DEFAULT NULL,
      *  `c4` varchar(5) DEFAULT NULL,
+     *  INDEX i1(`c1`, `c3`) local,
      *  PRIMARY KEY(`c1`, `c2`)) PARTITION BY KEY(`c1`) PARTITIONS 200;
      */
 
@@ -802,6 +982,7 @@ async fn test_aggregation_illegal_column() {
      *  `c2` bigint NOT NULL,
      *  `c3` double DEFAULT NULL,
      *  `c4` varchar(5) DEFAULT NULL,
+     *  INDEX i1(`c1`, `c3`) local,
      *  PRIMARY KEY(`c1`, `c2`)) PARTITION BY KEY(`c1`) PARTITIONS 200;
      */
 
@@ -885,6 +1066,7 @@ async fn test_aggregation_not_exist_column() {
      *  `c2` bigint NOT NULL,
      *  `c3` double DEFAULT NULL,
      *  `c4` varchar(5) DEFAULT NULL,
+     *  INDEX i1(`c1`, `c3`) local,
      *  PRIMARY KEY(`c1`, `c2`)) PARTITION BY KEY(`c1`) PARTITIONS 200;
      */
 

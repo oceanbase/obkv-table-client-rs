@@ -8,7 +8,9 @@ Now we provide an interface to access data from OceanBase, which we will introdu
 ***Notice that we will also provide another interface to access data from OceanBase in the future(Like [Mutation](https://github.com/oceanbase/obkv-table-client-java/tree/master/example/simple-mutation)).***
 
 ## Notice
-**We only support aggregate on a single partition now. Aggregation across partitions may lead to consistency problems. You can limit your aggregation in one partition by restricting your scan range.**
+**We only support aggregate on a single partition now. Aggregation across partitions may lead to consistency problems. You can limit your aggregation in one partition by restricting your scan range.
+
+Also, result of aggregate on a empty table may have different result between different observer. We will fix this problem later. For your convenience, you'd better not to aggregate empty table before we fix this problem.**
 
 ## demo
 ### Aggregate
@@ -30,6 +32,8 @@ The aggregation result is a **hash map**, you can get the single aggregation res
 
 For example, you can use `get(max(c1))` to get the aggregation result, the string `"max(c1)"` is the **operation_name**
 
+You could also get the aggregation result by local index. For example, you can use `index_name(idx1)` to use the idx1 to get the aggregation result.
+
 A simple aggregate example is shown below:
 ```rust aggregate exampleObTableAggregation
 async fn aggregate() {
@@ -40,7 +44,8 @@ async fn aggregate() {
     let aggregation = client
         .aggregate("your_table_name")
         .min("c2".to_owned())
-        .add_scan_range(vec![Value::from(200i32)], true, vec![Value::from(200i32)], true);
+        .add_scan_range(vec![Value::from(200i32)], true, vec![Value::from(200i32)], true)
+        .index_name("your_index_name");
     
     // get result
     let result_set = aggregation.execute().await;

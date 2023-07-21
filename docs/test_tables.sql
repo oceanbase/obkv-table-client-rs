@@ -250,5 +250,6 @@ CREATE TABLE test_partition_aggregation (
     `c2` bigint NOT NULL,
     `c3` double DEFAULT NULL,
     `c4` varchar(5) DEFAULT NULL,
+    INDEX i1(`c1`, `c3`) local,
     PRIMARY KEY(`c1`, `c2`)
 ) PARTITION BY KEY(`c1`) PARTITIONS 200;
