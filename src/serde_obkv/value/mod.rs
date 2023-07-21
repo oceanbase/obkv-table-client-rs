@@ -36,8 +36,8 @@ use super::{
     },
 };
 
-const VALUE_MAX: i64 = -2i64;
-const VALUE_MIN: i64 = -3i64;
+const VALUE_MAX: i64 = -3i64;
+const VALUE_MIN: i64 = -2i64;
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub enum CollationType {
