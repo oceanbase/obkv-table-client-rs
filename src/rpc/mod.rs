@@ -523,7 +523,7 @@ impl Connection {
         let req = ObTablePacket::ServerPacket {
             id: payload.channel_id(),
             code: Some(payload.pcode()),
-            header: None,
+            header: Box::new(None),
             content,
         };
 
@@ -986,7 +986,7 @@ mod test {
             code: None,
             id,
             content,
-            header: None,
+            header: Box::new(None),
         }
     }
 
