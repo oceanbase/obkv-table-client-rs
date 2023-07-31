@@ -27,6 +27,7 @@ use std::{
 };
 
 use mysql as my;
+use mysql::{prelude::Queryable, PoolConstraints, PoolOpts, Row};
 use rand::{seq::SliceRandom, thread_rng};
 
 use self::ob_part_desc::{ObHashPartDesc, ObKeyPartDesc, ObPartDesc, ObRangePartDesc};
@@ -573,7 +574,7 @@ impl ObTableLocation {
                 return Ok(pool);
             }
             let mut builder = my::OptsBuilder::new();
-            builder
+            builder = builder
                 .ip_or_hostname(Some(server_addr.ip.to_owned()))
                 .tcp_port(server_addr.sql_port as u16)
                 .user(Some(username))
@@ -581,6 +582,11 @@ impl ObTableLocation {
                 .db_name(Some(db_name))
                 .tcp_connect_timeout(connect_timeout)
                 .read_timeout(sock_timeout);
+            let constraints = PoolConstraints::new(
+                self.config.metadata_mysql_conn_pool_min_size,
+                self.config.metadata_mysql_conn_pool_max_size,
+            );
+            builder = builder.pool_opts(constraints.map(|v| PoolOpts::new().with_constraints(v)));
 
             info!(
                 "ObTableLocation::get_or_create_mysql_pool create mysql pool \
@@ -588,11 +594,7 @@ impl ObTableLocation {
                 server_addr.ip, server_addr.sql_port, db_name
             );
 
-            let pool = Arc::new(my::Pool::new_manual(
-                self.config.metadata_mysql_conn_pool_min_size,
-                self.config.metadata_mysql_conn_pool_max_size,
-                builder,
-            )?);
+            let pool = Arc::new(my::Pool::new(builder)?);
 
             match pools.get_mut(server_addr) {
                 Some(map) => {
@@ -643,17 +645,15 @@ impl ObTableLocation {
                 e
             })?;
 
-        let mut conn = pool
-            .try_get_conn(u::duration_to_millis(&timeout) as u32)
-            .map_err(|e| {
-                error!(
-                    "ObTableLocation::execute_sql fail to get connection, sql:{}, addr:{:?}, err:{}",
-                    sql, server_addr, e
-                );
-                e
-            })?;
+        let mut conn = pool.try_get_conn(timeout).map_err(|e| {
+            error!(
+                "ObTableLocation::execute_sql fail to get connection, sql:{}, addr:{:?}, err:{}",
+                sql, server_addr, e
+            );
+            e
+        })?;
 
-        let query_res = conn.query(sql).map_err(|e| {
+        let query_res = conn.query::<Row, &str>(sql).map_err(|e| {
             error!(
                 "ObTableLocation::execute_sql failed, sql:{}, addr:{:?}, err:{}",
                 sql, server_addr, e
@@ -819,7 +819,7 @@ impl ObTableLocation {
             Some(sock_timeout),
         )?;
 
-        let mut conn = pool.try_get_conn(u::duration_to_millis(&connect_timeout) as u32)?;
+        let mut conn = pool.try_get_conn(connect_timeout)?;
 
         let part_entry = self.get_table_location_from_remote(&mut conn, key, table_entry)?;
         //Clone a new table entry to return.
@@ -849,7 +849,7 @@ impl ObTableLocation {
 
         let mut table_id = OB_INVALID_ID;
         let mut partition_num = OB_INVALID_ID;
-        let mut conn = pool.try_get_conn(u::duration_to_millis(&connect_timeout) as u32)?;
+        let mut conn = pool.try_get_conn(connect_timeout)?;
         let sql = match key.table_name.as_ref() {
         ALL_DUMMY_TABLE => format!("SELECT /*+READ_CONSISTENCY(WEAK)*/ A.partition_id as partition_id, A.svr_ip as svr_ip, A.sql_port as sql_port,
                                     A.table_id as table_id, A.role as role, A.part_num as part_num, B.svr_port as svr_port,
@@ -868,14 +868,7 @@ impl ObTableLocation {
                      &key.table_name),
         };
         let mut replica_locations = Vec::new();
-        for result in conn.query(sql)? {
-            let row = result.map_err(|e| {
-                error!(
-                    "ObTableLocation::get_table_entry_from_remote: fail to execute sql, err:{}",
-                    e
-                );
-                e
-            })?;
+        for row in conn.query::<Row, String>(sql)? {
             let (id, svr_ip, sql_port, tbl_id, role, part_num, svr_port, status, stop_time) =
                 match my::from_row_opt(row) {
                     Ok(tuple) => tuple,
@@ -1014,14 +1007,7 @@ impl ObTableLocation {
 
         let mut partition_location = HashMap::new();
 
-        for result in conn.query(sql)? {
-            let row = result.map_err(|e| {
-                error!(
-                    "ObTableLocation::get_table_location_from_remote: fail to execute sql, err:{}",
-                    e
-                );
-                e
-            })?;
+        for row in conn.query::<Row, String>(sql)? {
             let (part_id, svr_ip, sql_port, role, svr_port, status, stop_time) =
                 match my::from_row_opt(row) {
                     Ok(tuple) => tuple,
