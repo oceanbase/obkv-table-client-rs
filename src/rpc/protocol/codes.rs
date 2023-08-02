@@ -657,6 +657,7 @@ pub enum ResultCodes {
     OB_PARTITION_IS_BLOCKED = -6229,
     OB_TRANS_RPC_TIMEOUT = -6230,
     OB_REPLICA_NOT_READABLE = -6231,
+    OB_TRANS_STMT_NEED_RETRY = -6241,
     OB_LOG_ID_NOT_FOUND = -6301,
     OB_LSR_THREAD_STOPPED = -6302,
     OB_NO_LOG = -6303,
@@ -1357,6 +1358,7 @@ impl ResultCodes {
             -6229 => ResultCodes::OB_PARTITION_IS_BLOCKED,
             -6230 => ResultCodes::OB_TRANS_RPC_TIMEOUT,
             -6231 => ResultCodes::OB_REPLICA_NOT_READABLE,
+            -6241 => ResultCodes::OB_TRANS_STMT_NEED_RETRY,
             -6301 => ResultCodes::OB_LOG_ID_NOT_FOUND,
             -6302 => ResultCodes::OB_LSR_THREAD_STOPPED,
             -6303 => ResultCodes::OB_NO_LOG,
@@ -1449,7 +1451,9 @@ impl ResultCodes {
 
         matches!(
             self,
-            ResultCodes::OB_TRY_LOCK_ROW_CONFLICT | ResultCodes::OB_TRANSACTION_SET_VIOLATION
+            ResultCodes::OB_TRY_LOCK_ROW_CONFLICT
+                | ResultCodes::OB_TRANSACTION_SET_VIOLATION
+                | ResultCodes::OB_TRANS_STMT_NEED_RETRY
         )
     }
 }
