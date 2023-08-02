@@ -1451,7 +1451,9 @@ impl ResultCodes {
 
         matches!(
             self,
-            ResultCodes::OB_TRY_LOCK_ROW_CONFLICT | ResultCodes::OB_TRANSACTION_SET_VIOLATION | ResultCodes::OB_TRANS_STMT_NEED_RETRY
+            ResultCodes::OB_TRY_LOCK_ROW_CONFLICT
+                | ResultCodes::OB_TRANSACTION_SET_VIOLATION
+                | ResultCodes::OB_TRANS_STMT_NEED_RETRY
         )
     }
 }
