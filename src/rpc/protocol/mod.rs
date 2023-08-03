@@ -722,7 +722,7 @@ pub enum ObTablePacket {
         id: i32,
         //channel id
         content: BytesMut,
-        header: Option<ObRpcPacketHeader>,
+        header: Box<Option<ObRpcPacketHeader>>,
     },
     TransportPacket {
         error: Error,
@@ -854,7 +854,7 @@ impl Decoder for ObTablePacketCodec {
                 return Ok(Some(ObTablePacket::ServerPacket {
                     id,
                     code: None,
-                    header: Some(header),
+                    header: Box::new(Some(header)),
                     content,
                 }));
             } else {
@@ -924,7 +924,7 @@ mod test {
             code: None,
             id: 99,
             content,
-            header: None,
+            header: Box::new(None),
         };
 
         let mut buf = BytesMut::new();
@@ -943,10 +943,10 @@ mod test {
                 code: _,
                 content,
                 id,
-                header: Some(h),
+                header,
             } => {
                 assert_eq!(id, 99);
-                assert_eq!(h.timeout, 99);
+                assert_eq!(header.unwrap().timeout, 99);
                 assert_eq!(b"hello", &content[..]);
             }
             _ => panic!("decode error"),

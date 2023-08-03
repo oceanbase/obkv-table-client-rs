@@ -18,6 +18,7 @@
 use std::{collections::HashMap, i32, i64, u8};
 
 use mysql as my;
+use mysql::{prelude::Queryable, Row};
 
 use super::{
     ob_part_constants, part_func_type::PartFuncType, ObHashPartDesc, ObKeyPartDesc, ObPartDesc,
@@ -63,88 +64,89 @@ impl LocationUtil {
         let mut info = ObPartitionInfo::new();
         // in java sdk is parsePartitionInfo()
         let mut is_first_row = true;
-        for result in conn.query(sql)? {
-            result.map(|mut row| {
-                    if is_first_row {
-                        is_first_row = false;
+        for mut row in conn.query::<Row, String>(sql)? {
+            if is_first_row {
+                is_first_row = false;
 
-                        // get part level
-                        info.level = ObPartitionLevel::from_int(row.take("part_level").unwrap());
+                // get part level
+                info.level = ObPartitionLevel::from_int(row.take("part_level").unwrap());
 
-                        // get first part
-                        if info.level.get_index() >= ObPartitionLevel::One.get_index() {
-                            let part_desc: Option<ObPartDesc> = match LocationUtil::build_part_desc(
-                                ObPartitionLevel::One,
-                                row.clone(),
-                            ) {
-                                Ok(v) => v,
-                                Err(e) => {
-                                    warn!(
+                // get first part
+                if info.level.get_index() >= ObPartitionLevel::One.get_index() {
+                    let part_desc: Option<ObPartDesc> = match LocationUtil::build_part_desc(
+                        ObPartitionLevel::One,
+                        row.clone(),
+                    ) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            warn!(
                                         "LocationUtil:fetch_partition_info ObPartitionLevel::One build_part_desc,err: {:?}",
                                         e
                                     );
-                                    None
-                                }
-                            };
-                            match part_desc {
-                                Some(v) => info.first_part_desc = Some(v),
-                                None => warn!("fail to build first part"),
-                            };
+                            None
                         }
+                    };
+                    match part_desc {
+                        Some(v) => info.first_part_desc = Some(v),
+                        None => warn!("fail to build first part"),
+                    };
+                }
 
-                        // get sub part
-                        if info.level.get_index() == ObPartitionLevel::Two.get_index() {
-                            let part_desc =
-                                match LocationUtil::build_part_desc(ObPartitionLevel::Two, row.clone()) {
-                                    Ok(v) => v,
-                                    Err(e) => {
-                                        warn!(
+                // get sub part
+                if info.level.get_index() == ObPartitionLevel::Two.get_index() {
+                    let part_desc = match LocationUtil::build_part_desc(
+                        ObPartitionLevel::Two,
+                        row.clone(),
+                    ) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            warn!(
                                             "LocationUtil:fetch_partition_info ObPartitionLevel::Two build_part_desc,err: {:?}",
                                             e
                                         );
-                                        None
-                                    }
-                                };
-                            match part_desc {
-                                Some(v) => info.sub_part_desc = Some(v),
-                                None => warn!("fail to build sub part"),
-                            };
+                            None
                         }
-                    }
+                    };
+                    match part_desc {
+                        Some(v) => info.sub_part_desc = Some(v),
+                        None => warn!("fail to build sub part"),
+                    };
+                }
+            }
 
-                    let part_key_extra: String = row.take("part_key_extra").unwrap();
-                    let part_key_name: String = row.take("part_key_name").unwrap();
-                    let part_key_idx: i32 = row.take("part_key_idx").unwrap();
-                    let part_key_type: u8 = row.take("part_key_type").unwrap();
+            let part_key_extra: String = row.take("part_key_extra").unwrap();
+            let part_key_name: String = row.take("part_key_name").unwrap();
+            let part_key_idx: i32 = row.take("part_key_idx").unwrap();
+            let part_key_type: u8 = row.take("part_key_type").unwrap();
 
-                    let spare1: u8 = row.take("spare1").unwrap();
+            let spare1: u8 = row.take("spare1").unwrap();
 
-                    // get part key for each loop
-                    if !part_key_extra.is_empty() {
-                        // TODO: new ObGeneratedColumnExpressParser(getPlainString(partKeyExtra)).parse());
-                        let column = ObGeneratedColumn::new(
-                            part_key_name,
-                            part_key_idx,
-                            ObjType::from_u8(part_key_type)
-                                .expect("LocationUtil::fetch_partition_info fail to decode obj type"),
-                            CollationType::from_u8(spare1)
-                                 .expect("LocationUtil::fetch_partition_info fail to decode collation type"),
-                        );
-                        info.part_columns.push(Box::new(column));
-                        unimplemented!();
-                    } else {
-                        let column = ObSimpleColumn::new(
-                            part_key_name,
-                            part_key_idx,
-                            ObjType::from_u8(part_key_type)
-                                .expect("LocationUtil::fetch_partition_info fail to decode obj type"),
-                            CollationType::from_u8(spare1)
-                                 .expect("LocationUtil::fetch_partition_info fail to decode collation type"),
-                        );
+            // get part key for each loop
+            if !part_key_extra.is_empty() {
+                // TODO: new ObGeneratedColumnExpressParser(getPlainString(partKeyExtra)).
+                // parse());
+                let column = ObGeneratedColumn::new(
+                    part_key_name,
+                    part_key_idx,
+                    ObjType::from_u8(part_key_type)
+                        .expect("LocationUtil::fetch_partition_info fail to decode obj type"),
+                    CollationType::from_u8(spare1)
+                        .expect("LocationUtil::fetch_partition_info fail to decode collation type"),
+                );
+                info.part_columns.push(Box::new(column));
+                unimplemented!();
+            } else {
+                let column = ObSimpleColumn::new(
+                    part_key_name,
+                    part_key_idx,
+                    ObjType::from_u8(part_key_type)
+                        .expect("LocationUtil::fetch_partition_info fail to decode obj type"),
+                    CollationType::from_u8(spare1)
+                        .expect("LocationUtil::fetch_partition_info fail to decode collation type"),
+                );
 
-                        info.part_columns.push(Box::new(column));
-                    }
-                })?;
+                info.part_columns.push(Box::new(column));
+            }
         }
 
         // get list partition column types here
@@ -454,40 +456,37 @@ impl LocationUtil {
             }
         }
 
-        for result in conn.query(sql)? {
-            result.map(|mut row| {
-                let high_bound_val: String = row.take("high_bound_val").unwrap();
-                let splits: Vec<String> =
-                    high_bound_val.split(',').map(|s| s.to_string()).collect();
-                let mut part_elements: Vec<Comparable> = Vec::new();
-                for i in 0..splits.len() {
-                    let element_str = LocationUtil::get_plain_string(&splits[i]);
-                    if element_str.eq_ignore_ascii_case("MAXVALUE") {
-                        part_elements.push(Comparable::MaxValue);
-                    } else if element_str.eq_ignore_ascii_case("MINVALUE") {
-                        part_elements.push(Comparable::MinValue);
-                    } else {
-                        part_elements.push(Comparable::Value(
-                            order_part_columns[i]
-                                .eval_value(&[Value::String(
-                                    element_str,
-                                    ObjMeta::new(
-                                        order_part_columns[i].get_ob_obj_type().clone(),
-                                        CollationLevel::Numeric,
-                                        order_part_columns[i].get_ob_collation_type().clone(),
-                                        10,
-                                    ),
-                                )])
-                                .unwrap(),
-                        ));
-                    }
+        for mut row in conn.query::<Row, String>(sql)? {
+            let high_bound_val: String = row.take("high_bound_val").unwrap();
+            let splits: Vec<String> = high_bound_val.split(',').map(|s| s.to_string()).collect();
+            let mut part_elements: Vec<Comparable> = Vec::new();
+            for i in 0..splits.len() {
+                let element_str = LocationUtil::get_plain_string(&splits[i]);
+                if element_str.eq_ignore_ascii_case("MAXVALUE") {
+                    part_elements.push(Comparable::MaxValue);
+                } else if element_str.eq_ignore_ascii_case("MINVALUE") {
+                    part_elements.push(Comparable::MinValue);
+                } else {
+                    part_elements.push(Comparable::Value(
+                        order_part_columns[i]
+                            .eval_value(&[Value::String(
+                                element_str,
+                                ObjMeta::new(
+                                    order_part_columns[i].get_ob_obj_type().clone(),
+                                    CollationLevel::Numeric,
+                                    order_part_columns[i].get_ob_collation_type().clone(),
+                                    10,
+                                ),
+                            )])
+                            .unwrap(),
+                    ));
                 }
-                let ob_partition_key = ObPartitionKey::new(part_elements);
-                let part_id: i64 = row.take(part_id_column_name).unwrap();
-                let part_name: String = row.take("part_name").unwrap();
-                bounds.push((ob_partition_key, part_id));
-                part_name_id_map.insert(part_name.to_lowercase(), part_id);
-            })?;
+            }
+            let ob_partition_key = ObPartitionKey::new(part_elements);
+            let part_id: i64 = row.take(part_id_column_name).unwrap();
+            let part_name: String = row.take("part_name").unwrap();
+            bounds.push((ob_partition_key, part_id));
+            part_name_id_map.insert(part_name.to_lowercase(), part_id);
         }
 
         if let Some(part_desc) = part_desc {
