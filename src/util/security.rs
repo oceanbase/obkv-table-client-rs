@@ -17,9 +17,8 @@
 
 /// Password security module
 use std::cell::RefCell;
-use std::{iter::repeat, num::Wrapping};
-
-use crypto::{digest::Digest, sha1::Sha1};
+use sha1::{Sha1, Digest};
+use std::num::Wrapping;
 
 use super::current_time_millis;
 
@@ -77,23 +76,18 @@ pub fn scramble_password(password: &str, seed: &str) -> Vec<u8> {
     }
 
     let mut hasher = Sha1::new();
-    hasher.input_str(password);
-    let mut pass1: Vec<u8> = repeat(0).take((hasher.output_bits() + 7) / 8).collect();
-    hasher.result(&mut pass1);
-    hasher.reset();
-    hasher.input(&pass1);
-    let mut pass2: Vec<u8> = repeat(0).take((hasher.output_bits() + 7) / 8).collect();
-    hasher.result(&mut pass2);
-    hasher.reset();
-    hasher.input_str(seed);
-    hasher.input(&pass2);
-    let mut pass3: Vec<u8> = repeat(0).take((hasher.output_bits() + 7) / 8).collect();
-    hasher.result(&mut pass3);
+    hasher.update(password);
+    let pass1 = hasher.finalize_reset();
+    hasher.update(&pass1);
+    let pass2 = hasher.finalize_reset();
+    hasher.update(seed);
+    hasher.update(&pass2);
+    let mut pass3 = hasher.finalize_reset();
 
     for i in 0..pass3.len() {
         pass3[i] ^= pass1[i];
     }
-    pass3
+    pass3.to_vec()
 }
 
 #[cfg(test)]

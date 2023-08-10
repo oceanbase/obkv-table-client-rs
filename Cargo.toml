@@ -48,7 +48,7 @@ quick-error = "1.2"
 r2d2 = "0.8.3"
 rand = "0.8"
 reqwest = { version = "0.11.13", default-features = false, features = ["rustls-tls", "blocking"] }
-rust-crypto = "0.2"
+sha1 = "0.10.5"
 scheduled-thread-pool = "0.2"
 serde = "1.0"
 serde_bytes = "0.11"
