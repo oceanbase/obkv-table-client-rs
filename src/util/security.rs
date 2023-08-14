@@ -17,8 +17,9 @@
 
 /// Password security module
 use std::cell::RefCell;
-use sha1::{Sha1, Digest};
 use std::num::Wrapping;
+
+use sha1::{Digest, Sha1};
 
 use super::current_time_millis;
 
