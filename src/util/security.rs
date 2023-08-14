@@ -78,10 +78,10 @@ pub fn scramble_password(password: &str, seed: &str) -> Vec<u8> {
     let mut hasher = Sha1::new();
     hasher.update(password);
     let pass1 = hasher.finalize_reset();
-    hasher.update(&pass1);
+    hasher.update(pass1);
     let pass2 = hasher.finalize_reset();
     hasher.update(seed);
-    hasher.update(&pass2);
+    hasher.update(pass2);
     let mut pass3 = hasher.finalize_reset();
 
     for i in 0..pass3.len() {
