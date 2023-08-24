@@ -96,8 +96,8 @@ impl Default for ClientConfig {
 
             table_entry_acquire_connect_timeout: Duration::from_secs(5),
             table_entry_acquire_read_timeout: Duration::from_secs(3),
-            table_entry_refresh_interval_base: Duration::from_millis(100),
-            table_entry_refresh_interval_ceiling: Duration::from_millis(1600),
+            table_entry_refresh_interval_base: Duration::from_secs(60),
+            table_entry_refresh_interval_ceiling: Duration::from_secs(120),
             table_entry_refresh_try_times: 3,
             table_entry_refresh_try_interval: Duration::from_millis(20),
             table_entry_refresh_continuous_failure_ceiling: 10,
@@ -110,7 +110,7 @@ impl Default for ClientConfig {
             rpc_login_timeout: Duration::from_secs(3),
             rpc_operation_timeout: Duration::from_secs(3),
             rpc_retry_limit: 3,
-            rpc_retry_interval: Duration::from_secs(0),
+            rpc_retry_interval: Duration::from_millis(1000),
 
             refresh_workers_num: 5,
 
