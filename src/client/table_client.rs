@@ -329,7 +329,9 @@ impl ObTableClientInner {
         {
             warn!("ObTableClientInner::on_table_op_failure refresh table entry {} while execute failed times exceeded {}, err: {}.",
                   table_name, self.config.runtime_continuous_failure_ceiling, error);
-            self.get_or_refresh_table_entry(table_name, true)?;
+            let _ = self.refresh_sender.try_send(table_name.to_owned());
+            warn!("{}", format!("ObTableClientInner::on_table_op_failure: try to refresh schema actively, table_name:{table_name}"));
+            // self.get_or_refresh_table_entry(table_name, true)?;
             counter.store(0, Ordering::SeqCst);
         }
 

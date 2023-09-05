@@ -103,7 +103,7 @@ impl Default for ClientConfig {
             table_entry_refresh_continuous_failure_ceiling: 10,
 
             server_address_priority_timeout: Duration::from_secs(1800),
-            runtime_continuous_failure_ceiling: 100,
+            runtime_continuous_failure_ceiling: 10,
 
             rpc_connect_timeout: Duration::from_secs(5),
             rpc_read_timeout: Duration::from_secs(3),
