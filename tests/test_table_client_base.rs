@@ -106,12 +106,12 @@ impl BaseTest {
         let mut handles = vec![];
         let start = SystemTime::now();
         let counter = Arc::new(AtomicUsize::new(0));
-        for _ in 0..10 {
+        for _ in 0..BaseTest::THREAD_NUM {
             let client = self.client.clone();
             let counter = counter.clone();
             handles.push(task::spawn(async move {
-                for i in 0..100 {
-                    let key: i64 = i;
+                for i in 0..BaseTest::ROW_NUM {
+                    let key: i64 = i.try_into().unwrap();
                     let value = format!("value{i}");
                     let result = client
                         .insert_or_update(
@@ -141,11 +141,14 @@ impl BaseTest {
         for handle in handles {
             handle.await.unwrap();
         }
-        assert_eq!(1000, counter.load(Ordering::SeqCst));
+        assert_eq!(
+            BaseTest::THREAD_NUM * BaseTest::ROW_NUM,
+            counter.load(Ordering::SeqCst)
+        );
         println!(
             "{} seconds for insert_or_update {} rows.",
             start.elapsed().unwrap().as_secs(),
-            1000
+            BaseTest::THREAD_NUM * BaseTest::ROW_NUM
         );
     }
 

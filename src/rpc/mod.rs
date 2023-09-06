@@ -570,7 +570,7 @@ impl Connection {
                 self.on_recv_timeout();
                 return Err(CommonErr(
                     CommonErrCode::Rpc,
-                    format!("wait for rpc response timeout, err:{err}"),
+                    format!("wait for rpc response timeout, err:{err}, trace_id:{trace_id}"),
                 ));
             }
         }.map_err(|err| CommonErr(CommonErrCode::Rpc, format!("Tokio timeout error: {err:?}")))?;

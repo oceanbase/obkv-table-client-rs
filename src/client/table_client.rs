@@ -302,9 +302,8 @@ impl ObTableClientInner {
                 table_name, error
             );
             let _ = self.refresh_sender.try_send(table_name.to_owned());
-            warn!("{}", format!("ObTableClientInner::on_table_op_failure: try to refresh schema actively, table_name:{table_name}"));
+            warn!("ObTableClientInner::on_table_op_failure: try to refresh schema actively, table_name:{table_name}");
             return Ok(());
-            // self.get_or_refresh_table_entry_non_blocking(table_name, true)?;
         }
 
         let counter = {
@@ -330,8 +329,7 @@ impl ObTableClientInner {
             warn!("ObTableClientInner::on_table_op_failure refresh table entry {} while execute failed times exceeded {}, err: {}.",
                   table_name, self.config.runtime_continuous_failure_ceiling, error);
             let _ = self.refresh_sender.try_send(table_name.to_owned());
-            warn!("{}", format!("ObTableClientInner::on_table_op_failure: try to refresh schema actively, table_name:{table_name}"));
-            // self.get_or_refresh_table_entry(table_name, true)?;
+            warn!("ObTableClientInner::on_table_op_failure: try to refresh schema actively, table_name:{table_name}");
             counter.store(0, Ordering::SeqCst);
         }
 
@@ -433,10 +431,10 @@ impl ObTableClientInner {
         end_inclusive: bool,
         refresh: bool,
     ) -> Result<Vec<(i64, Arc<ObTable>)>> {
-        //1. get table entry info
+        // 1. get table entry info
         let table_entry = self.get_or_refresh_table_entry(table_name, refresh)?;
 
-        //2. get replica locaton
+        // 2. get replica locaton
         let part_id_with_replicas: Vec<(i64, ReplicaLocation)> =
             self.get_partition_leaders(&table_entry, start, start_inclusive, end, end_inclusive)?;
 

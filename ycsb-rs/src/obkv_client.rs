@@ -161,7 +161,7 @@ impl OBKVClient {
         table: &str,
         key: &str,
         columns: &Vec<String>,
-        result: &mut HashMap<String, String>,
+        result: &HashMap<String, String>,
     ) -> Result<()> {
         let result = self
             .client
@@ -207,7 +207,7 @@ impl OBKVClient {
         startkey: &str,
         endkey: &str,
         columns: &Vec<String>,
-        result: &mut HashMap<String, String>,
+        result: &HashMap<String, String>,
     ) -> Result<()> {
         let query = self
             .client
@@ -231,7 +231,7 @@ impl OBKVClient {
         table: &str,
         keys: &Vec<String>,
         columns: &Vec<String>,
-        result: &mut HashMap<String, String>,
+        result: &HashMap<String, String>,
     ) -> Result<()> {
         let mut batch_op = self.client.batch_operation(keys.len());
         for key in keys {
