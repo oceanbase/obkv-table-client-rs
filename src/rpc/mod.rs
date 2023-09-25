@@ -942,7 +942,7 @@ impl Builder {
                     error!("Builder::build fail to connect to {}, err: {}.", addr, e);
                     e
                 })
-                .unwrap();
+                .unwrap()?;
 
             let id = Self::generate_uniqueid(stream.local_addr().unwrap());
 
