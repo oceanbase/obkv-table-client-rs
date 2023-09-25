@@ -935,14 +935,13 @@ impl Builder {
 
             let tokio_socket = TcpSocket::from_std_stream(socket2_socket.into());
 
-            let stream = tokio_socket
-                .connect(addr)
-                .await
-                .map_err(|e| {
+            let stream = match tokio_socket.connect(addr).await {
+                Ok(stream) => stream,
+                Err(e) => {
                     error!("Builder::build fail to connect to {}, err: {}.", addr, e);
-                    e
-                })
-                .unwrap()?;
+                    return Err(e.into());
+                }
+            };
 
             let id = Self::generate_uniqueid(stream.local_addr().unwrap());
 
