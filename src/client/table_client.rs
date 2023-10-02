@@ -1123,6 +1123,7 @@ impl ObTableClientInner {
             if let Err(e) = self.get_or_refresh_table_entry(&table_name, true) {
                 error!("ObTableClientInner::refresh_all_table_entries fail to refresh table entry for table: {}, err: {}.",
                                  table_name, e);
+                self.invalidate_table(&table_name);
             }
         }
         OBKV_CLIENT_METRICS.observe_sys_operation_rt("refresh_all_tables", start.elapsed());
@@ -1130,13 +1131,13 @@ impl ObTableClientInner {
 
     fn init(&self) -> Result<()> {
         if self.is_initialized() {
-            warn!("ObTableClientInner::init already initialzied.");
+            warn!("ObTableClientInner::init already initialized.");
             return Ok(());
         }
 
         let _lock = self.status_mutex.lock();
         if self.is_initialized() {
-            warn!("ObTableClientInner::init already initialzied.");
+            warn!("ObTableClientInner::init already initialized.");
             return Ok(());
         }
         self.initialized.store(true, Ordering::Release);
