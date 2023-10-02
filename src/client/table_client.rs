@@ -423,10 +423,10 @@ impl ObTableClientInner {
         end_inclusive: bool,
         refresh: bool,
     ) -> Result<Vec<(i64, Arc<ObTable>)>> {
-        //1. get table entry info
+        // 1. get table entry info
         let table_entry = self.get_or_refresh_table_entry(table_name, refresh)?;
 
-        //2. get replica locaton
+        // 2. get replica location
         let part_id_with_replicas: Vec<(i64, ReplicaLocation)> =
             self.get_partition_leaders(&table_entry, start, start_inclusive, end, end_inclusive)?;
 
