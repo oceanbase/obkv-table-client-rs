@@ -1121,7 +1121,7 @@ impl ObTableClientInner {
 
         for table_name in tables {
             if let Err(e) = self.get_or_refresh_table_entry(&table_name, true) {
-                error!("ObTableClientInner::refresh_all_table_entries fail to refresh table entry for table: {}, err: {}.",
+                warn!("ObTableClientInner::refresh_all_table_entries fail to refresh table entry for table: {}, err: {}.",
                                  table_name, e);
                 self.invalidate_table(&table_name);
             }
