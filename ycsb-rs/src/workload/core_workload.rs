@@ -142,8 +142,8 @@ impl CoreWorkload {
     async fn ob_transaction_read(&self, db: Arc<OBKVClient>) {
         let keynum = self.next_key_num();
         let dbkey = format!("{}", fnvhash64(keynum));
-        let mut result = HashMap::new();
-        db.read(&self.table, &dbkey, &self.field_names, &mut result)
+        let result = HashMap::new();
+        db.read(&self.table, &dbkey, &self.field_names, result)
             .await
             .unwrap();
     }
@@ -186,16 +186,10 @@ impl CoreWorkload {
         let start = self.next_key_num();
         let dbstart = format!("{}", fnvhash64(start));
         let dbend = format!("{}", fnvhash64(start));
-        let mut result = HashMap::new();
-        db.scan(
-            &self.table,
-            &dbstart,
-            &dbend,
-            &self.field_names,
-            &mut result,
-        )
-        .await
-        .unwrap();
+        let result = HashMap::new();
+        db.scan(&self.table, &dbstart, &dbend, &self.field_names, result)
+            .await
+            .unwrap();
     }
 
     async fn ob_transaction_batchread(&self, db: Arc<OBKVClient>) {
@@ -207,8 +201,8 @@ impl CoreWorkload {
             keys.push(dbkey);
         }
 
-        let mut result = HashMap::new();
-        db.batch_read(&self.table, &keys, &self.field_names, &mut result)
+        let result = HashMap::new();
+        db.batch_read(&self.table, &keys, &self.field_names, result)
             .await
             .unwrap();
     }

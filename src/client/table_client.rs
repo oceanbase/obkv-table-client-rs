@@ -423,10 +423,10 @@ impl ObTableClientInner {
         end_inclusive: bool,
         refresh: bool,
     ) -> Result<Vec<(i64, Arc<ObTable>)>> {
-        //1. get table entry info
+        // 1. get table entry info
         let table_entry = self.get_or_refresh_table_entry(table_name, refresh)?;
 
-        //2. get replica locaton
+        // 2. get replica location
         let part_id_with_replicas: Vec<(i64, ReplicaLocation)> =
             self.get_partition_leaders(&table_entry, start, start_inclusive, end, end_inclusive)?;
 
@@ -1121,8 +1121,9 @@ impl ObTableClientInner {
 
         for table_name in tables {
             if let Err(e) = self.get_or_refresh_table_entry(&table_name, true) {
-                error!("ObTableClientInner::refresh_all_table_entries fail to refresh table entry for table: {}, err: {}.",
+                warn!("ObTableClientInner::refresh_all_table_entries fail to refresh table entry for table: {}, err: {}.",
                                  table_name, e);
+                self.invalidate_table(&table_name);
             }
         }
         OBKV_CLIENT_METRICS.observe_sys_operation_rt("refresh_all_tables", start.elapsed());
@@ -1130,13 +1131,13 @@ impl ObTableClientInner {
 
     fn init(&self) -> Result<()> {
         if self.is_initialized() {
-            warn!("ObTableClientInner::init already initialzied.");
+            warn!("ObTableClientInner::init already initialized.");
             return Ok(());
         }
 
         let _lock = self.status_mutex.lock();
         if self.is_initialized() {
-            warn!("ObTableClientInner::init already initialzied.");
+            warn!("ObTableClientInner::init already initialized.");
             return Ok(());
         }
         self.initialized.store(true, Ordering::Release);

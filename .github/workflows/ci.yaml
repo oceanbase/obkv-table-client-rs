@@ -39,7 +39,7 @@ env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: "1"
   LOCK_FILE: Cargo.lock
-  RUST_VERSION: nightly-2023-02-02
+  RUST_VERSION: nightly-2023-08-28
 
 jobs:
   style-check:
@@ -81,7 +81,7 @@ jobs:
     timeout-minutes: 60
     strategy:
       matrix:
-        rust: [ nightly-2023-02-02 ]
+        rust: [ nightly-2023-08-28 ]
     steps:
       - uses: actions/checkout@v3
         with:

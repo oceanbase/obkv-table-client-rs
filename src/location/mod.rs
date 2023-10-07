@@ -1045,13 +1045,12 @@ impl ObTableLocation {
                 role: role.clone(),
             };
 
-            let mut location =
-                partition_location
-                    .entry(partition_id)
-                    .or_insert(ObPartitionLocation {
-                        leader: None,
-                        followers: vec![],
-                    });
+            let location = partition_location
+                .entry(partition_id)
+                .or_insert(ObPartitionLocation {
+                    leader: None,
+                    followers: vec![],
+                });
 
             match role {
                 ObServerRole::Leader => location.leader = Some(replica),

@@ -365,7 +365,7 @@ impl QueryStreamResult {
         if has_next {
             self.pop_next_row_from_cache()
         } else {
-            //4. Reach the end.
+            // 4. Reach the end.
             self.eof = true;
             self.close_eagerly("eof").await;
             Ok(None)
