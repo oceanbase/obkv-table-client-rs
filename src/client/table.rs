@@ -82,6 +82,11 @@ impl ObTable {
 
         result.into()
     }
+
+    /// return addr
+    pub fn addr(&self) -> String {
+        format!("{}:{}", self.ip, self.port)
+    }
 }
 
 pub struct Builder {

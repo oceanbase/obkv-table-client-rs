@@ -29,7 +29,6 @@ use std::{
 
 use rand::{seq::SliceRandom, thread_rng};
 use scheduled_thread_pool::ScheduledThreadPool;
-use tokio::time::sleep;
 
 use super::{
     ocp::{ObOcpModelManager, OcpModel},
@@ -215,8 +214,6 @@ struct ObTableClientInner {
     refresh_metadata_mutex: Lock,
     last_refresh_metadata_ts: AtomicUsize,
 
-    refresh_sender: std::sync::mpsc::SyncSender<String>,
-
     // query concurrency control
     query_permits: Option<Permits>,
 }
@@ -233,7 +230,6 @@ impl ObTableClientInner {
         database: String,
         running_mode: RunningMode,
         config: ClientConfig,
-        refresh_sender: std::sync::mpsc::SyncSender<String>,
         runtimes: Arc<ObClientRuntimes>,
     ) -> Result<Self> {
         let ocp_manager =
@@ -272,7 +268,6 @@ impl ObTableClientInner {
             refresh_metadata_mutex: Mutex::new(0),
             last_refresh_metadata_ts: AtomicUsize::new(0),
 
-            refresh_sender,
             query_permits,
         })
     }
@@ -301,9 +296,7 @@ impl ObTableClientInner {
                  table_name:{}, err:{}",
                 table_name, error
             );
-            let _ = self.refresh_sender.try_send(table_name.to_owned());
-            warn!("ObTableClientInner::on_table_op_failure: try to refresh schema actively, table_name:{table_name}");
-            return Ok(());
+            self.get_or_refresh_table_entry_non_blocking(table_name, true)?;
         }
 
         let counter = {
@@ -328,8 +321,7 @@ impl ObTableClientInner {
         {
             warn!("ObTableClientInner::on_table_op_failure refresh table entry {} while execute failed times exceeded {}, err: {}.",
                   table_name, self.config.runtime_continuous_failure_ceiling, error);
-            let _ = self.refresh_sender.try_send(table_name.to_owned());
-            warn!("ObTableClientInner::on_table_op_failure: try to refresh schema actively, table_name:{table_name}");
+            self.get_or_refresh_table_entry(table_name, true)?;
             counter.store(0, Ordering::SeqCst);
         }
 
@@ -434,7 +426,7 @@ impl ObTableClientInner {
         // 1. get table entry info
         let table_entry = self.get_or_refresh_table_entry(table_name, refresh)?;
 
-        // 2. get replica locaton
+        // 2. get replica location
         let part_id_with_replicas: Vec<(i64, ReplicaLocation)> =
             self.get_partition_leaders(&table_entry, start, start_inclusive, end, end_inclusive)?;
 
@@ -847,15 +839,7 @@ impl ObTableClientInner {
         ))
     }
 
-    fn need_refresh_table_entry(
-        &self,
-        table_entry: &Arc<TableEntry>,
-        active_refresh: bool,
-    ) -> bool {
-        if active_refresh {
-            return true;
-        }
-
+    fn need_refresh_table_entry(&self, table_entry: &Arc<TableEntry>) -> bool {
         let ratio = 2_f64.powi(self.server_roster.max_priority() as i32);
 
         let interval_ms =
@@ -905,13 +889,10 @@ impl ObTableClientInner {
         refresh: bool,
         blocking: bool,
     ) -> Result<Arc<TableEntry>> {
-        // Now blocking is false when refresh actively
-        let active_refresh = !blocking;
-
         // Attempt to retrieve it from cache, avoid locking.
         if let Some(table_entry) = self.get_table_entry_from_cache(table_name) {
             //If the refresh is false indicates that user tolerate not the latest data
-            if !refresh || !self.need_refresh_table_entry(&table_entry, active_refresh) {
+            if !refresh || !self.need_refresh_table_entry(&table_entry) {
                 return Ok(table_entry);
             }
         }
@@ -972,7 +953,7 @@ impl ObTableClientInner {
         //double-check whether need to do refreshing
         if let Some(table_entry) = self.get_table_entry_from_cache(table_name) {
             //If the refresh is false indicates that user tolerate not the latest data
-            if !refresh || !self.need_refresh_table_entry(&table_entry, active_refresh) {
+            if !refresh || !self.need_refresh_table_entry(&table_entry) {
                 debug!(
                     "ObTableClientInner::get_or_refresh_table_entry: double check found no need \
                      to refresh, table_name:{}",
@@ -1140,8 +1121,9 @@ impl ObTableClientInner {
 
         for table_name in tables {
             if let Err(e) = self.get_or_refresh_table_entry(&table_name, true) {
-                error!("ObTableClientInner::refresh_all_table_entries fail to refresh table entry for table: {}, err: {}.",
+                warn!("ObTableClientInner::refresh_all_table_entries fail to refresh table entry for table: {}, err: {}.",
                                  table_name, e);
+                self.invalidate_table(&table_name);
             }
         }
         OBKV_CLIENT_METRICS.observe_sys_operation_rt("refresh_all_tables", start.elapsed());
@@ -1149,13 +1131,13 @@ impl ObTableClientInner {
 
     fn init(&self) -> Result<()> {
         if self.is_initialized() {
-            warn!("ObTableClientInner::init already initialzied.");
+            warn!("ObTableClientInner::init already initialized.");
             return Ok(());
         }
 
         let _lock = self.status_mutex.lock();
         if self.is_initialized() {
-            warn!("ObTableClientInner::init already initialzied.");
+            warn!("ObTableClientInner::init already initialized.");
             return Ok(());
         }
         self.initialized.store(true, Ordering::Release);
@@ -1443,10 +1425,7 @@ impl ObTableClientInner {
                         OBKV_CLIENT_METRICS.inc_retry_times(ObClientOpRetryType::Execute);
 
                         if self.config.rpc_retry_interval.as_secs() > 0 {
-                            sleep(Duration::from_millis(
-                                self.config.rpc_retry_interval.as_millis() as u64,
-                            ))
-                            .await;
+                            thread::sleep(self.config.rpc_retry_interval);
                         }
                         continue;
                     }
@@ -1858,10 +1837,7 @@ impl ObTableClient {
                         OBKV_CLIENT_METRICS.inc_retry_times(ObClientOpRetryType::ExecuteBatch);
 
                         if self.inner.config.rpc_retry_interval.as_secs() > 0 {
-                            sleep(Duration::from_millis(
-                                self.inner.config.rpc_retry_interval.as_millis() as u64,
-                            ))
-                            .await;
+                            thread::sleep(self.inner.config.rpc_retry_interval);
                         }
                         continue;
                     }
@@ -2396,51 +2372,24 @@ impl Builder {
         assert_not_empty(&self.param_url, "Blank param url");
         assert_not_empty(&self.full_user_name, "Blank full user name");
         let runtimes = Arc::new(build_obkv_runtimes(&self.config));
-        let (sender, receiver) = std::sync::mpsc::sync_channel::<String>(1);
-        let inner_client = Arc::new(ObTableClientInner::internal_new(
-            self.param_url,
-            self.full_user_name,
-            self.password,
-            self.user_name,
-            self.tenant_name,
-            self.cluster_name,
-            self.database,
-            self.running_mode,
-            self.config,
-            sender,
-            runtimes,
-        )?);
-
-        // refresh schema in ActiveRefreshSchemaThread
-        let inner = inner_client.clone();
-        let _handle = thread::Builder::new()
-            .name("ActiveRefreshMetaThread".to_string())
-            .spawn(move || {
-            loop {
-                let message = {
-                    match receiver.recv() {
-                        Ok(message) => Some(message),
-                        Err(_) => None,
-                    }
-                };
-
-                if let Some(message) = message {
-                    if let Err(e) = inner.get_or_refresh_table_entry_non_blocking(&message, true) {
-                        error!("ActiveRefreshMetaThread fail to refresh table entry for table: {}, err: {}.",
-                                 message, e);
-                    }
-                } else {
-                    break;
-                }
-            }
-        });
 
         Ok(ObTableClient {
-            inner: inner_client,
+            inner: Arc::new(ObTableClientInner::internal_new(
+                self.param_url,
+                self.full_user_name,
+                self.password,
+                self.user_name,
+                self.tenant_name,
+                self.cluster_name,
+                self.database,
+                self.running_mode,
+                self.config,
+                runtimes,
+            )?),
             refresh_thread_pool: Arc::new(
                 ScheduledThreadPool::builder()
                     .num_threads(2)
-                    .thread_name_pattern("RefreshMetaThread")
+                    .thread_name_pattern("RefreshMetaThread-")
                     .build(),
             ),
         })

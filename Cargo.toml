@@ -31,6 +31,7 @@ tokio = { version = "1", features = ["full"] }
 
 [dependencies]
 anyhow = { workspace = true }
+backtrace = "0.3"
 byteorder = "1.2"
 bytes = "1.4"
 chrono = "0.4"

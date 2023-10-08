@@ -143,7 +143,7 @@ impl CoreWorkload {
         let keynum = self.next_key_num();
         let dbkey = format!("{}", fnvhash64(keynum));
         let result = HashMap::new();
-        db.read(&self.table, &dbkey, &self.field_names, &result)
+        db.read(&self.table, &dbkey, &self.field_names, result)
             .await
             .unwrap();
     }
@@ -187,7 +187,7 @@ impl CoreWorkload {
         let dbstart = format!("{}", fnvhash64(start));
         let dbend = format!("{}", fnvhash64(start));
         let result = HashMap::new();
-        db.scan(&self.table, &dbstart, &dbend, &self.field_names, &result)
+        db.scan(&self.table, &dbstart, &dbend, &self.field_names, result)
             .await
             .unwrap();
     }
@@ -202,7 +202,7 @@ impl CoreWorkload {
         }
 
         let result = HashMap::new();
-        db.batch_read(&self.table, &keys, &self.field_names, &result)
+        db.batch_read(&self.table, &keys, &self.field_names, result)
             .await
             .unwrap();
     }

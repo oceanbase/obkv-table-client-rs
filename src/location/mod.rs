@@ -381,6 +381,9 @@ impl ObPartitionLocation {
     pub fn leader(&self) -> &Option<ReplicaLocation> {
         &self.leader
     }
+    pub fn followers(&self) -> &Vec<ReplicaLocation> {
+        &self.followers
+    }
 }
 
 impl ObPartitionEntry {

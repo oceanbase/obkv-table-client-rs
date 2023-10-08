@@ -300,8 +300,8 @@ impl ConnPool {
                 return Err(CommonErr(
                     CommonErrCode::ConnPool,
                     format!(
-                        "ConnPool::get wait for a connection timeout, timeout:{:?}, addr:{}",
-                        pool.conn_builder.connect_timeout, pool.conn_builder.ip
+                        "ConnPool::get wait for a connection timeout, timeout:{:?}, addr:{}, port:{}",
+                        pool.conn_builder.connect_timeout, pool.conn_builder.ip, pool.conn_builder.port
                     ),
                 ));
             }
