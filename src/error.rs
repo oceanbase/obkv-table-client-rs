@@ -166,6 +166,10 @@ impl Error {
     pub fn need_refresh_table(&self) -> bool {
         if let Error::Common(CommonErrCode::ObException(code), _) = self {
             code.need_refresh_table()
+        } else if let Error::Common(CommonErrCode::ConnPool, message) = self {
+            // conn_pool will produced this error if all connection to a server is shutdown
+            // which means we need refresh
+            return message.ends_with("are all removed");
         } else {
             false
         }

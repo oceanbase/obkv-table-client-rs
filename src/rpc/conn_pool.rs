@@ -256,6 +256,7 @@ impl ConnPool {
 
         // TODO: may use better name for the timeout here
         let end = Instant::now() + pool.conn_builder.connect_timeout;
+        let mut all_moved = false;
 
         let mut inner = pool.inner.lock().unwrap();
         loop {
@@ -274,6 +275,9 @@ impl ConnPool {
                     return Ok(conn);
                 }
                 (None, removed) => {
+                    if !all_moved {
+                        all_moved = true;
+                    }
                     warn!("ConnPool::get fail to get active connection so have to wait for a new one, removed:{}", removed);
                 }
             }
@@ -292,6 +296,16 @@ impl ConnPool {
                     format!(
                         "ConnPool::get get a connection timeout, timeout:{:?}, addr:{}",
                         pool.conn_builder.connect_timeout, pool.conn_builder.ip
+                    ),
+                ));
+            }
+            if all_moved {
+                // error.rs will refresh depends on 'are all removed'
+                return Err(CommonErr(
+                    CommonErrCode::ConnPool,
+                    format!(
+                        "ConnPool::all connection to addr:{}, port:{} are all removed",
+                        pool.conn_builder.ip, pool.conn_builder.port
                     ),
                 ));
             }

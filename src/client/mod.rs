@@ -94,7 +94,7 @@ impl Default for ClientConfig {
             rslist_acquire_try_times: 3,
             rslist_acquire_retry_interval: Duration::from_millis(100),
 
-            table_entry_acquire_connect_timeout: Duration::from_secs(5),
+            table_entry_acquire_connect_timeout: Duration::from_secs(3),
             table_entry_acquire_read_timeout: Duration::from_secs(3),
             table_entry_refresh_interval_base: Duration::from_secs(60),
             table_entry_refresh_interval_ceiling: Duration::from_secs(120),
