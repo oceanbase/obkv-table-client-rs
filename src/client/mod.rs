@@ -105,10 +105,10 @@ impl Default for ClientConfig {
             server_address_priority_timeout: Duration::from_secs(1800),
             runtime_continuous_failure_ceiling: 10,
 
-            rpc_connect_timeout: Duration::from_secs(5),
+            rpc_connect_timeout: Duration::from_secs(3),
             rpc_read_timeout: Duration::from_secs(3),
             rpc_login_timeout: Duration::from_secs(3),
-            rpc_operation_timeout: Duration::from_secs(5),
+            rpc_operation_timeout: Duration::from_secs(3),
             rpc_retry_limit: 3,
             rpc_retry_interval: Duration::from_millis(500),
 
