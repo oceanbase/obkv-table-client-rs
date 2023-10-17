@@ -174,6 +174,16 @@ impl Error {
             false
         }
     }
+
+    pub fn need_invalidate_table(&self) -> bool {
+        if let Error::Common(CommonErrCode::PartitionError, message) = self {
+            // Location::get_table_location_from_remote will produce this error if the table
+            // is dropped
+            message.starts_with("Location::get_table_location_from_remote: Table maybe dropped.")
+        } else {
+            false
+        }
+    }
 }
 
 pub type Result<T> = ::std::result::Result<T, Error>;

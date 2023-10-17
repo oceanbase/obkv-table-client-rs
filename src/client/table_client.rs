@@ -1018,6 +1018,13 @@ impl ObTableClientInner {
                          entry for table {}, error is {:?}",
                         table_name, e
                     );
+                    if e.is_err()
+                        && e.as_ref().err().unwrap().is_ob_exception()
+                        && e.as_ref().err().unwrap().ob_result_code().unwrap()
+                            == ResultCodes::OB_ERR_UNKNOWN_TABLE
+                    {
+                        return Err(e.err().unwrap());
+                    }
                     if self
                         .table_entry_refresh_continuous_failure_count
                         .fetch_add(1, Ordering::SeqCst)
@@ -1140,7 +1147,9 @@ impl ObTableClientInner {
             if let Err(e) = self.get_or_refresh_table_entry(&table_name, true) {
                 warn!("ObTableClientInner::refresh_all_table_entries fail to refresh table entry for table: {}, err: {}.",
                                  table_name, e);
-                self.invalidate_table(&table_name);
+                if e.need_invalidate_table() {
+                    self.invalidate_table(&table_name);
+                }
             }
         }
         OBKV_CLIENT_METRICS.observe_sys_operation_rt("refresh_all_tables", start.elapsed());
