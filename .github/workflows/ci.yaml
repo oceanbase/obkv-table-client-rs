@@ -103,9 +103,10 @@ jobs:
       - name: Backup Lock File
         run: |
           cp ${LOCK_FILE} ${LOCK_FILE}.bak
-      - name: Run Unit Tests
+      - name: Run Tests
         run: |
-          make test-ut
+          docker run -p 2881:2881 --name oceanbase-ce -d oceanbase/oceanbase-ce
+          make test-all
           echo "Checking if ${LOCK_FILE} has changed..."
       - name: Check Lock File
         run: |
