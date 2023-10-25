@@ -30,7 +30,9 @@ use crate::{
     location::OB_INVALID_ID,
     rpc::protocol::codes::ResultCodes,
     serde_obkv::{util, value::Value},
-    util::{decode_value, duration_to_millis, security, string_from_bytes},
+    util::{
+        decode_value, duration_to_millis, obversion::ob_vsn_major, security, string_from_bytes,
+    },
 };
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -411,7 +413,12 @@ impl ProtoEncoder for ObTableOperationRequest {
         util::encode_bytes_string(&self.credential, buf)?;
         util::encode_vstring(&self.table_name, buf)?;
         util::encode_vi64(self.table_id, buf)?;
-        util::encode_vi64(self.partition_id, buf)?;
+
+        if ob_vsn_major() >= 4 {
+            buf.put_i64(self.partition_id);
+        } else {
+            util::encode_vi64(self.partition_id, buf)?;
+        }
 
         buf.put_i8(self.entity_type as i8);
         self.table_operation.encode(buf)?;
