@@ -87,7 +87,7 @@ impl Default for ClientConfig {
             sys_password: "".to_owned(),
             metadata_mysql_conn_pool_min_size: 1,
             metadata_mysql_conn_pool_max_size: 3,
-            metadata_refresh_interval: Duration::from_secs(60),
+            metadata_refresh_interval: Duration::from_secs(3),
             ocp_model_cache_file: "/tmp/ocp_model_cache.json".to_owned(),
 
             rslist_acquire_timeout: Duration::from_secs(10),

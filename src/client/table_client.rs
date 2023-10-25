@@ -464,7 +464,7 @@ impl ObTableClientInner {
             // Table not found, try to refresh it and retry get it again.
             warn!("ObTableClientInner::get_tables can not get ob table by address {:?} so that will sync refresh metadata.",
                   replica_location.addr());
-            self.sync_refresh_metadata(true)?;
+            self.sync_refresh_metadata()?;
             let table_entry = self.get_or_refresh_table_entry(table_name, true)?;
             match table_entry.get_partition_location_with_part_id(part_id) {
                 Some(location) => match location.leader() {
@@ -1046,7 +1046,7 @@ impl ObTableClientInner {
                         .fetch_add(1, Ordering::SeqCst)
                         >= self.config.table_entry_refresh_continuous_failure_ceiling
                     {
-                        self.sync_refresh_metadata(true)?;
+                        self.sync_refresh_metadata()?;
                         self.table_entry_refresh_continuous_failure_count
                             .store(0, Ordering::SeqCst);
                     }
@@ -1058,7 +1058,7 @@ impl ObTableClientInner {
 
         info!("ObTableClientInner::get_or_refresh_table_entry refresh table entry has tried {}-times failure and will sync refresh metadata", retry_times);
 
-        self.sync_refresh_metadata(true)?;
+        self.sync_refresh_metadata()?;
         self.refresh_table_entry(table_name, self.table_locations.rl().get(table_name))
     }
 
@@ -1211,11 +1211,11 @@ impl ObTableClientInner {
             < duration_to_millis(&self.config.metadata_refresh_interval)
     }
 
-    fn sync_refresh_metadata(&self, refresh_immediately: bool) -> Result<()> {
+    fn sync_refresh_metadata(&self) -> Result<()> {
         // only record real refreshing
         let start = Instant::now();
 
-        if !refresh_immediately && self.is_already_refreshed() {
+        if self.is_already_refreshed() {
             warn!("ObTableClientInner::sync_refresh_metadata try to lock metadata refreshing, it has refresh  at: {}, dataSourceName: {}, url: {}",
                   self.last_refresh_metadata_ts.load(Ordering::Acquire), self.datasource_name, self.param_url);
             return Ok(());
@@ -1223,7 +1223,7 @@ impl ObTableClientInner {
 
         let _lock = self.refresh_metadata_mutex.lock();
 
-        if !refresh_immediately && self.is_already_refreshed() {
+        if self.is_already_refreshed() {
             warn!("ObTableClientInner::sync_refresh_metadata already refresh metadata at : {}, dataSourceName: {}, url: {}",
                   self.last_refresh_metadata_ts.load(Ordering::Acquire), self.datasource_name, self.param_url);
             return Ok(());
