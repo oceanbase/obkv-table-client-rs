@@ -301,8 +301,16 @@ impl ObTableClientInner {
                  table_name:{}, err:{}",
                 table_name, error
             );
-            let _ = self.refresh_sender.try_send(table_name.to_owned());
-            warn!("ObTableClientInner::on_table_op_failure: try to refresh schema actively, table_name:{table_name}");
+
+            match self.refresh_sender.try_send(table_name.to_owned()) {
+                Ok(_) => {
+                    warn!("ObTableClientInner::on_table_op_failure: Need Refresh / try to refresh schema actively succeed, table_name:{table_name}");
+                }
+                Err(error) => {
+                    warn!("ObTableClientInner::on_table_op_failure: Need Refresh / try to refresh schema actively failed, maybe other thread has sent, table_name:{table_name}, error:{error}");
+                }
+            }
+
             return Ok(());
         }
 
@@ -328,8 +336,16 @@ impl ObTableClientInner {
         {
             warn!("ObTableClientInner::on_table_op_failure refresh table entry {} while execute failed times exceeded {}, err: {}.",
                   table_name, self.config.runtime_continuous_failure_ceiling, error);
-            let _ = self.refresh_sender.try_send(table_name.to_owned());
-            warn!("ObTableClientInner::on_table_op_failure: try to refresh schema actively, table_name:{table_name}");
+
+            match self.refresh_sender.try_send(table_name.to_owned()) {
+                Ok(_) => {
+                    warn!("ObTableClientInner::on_table_op_failure: Continuous Failure / try to refresh schema actively succeed, table_name:{table_name}");
+                }
+                Err(error) => {
+                    warn!("ObTableClientInner::on_table_op_failure: Continuous Failure / try to refresh schema actively failed, maybe other thread has sent, table_name:{table_name}, error:{error}");
+                }
+            }
+
             counter.store(0, Ordering::SeqCst);
         }
 
