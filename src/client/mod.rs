@@ -87,30 +87,30 @@ impl Default for ClientConfig {
             sys_password: "".to_owned(),
             metadata_mysql_conn_pool_min_size: 1,
             metadata_mysql_conn_pool_max_size: 3,
-            metadata_refresh_interval: Duration::from_secs(60),
+            metadata_refresh_interval: Duration::from_secs(3),
             ocp_model_cache_file: "/tmp/ocp_model_cache.json".to_owned(),
 
             rslist_acquire_timeout: Duration::from_secs(10),
             rslist_acquire_try_times: 3,
             rslist_acquire_retry_interval: Duration::from_millis(100),
 
-            table_entry_acquire_connect_timeout: Duration::from_secs(5),
+            table_entry_acquire_connect_timeout: Duration::from_secs(3),
             table_entry_acquire_read_timeout: Duration::from_secs(3),
-            table_entry_refresh_interval_base: Duration::from_millis(100),
-            table_entry_refresh_interval_ceiling: Duration::from_millis(1600),
+            table_entry_refresh_interval_base: Duration::from_secs(60),
+            table_entry_refresh_interval_ceiling: Duration::from_secs(120),
             table_entry_refresh_try_times: 3,
             table_entry_refresh_try_interval: Duration::from_millis(20),
             table_entry_refresh_continuous_failure_ceiling: 10,
 
             server_address_priority_timeout: Duration::from_secs(1800),
-            runtime_continuous_failure_ceiling: 100,
+            runtime_continuous_failure_ceiling: 10,
 
-            rpc_connect_timeout: Duration::from_secs(5),
+            rpc_connect_timeout: Duration::from_secs(3),
             rpc_read_timeout: Duration::from_secs(3),
             rpc_login_timeout: Duration::from_secs(3),
             rpc_operation_timeout: Duration::from_secs(3),
             rpc_retry_limit: 3,
-            rpc_retry_interval: Duration::from_secs(0),
+            rpc_retry_interval: Duration::from_millis(500),
 
             refresh_workers_num: 5,
 

@@ -1068,7 +1068,7 @@ impl ObTableLocation {
                    part_id, table_entry, partition_location);
                 return Err(CommonErr(
                 CommonErrCode::PartitionError,
-                format!("Location::get_table_location_from_remote: partition num={part_id} is not exists, table={table_entry:?}, locations={partition_location:?}"),
+                format!("Location::get_table_location_from_remote: Table maybe dropped. partition num={part_id} is not exists, table={table_entry:?}, locations={partition_location:?}"),
             ));
             }
 
@@ -1078,7 +1078,7 @@ impl ObTableLocation {
 
                 return Err(CommonErr(
                 CommonErrCode::PartitionError,
-                format!("Location::get_table_location_from_remote: partition num={part_id} has no leader, table={table_entry:?}, locations={partition_location:?}"),
+                format!("Location::get_table_location_from_remote: partition num={part_id} has no leader, table={table_entry:?}, locations={partition_location:?}, maybe rebalancing"),
             ));
             }
         }

@@ -166,6 +166,20 @@ impl Error {
     pub fn need_refresh_table(&self) -> bool {
         if let Error::Common(CommonErrCode::ObException(code), _) = self {
             code.need_refresh_table()
+        } else if let Error::Common(CommonErrCode::ConnPool, message) = self {
+            // conn_pool will produced this error if all connection to a server is shutdown
+            // which means we need refresh
+            return message.ends_with("are all removed");
+        } else {
+            false
+        }
+    }
+
+    pub fn need_invalidate_table(&self) -> bool {
+        if let Error::Common(CommonErrCode::PartitionError, message) = self {
+            // Location::get_table_location_from_remote will produce this error if the table
+            // is dropped
+            message.starts_with("Location::get_table_location_from_remote: Table maybe dropped.")
         } else {
             false
         }

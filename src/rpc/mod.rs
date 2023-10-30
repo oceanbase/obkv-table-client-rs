@@ -570,7 +570,7 @@ impl Connection {
                 self.on_recv_timeout();
                 return Err(CommonErr(
                     CommonErrCode::Rpc,
-                    format!("wait for rpc response timeout, err:{err}"),
+                    format!("wait for rpc response timeout, err:{err}, trace_id:{trace_id}"),
                 ));
             }
         }.map_err(|err| CommonErr(CommonErrCode::Rpc, format!("Tokio timeout error: {err:?}")))?;
@@ -935,14 +935,13 @@ impl Builder {
 
             let tokio_socket = TcpSocket::from_std_stream(socket2_socket.into());
 
-            let stream = tokio_socket
-                .connect(addr)
-                .await
-                .map_err(|e| {
+            let stream = match tokio_socket.connect(addr).await {
+                Ok(stream) => stream,
+                Err(e) => {
                     error!("Builder::build fail to connect to {}, err: {}.", addr, e);
-                    e
-                })
-                .unwrap();
+                    return Err(e.into());
+                }
+            };
 
             let id = Self::generate_uniqueid(stream.local_addr().unwrap());
 

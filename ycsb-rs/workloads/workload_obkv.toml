@@ -44,9 +44,9 @@ test_sys_user_name = ""
 test_sys_password = ""
 
 # How may YCSB Client will use a OBKV Client
-obkv_client_reuse = 400
+obkv_client_reuse = 200
 
-rpc_connect_timeout = 5000
+rpc_connect_timeout = 1000
 rpc_read_timeout = 3000
 rpc_login_timeout = 3000
 rpc_operation_timeout = 3000
