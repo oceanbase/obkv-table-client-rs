@@ -25,6 +25,7 @@ use chrono::Utc;
 
 use crate::serde_obkv::value::{ObjType, Value};
 
+pub mod obversion;
 pub mod permit;
 pub mod security;
 
