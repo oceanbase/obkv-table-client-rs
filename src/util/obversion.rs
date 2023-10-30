@@ -41,9 +41,9 @@ const OB_VSN_MINOR_PATCH_MASK: u64 = 0xff;
 #[allow(dead_code)]
 pub fn calc_version(major: i32, minor: i16, major_patch: i8, minor_patch: i8) -> u64 {
     ((major as u64) << OB_VSN_MAJOR_SHIFT)
-        + ((minor as u64) << OB_VSN_MINOR_SHIFT)
-        + ((major_patch as u64) << OB_VSN_MAJOR_PATCH_SHIFT)
-        + ((minor_patch as u64) << OB_VSN_MINOR_PATCH_SHIFT)
+        | ((minor as u64) << OB_VSN_MINOR_SHIFT)
+        | ((major_patch as u64) << OB_VSN_MAJOR_PATCH_SHIFT)
+        | ((minor_patch as u64) << OB_VSN_MINOR_PATCH_SHIFT)
 }
 
 #[allow(dead_code)]
