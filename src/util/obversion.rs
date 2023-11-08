@@ -108,6 +108,54 @@ pub fn get_ob_vsn_string(version: u64) -> String {
     )
 }
 
+pub fn parse_ob_vsn_from_sql(vsn: String) {
+    // server_version is like "4.2.1.0"
+    if let Ok(re) = regex::Regex::new(r"(\d+)\.(\d+)\.(\d+)\.(\d+)") {
+        if let Some(captures) = re.captures(&vsn) {
+            if let (Some(major), Some(minor), Some(major_patch), Some(minor_patch)) = (
+                captures.get(1),
+                captures.get(2),
+                captures.get(3),
+                captures.get(4),
+            ) {
+                OB_VERSION.store(
+                    calc_version(
+                        major.as_str().parse().unwrap(),
+                        minor.as_str().parse().unwrap(),
+                        major_patch.as_str().parse().unwrap(),
+                        minor_patch.as_str().parse().unwrap(),
+                    ),
+                    Relaxed,
+                );
+            }
+        }
+    }
+}
+
+pub fn parse_ob_vsn_from_login(vsn: &str) {
+    // server_version is like "OceanBase 4.2.1.0"
+    if let Ok(re) = regex::Regex::new(r"OceanBase\s+(\d+)\.(\d+)\.(\d+)\.(\d+)") {
+        if let Some(captures) = re.captures(vsn) {
+            if let (Some(major), Some(minor), Some(major_patch), Some(minor_patch)) = (
+                captures.get(1),
+                captures.get(2),
+                captures.get(3),
+                captures.get(4),
+            ) {
+                OB_VERSION.store(
+                    calc_version(
+                        major.as_str().parse().unwrap(),
+                        minor.as_str().parse().unwrap(),
+                        major_patch.as_str().parse().unwrap(),
+                        minor_patch.as_str().parse().unwrap(),
+                    ),
+                    Relaxed,
+                );
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -127,5 +175,20 @@ mod test {
 
         assert_eq!(ob_vsn_string(), "0.0.0.0");
         assert_eq!(get_ob_vsn_string(my_version), "4.2.1.4");
+    }
+
+    #[test]
+    fn test_parse_ob_version() {
+        parse_ob_vsn_from_sql("4.2.1.4".to_string());
+        assert_eq!(get_ob_vsn_major(OB_VERSION.load(Relaxed)), 4);
+        assert_eq!(get_ob_vsn_minor(OB_VERSION.load(Relaxed)), 2);
+        assert_eq!(get_ob_vsn_major_patch(OB_VERSION.load(Relaxed)), 1);
+        assert_eq!(get_ob_vsn_minor_patch(OB_VERSION.load(Relaxed)), 4);
+
+        parse_ob_vsn_from_login("OceanBase 3.21.11.4");
+        assert_eq!(get_ob_vsn_major(OB_VERSION.load(Relaxed)), 3);
+        assert_eq!(get_ob_vsn_minor(OB_VERSION.load(Relaxed)), 21);
+        assert_eq!(get_ob_vsn_major_patch(OB_VERSION.load(Relaxed)), 11);
+        assert_eq!(get_ob_vsn_minor_patch(OB_VERSION.load(Relaxed)), 4);
     }
 }

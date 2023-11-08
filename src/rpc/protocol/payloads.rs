@@ -1115,6 +1115,10 @@ impl ObTableLoginResult {
     pub fn tenant_id(&self) -> u64 {
         self.tenant_id
     }
+
+    pub fn serer_version(&self) -> &str {
+        &self.server_version
+    }
 }
 
 impl ObPayload for ObTableLoginResult {

@@ -1523,6 +1523,7 @@ dependencies = [
  "quick-error",
  "r2d2",
  "rand",
+ "regex",
  "reqwest",
  "scheduled-thread-pool",
  "scoped_threadpool",

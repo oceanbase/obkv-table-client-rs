@@ -118,7 +118,6 @@ impl ObPartDesc {
     pub fn set_ordered_compare_columns(&mut self, ordered_part_column: Vec<Box<dyn ObColumn>>) {
         match self {
             ObPartDesc::Range(ref mut v) => v.ordered_compare_column = ordered_part_column,
-
             ObPartDesc::Hash(_) => (),
             ObPartDesc::Key(_) => (),
         }
@@ -323,6 +322,7 @@ pub struct ObRangePartDesc {
     ordered_compare_column: Vec<Box<dyn ObColumn>>,
     ordered_compare_column_types: Vec<ObjType>,
     bounds: Vec<(ObPartitionKey, i64)>,
+    part_num: i32,
 }
 
 impl Default for ObRangePartDesc {
@@ -338,6 +338,7 @@ impl ObRangePartDesc {
             ordered_compare_column: Vec::new(),
             ordered_compare_column_types: Vec::new(),
             bounds: Vec::new(),
+            part_num: 0,
         }
     }
 
@@ -388,6 +389,10 @@ impl ObRangePartDesc {
 
     pub fn set_bounds(&mut self, bounds: Vec<(ObPartitionKey, i64)>) {
         self.bounds = bounds;
+    }
+
+    pub fn set_part_num(&mut self, part_num: i32) {
+        self.part_num = part_num;
     }
 
     pub fn set_part_func_type(&mut self, part_func_type: PartFuncType) {
