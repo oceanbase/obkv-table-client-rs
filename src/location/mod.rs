@@ -194,14 +194,17 @@ pub struct ObServerInfo {
 }
 
 impl ObServerInfo {
+    #[inline]
     pub fn is_active(&self) -> bool {
         self.stop_time == 0 && self.status == ObServerStatus::Active
     }
 
+    #[inline]
     pub fn status(&self) -> ObServerStatus {
         self.status.clone()
     }
 
+    #[inline]
     pub fn stop_time(&self) -> i64 {
         self.stop_time
     }
@@ -412,10 +415,17 @@ pub struct ReplicaLocation {
 }
 
 impl ReplicaLocation {
+    #[inline]
+    pub fn is_available(&self) -> bool {
+        self.info.is_active() || matches!(self.role, ObServerRole::Leader)
+    }
+
+    #[inline]
     pub fn addr(&self) -> &ObServerAddr {
         &self.addr
     }
 
+    #[inline]
     pub fn info(&self) -> &ObServerInfo {
         &self.info
     }
@@ -1030,20 +1040,17 @@ impl ObTableLocation {
             observer_addr.set_svr_port(svr_port);
 
             let observer_info = ObServerInfo { stop_time, status };
-            if !observer_info.is_active() {
-                warn!(
-                    "ObTableLocation::get_table_location_from_remote: inactive observer found, \
-                    server_info:{:?}, addr:{:?}",
-                    observer_info, observer_addr
-                );
-                continue;
-            }
-
             let replica = ReplicaLocation {
                 addr: observer_addr,
                 info: observer_info,
                 role: role.clone(),
             };
+            if !replica.is_available() {
+                warn!(
+                    "ObTableLocation::get_table_location_from_remote: unavailable replica is found, location:{replica:?}",
+                );
+                continue;
+            }
 
             let mut location =
                 partition_location
