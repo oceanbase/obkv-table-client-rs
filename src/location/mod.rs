@@ -904,20 +904,19 @@ impl ObTableLocation {
             observer_addr.set_svr_port(svr_port);
 
             let observer_info = ObServerInfo { stop_time, status };
-            if !observer_info.is_active() {
+            let replica = ReplicaLocation {
+                addr: observer_addr,
+                info: observer_info,
+                role,
+            };
+            if !replica.is_available() {
                 warn!(
-                    "ObTableLocation::get_table_entry_from_remote: inactive observer found, \
-                     server_info:{:?}, addr:{:?}",
-                    observer_info, observer_addr
+                    "ObTableLocation::get_table_entry_from_remote: unavailable replica is found, replica:{replica:?}",
                 );
                 continue;
             }
 
-            replica_locations.push(ReplicaLocation {
-                addr: observer_addr,
-                info: observer_info,
-                role,
-            });
+            replica_locations.push(replica);
         }
 
         if replica_locations.is_empty() {
@@ -1047,7 +1046,7 @@ impl ObTableLocation {
             };
             if !replica.is_available() {
                 warn!(
-                    "ObTableLocation::get_table_location_from_remote: unavailable replica is found, location:{replica:?}",
+                    "ObTableLocation::get_table_location_from_remote: unavailable replica is found, replica:{replica:?}",
                 );
                 continue;
             }
@@ -1206,5 +1205,59 @@ mod test {
         );
         assert!(v0 < v1);
         assert!(v0 > v2);
+    }
+
+    #[test]
+    fn test_replica_availability() {
+        fn new_replica(
+            stop_time: i64,
+            status: ObServerStatus,
+            role: ObServerRole,
+        ) -> ReplicaLocation {
+            ReplicaLocation {
+                addr: ObServerAddr::default(),
+                info: ObServerInfo { stop_time, status },
+                role,
+            }
+        }
+
+        let cases = vec![
+            (
+                new_replica(0, ObServerStatus::Active, ObServerRole::Follower),
+                true,
+            ),
+            (
+                new_replica(0, ObServerStatus::Active, ObServerRole::Leader),
+                true,
+            ),
+            (
+                new_replica(0, ObServerStatus::Inactive, ObServerRole::Follower),
+                false,
+            ),
+            (
+                new_replica(0, ObServerStatus::Inactive, ObServerRole::Leader),
+                true,
+            ),
+            (
+                new_replica(0, ObServerStatus::Deleting, ObServerRole::Follower),
+                false,
+            ),
+            (
+                new_replica(0, ObServerStatus::Deleting, ObServerRole::Leader),
+                true,
+            ),
+            (
+                new_replica(1, ObServerStatus::Active, ObServerRole::Follower),
+                false,
+            ),
+            (
+                new_replica(1, ObServerStatus::Active, ObServerRole::Leader),
+                true,
+            ),
+        ];
+
+        for (replica, available) in cases {
+            assert_eq!(replica.is_available(), available, "replica:{replica:?}");
+        }
     }
 }
