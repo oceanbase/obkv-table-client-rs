@@ -56,7 +56,8 @@ impl PartFuncType {
     pub fn is_key_part(&self) -> bool {
         matches!(
             self,
-            PartFuncType::KeyImplicit
+            PartFuncType::Key
+                | PartFuncType::KeyImplicit
                 | PartFuncType::KeyV2
                 | PartFuncType::KeyV3
                 | PartFuncType::KeyImplicitV2

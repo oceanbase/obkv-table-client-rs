@@ -25,7 +25,7 @@ use std::{
 /// Query API for ob table
 use super::ObTable;
 use crate::{
-    client::table_client::{StreamQuerier, OBKV_CLIENT_METRICS},
+    client::table_client::{PartInfo, StreamQuerier, OBKV_CLIENT_METRICS},
     error::{CommonErrCode, Error::Common as CommonErr, Result},
     rpc::protocol::{
         payloads::ObTableEntityType,
@@ -51,7 +51,7 @@ pub struct QueryStreamResult {
     operation_timeout: Option<Duration>,
     table_name: String,
     entity_type: ObTableEntityType,
-    expectant: HashMap<i64, (i64, Arc<ObTable>)>,
+    expectant: HashMap<i64, (PartInfo, Arc<ObTable>)>,
     cache_properties: Vec<String>,
     cache_rows: VecDeque<Vec<Value>>,
     partition_last_result: PartitionQueryResultDeque,
@@ -89,11 +89,12 @@ impl QueryStreamResult {
 
     async fn refer_to_new_partition(
         &mut self,
-        (part_id, ob_table): (i64, Arc<ObTable>),
+        (part_info, ob_table): (PartInfo, Arc<ObTable>),
     ) -> Result<i64> {
         let mut req = ObTableQueryRequest::new(
             &self.table_name,
-            part_id,
+            part_info.table_id,
+            part_info.part_id,
             self.entity_type.to_owned(),
             self.table_query.to_owned(),
             self.operation_timeout
@@ -104,7 +105,7 @@ impl QueryStreamResult {
         let result = self
             .querier
             .clone()
-            .execute_query(self, (part_id, ob_table), &mut req)
+            .execute_query(self, (part_info.part_id, ob_table), &mut req)
             .await;
 
         if result.is_err() {
@@ -151,7 +152,7 @@ impl QueryStreamResult {
         self.table_name = table_name.to_owned();
     }
 
-    pub fn set_expectant(&mut self, expectant: HashMap<i64, (i64, Arc<ObTable>)>) {
+    pub fn set_expectant(&mut self, expectant: HashMap<i64, (PartInfo, Arc<ObTable>)>) {
         self.expectant = expectant;
     }
 

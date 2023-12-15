@@ -28,7 +28,7 @@ use crate::{
     error::{self as error, CommonErrCode, Error::Common as CommonErr},
     location::OB_INVALID_ID,
     serde_obkv::{util, value::Value},
-    util::{decode_value, duration_to_millis},
+    util::{decode_value, duration_to_millis, obversion::ob_vsn_major},
 };
 
 #[derive(Debug, Clone)]
@@ -223,6 +223,7 @@ pub struct ObNewRange {
     border_flag: ObBorderFlag,
     start_key: ObRowKey,
     end_key: ObRowKey,
+    flag: i64,
 }
 
 impl ObNewRange {
@@ -240,6 +241,7 @@ impl ObNewRange {
             border_flag,
             start_key: ObRowKey::new(start_key),
             end_key: ObRowKey::new(end_key),
+            flag: 0,
         }
     }
 
@@ -256,10 +258,18 @@ impl ObNewRange {
     }
 
     pub fn content_len(&self) -> Result<usize> {
-        Ok(util::encoded_length_vi64(self.table_id)
-            + 1
-            + self.start_key.content_len()?
-            + self.end_key.content_len()?)
+        if ob_vsn_major() >= 4 {
+            Ok(util::encoded_length_vi64(self.table_id)
+                + 1 // border_flag
+                + self.start_key.content_len()?
+                + self.end_key.content_len()?
+                + util::encoded_length_vi64(self.flag))
+        } else {
+            Ok(util::encoded_length_vi64(self.table_id)
+                + 1 // border_flag
+                + self.start_key.content_len()?
+                + self.end_key.content_len()?)
+        }
     }
 
     pub fn set_inclusive_start(&mut self) {
@@ -318,7 +328,11 @@ impl ProtoEncoder for ObNewRange {
         util::encode_vi64(self.table_id, buf)?;
         buf.put_i8(self.border_flag.value());
         self.start_key.encode(buf)?;
-        self.end_key.encode(buf)
+        self.end_key.encode(buf)?;
+        if ob_vsn_major() >= 4 {
+            util::encode_vi64(self.flag, buf)?;
+        }
+        Ok(())
     }
 }
 
@@ -671,6 +685,7 @@ pub struct ObTableQueryRequest {
 impl ObTableQueryRequest {
     pub fn new(
         table_name: &str,
+        table_id: i64,
         partition_id: i64,
         entity_type: ObTableEntityType,
         table_query: ObTableQuery,
@@ -684,7 +699,7 @@ impl ObTableQueryRequest {
             base,
             credential: vec![],
             table_name: table_name.to_owned(),
-            table_id: OB_INVALID_ID,
+            table_id,
             partition_id,
             entity_type,
             table_query,
@@ -719,7 +734,11 @@ impl ObPayload for ObTableQueryRequest {
         Ok(util::encoded_length_bytes_string(&self.credential)
             + util::encoded_length_vstring(&self.table_name)
             + util::encoded_length_vi64(self.table_id)
-            + util::encoded_length_vi64(self.partition_id)
+            + if ob_vsn_major() >= 4 {
+                8
+            } else {
+                util::encoded_length_vi64(self.partition_id)
+            }
             + self.table_query.len()?
             + 2)
     }
@@ -732,7 +751,11 @@ impl ProtoEncoder for ObTableQueryRequest {
         util::encode_bytes_string(&self.credential, buf)?;
         util::encode_vstring(&self.table_name, buf)?;
         util::encode_vi64(self.table_id, buf)?;
-        util::encode_vi64(self.partition_id, buf)?;
+        if ob_vsn_major() >= 4 {
+            buf.put_i64(self.partition_id);
+        } else {
+            util::encode_vi64(self.partition_id, buf)?;
+        }
         buf.put_i8(self.entity_type as i8);
         buf.put_i8(self.consistency_level as i8);
 

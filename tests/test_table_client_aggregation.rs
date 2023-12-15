@@ -215,6 +215,29 @@ async fn test_multiple_partition() {
     const TEST_TABLE_NAME: &str = "test_partition_aggregation";
     client.add_row_key_element(TEST_TABLE_NAME, vec!["c1".to_owned(), "c2".to_owned()]);
 
+    // delete previous data
+    let result = client
+        .delete(
+            TEST_TABLE_NAME,
+            vec![Value::from(200i32), Value::from(50i64)],
+        )
+        .await;
+    assert!(result.is_ok());
+    let result = client
+        .delete(
+            TEST_TABLE_NAME,
+            vec![Value::from(200i32), Value::from(150i64)],
+        )
+        .await;
+    assert!(result.is_ok());
+    let result = client
+        .delete(
+            TEST_TABLE_NAME,
+            vec![Value::from(300i32), Value::from(300i64)],
+        )
+        .await;
+    assert!(result.is_ok());
+
     // prepare data
     let result = client
         .insert(
@@ -388,6 +411,29 @@ async fn test_local_index() {
     let client = client_handle.await.unwrap();
     const TEST_TABLE_NAME: &str = "test_partition_aggregation";
     client.add_row_key_element(TEST_TABLE_NAME, vec!["c1".to_owned(), "c2".to_owned()]);
+
+    // delete previous data
+    let result = client
+        .delete(
+            TEST_TABLE_NAME,
+            vec![Value::from(200i32), Value::from(50i64)],
+        )
+        .await;
+    assert!(result.is_ok());
+    let result = client
+        .delete(
+            TEST_TABLE_NAME,
+            vec![Value::from(200i32), Value::from(150i64)],
+        )
+        .await;
+    assert!(result.is_ok());
+    let result = client
+        .delete(
+            TEST_TABLE_NAME,
+            vec![Value::from(300i32), Value::from(300i64)],
+        )
+        .await;
+    assert!(result.is_ok());
 
     // prepare data
     let result = client
@@ -563,6 +609,29 @@ async fn test_multiple_partition_illegal() {
     let client = client_handle.await.unwrap();
     const TEST_TABLE_NAME: &str = "test_partition_aggregation";
     client.add_row_key_element(TEST_TABLE_NAME, vec!["c1".to_owned()]);
+
+    // delete previous data
+    let result = client
+        .delete(
+            TEST_TABLE_NAME,
+            vec![Value::from(200i32), Value::from(50i64)],
+        )
+        .await;
+    assert!(result.is_ok());
+    let result = client
+        .delete(
+            TEST_TABLE_NAME,
+            vec![Value::from(200i32), Value::from(150i64)],
+        )
+        .await;
+    assert!(result.is_ok());
+    let result = client
+        .delete(
+            TEST_TABLE_NAME,
+            vec![Value::from(300i32), Value::from(300i64)],
+        )
+        .await;
+    assert!(result.is_ok());
 
     // prepare data
     let result = client
@@ -792,6 +861,20 @@ async fn test_multiple_aggregation_some_null() {
     const TEST_TABLE_NAME: &str = "test_partition_aggregation";
     client.add_row_key_element(TEST_TABLE_NAME, vec!["c1".to_owned()]);
 
+    // delete previous data
+    let result =
+        client.execute_sql("delete from test_partition_aggregation where c1 = 200 and c2 = 50");
+    assert!(result.is_ok());
+
+    let result =
+        client.execute_sql("delete from test_partition_aggregation where c1 = 200 and c2 = 150");
+    assert!(result.is_ok());
+
+    let result =
+        client.execute_sql("delete from test_partition_aggregation where c1 = 300 and c2 = 50");
+
+    assert!(result.is_ok());
+
     // prepare data
     let result = client.execute_sql(
         "insert into test_partition_aggregation(c1, c2, c3) values('200', '50', '50')",
@@ -906,6 +989,29 @@ async fn test_aggregation_empty_table() {
     const TEST_TABLE_NAME: &str = "test_partition_aggregation";
     client.add_row_key_element(TEST_TABLE_NAME, vec!["c1".to_owned()]);
 
+    // delete previous data
+    let result = client
+        .delete(
+            TEST_TABLE_NAME,
+            vec![Value::from(200i32), Value::from(50i64)],
+        )
+        .await;
+    assert!(result.is_ok());
+    let result = client
+        .delete(
+            TEST_TABLE_NAME,
+            vec![Value::from(200i32), Value::from(150i64)],
+        )
+        .await;
+    assert!(result.is_ok());
+    let result = client
+        .delete(
+            TEST_TABLE_NAME,
+            vec![Value::from(300i32), Value::from(300i64)],
+        )
+        .await;
+    assert!(result.is_ok());
+
     // aggregate empty table
     let aggregation = client
         .aggregate(TEST_TABLE_NAME)
@@ -924,6 +1030,13 @@ async fn test_aggregation_empty_table() {
     // get result
     let result_set = aggregation.execute().await;
     // todo:server behaviors must be compatible
+    if let Err(e) = result_set.as_ref() {
+        assert!(e.is_common_err());
+        assert_eq!(
+            "Common error, code:InvalidParam, err:get empty result from aggregation",
+            e.to_string()
+        );
+    }
     assert!(result_set.is_ok());
     let result_set = result_set.unwrap();
 
@@ -991,6 +1104,19 @@ async fn test_aggregation_illegal_column() {
     const TEST_TABLE_NAME: &str = "test_partition_aggregation";
     client.add_row_key_element(TEST_TABLE_NAME, vec!["c1".to_owned()]);
 
+    // delete previous data
+    let result =
+        client.execute_sql("delete from test_partition_aggregation where c1 = 200 and c2 = 50");
+    assert!(result.is_ok());
+
+    let result =
+        client.execute_sql("delete from test_partition_aggregation where c1 = 200 and c2 = 150");
+    assert!(result.is_ok());
+
+    let result =
+        client.execute_sql("delete from test_partition_aggregation where c1 = 300 and c2 = 50");
+    assert!(result.is_ok());
+
     // prepare data
     let result = client
         .execute_sql("insert into test_partition_aggregation(c1, c2, c4) values('200', '50', 'a')");
@@ -1024,10 +1150,17 @@ async fn test_aggregation_illegal_column() {
     match result_set {
         Ok(_) => unreachable!(),
         Err(e) => {
-            assert_eq!(
-                obkv::error::CommonErrCode::ObException(ResultCodes::OB_ERR_UNEXPECTED),
-                e.common_err_code().unwrap()
-            );
+            if client.ob_vsn_major() >= 4 {
+                assert_eq!(
+                    obkv::error::CommonErrCode::ObException(ResultCodes::OB_NOT_SUPPORTED),
+                    e.common_err_code().unwrap()
+                );
+            } else {
+                assert_eq!(
+                    obkv::error::CommonErrCode::ObException(ResultCodes::OB_ERR_UNEXPECTED),
+                    e.common_err_code().unwrap()
+                );
+            }
         }
     }
 
@@ -1074,6 +1207,19 @@ async fn test_aggregation_not_exist_column() {
     let client = client_handle.await.unwrap();
     const TEST_TABLE_NAME: &str = "test_partition_aggregation";
     client.add_row_key_element(TEST_TABLE_NAME, vec!["c1".to_owned()]);
+
+    // delete previous data
+    let result =
+        client.execute_sql("delete from test_partition_aggregation where c1 = 200 and c2 = 50");
+    assert!(result.is_ok());
+
+    let result =
+        client.execute_sql("delete from test_partition_aggregation where c1 = 200 and c2 = 150");
+    assert!(result.is_ok());
+
+    let result =
+        client.execute_sql("delete from test_partition_aggregation where c1 = 300 and c2 = 50");
+    assert!(result.is_ok());
 
     // prepare data
     let result = client

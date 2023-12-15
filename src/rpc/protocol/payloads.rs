@@ -369,6 +369,10 @@ impl ObTableOperationRequest {
         }
     }
 
+    pub fn set_table_id(&mut self, table_id: i64) {
+        self.table_id = table_id;
+    }
+
     pub fn set_partition_id(&mut self, partition_id: i64) {
         self.partition_id = partition_id;
     }
@@ -396,7 +400,11 @@ impl ObPayload for ObTableOperationRequest {
         Ok(util::encoded_length_bytes_string(&self.credential)
             + util::encoded_length_vstring(&self.table_name)
             + util::encoded_length_vi64(self.table_id)
-            + util::encoded_length_vi64(self.partition_id)
+            + if ob_vsn_major() >= 4 {
+                8
+            } else {
+                util::encoded_length_vi64(self.partition_id)
+            }
             + util::encoded_length_i8(self.entity_type as i8)
             + util::encoded_length_i8(self.consistency_level as i8)
             + util::encoded_length_i8(self.return_row_key as i8)
@@ -513,6 +521,10 @@ impl ObTableBatchOperation {
 
     pub fn set_partition_id(&mut self, part_id: i64) {
         self.partition_id = part_id
+    }
+
+    pub fn set_table_id(&mut self, table_id: i64) {
+        self.table_id = table_id
     }
 
     pub fn is_read_only(&self) -> bool {
@@ -770,7 +782,11 @@ impl ObPayload for ObTableBatchOperationRequest {
         Ok(util::encoded_length_bytes_string(&self.credential)
             + util::encoded_length_vstring(&self.table_name)
             + util::encoded_length_vi64(self.table_id)
-            + util::encoded_length_vi64(self.partition_id)
+            + if ob_vsn_major() >= 4 {
+                8
+            } else {
+                util::encoded_length_vi64(self.partition_id)
+            }
             + self.batch_operation.len()?
             + util::encoded_length_i8(self.entity_type as i8)
             + util::encoded_length_i8(self.consistency_level as i8)
@@ -795,7 +811,11 @@ impl ProtoEncoder for ObTableBatchOperationRequest {
         buf.put_i8(self.return_row_key as i8);
         buf.put_i8(self.return_affected_entity as i8);
         buf.put_i8(self.return_affected_rows as i8);
-        util::encode_vi64(self.partition_id, buf)?;
+        if ob_vsn_major() >= 4 {
+            buf.put_i64(self.partition_id);
+        } else {
+            util::encode_vi64(self.partition_id, buf)?;
+        }
         buf.put_i8(self.atomic_op as i8);
         Ok(())
     }

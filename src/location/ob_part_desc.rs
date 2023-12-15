@@ -29,6 +29,7 @@ use crate::{
         util::hash::ob_hash_sort_utf8mb4::ObHashSortUtf8mb4,
     },
     serde_obkv::value::{CollationType, ObjType, Value},
+    util::obversion::ob_vsn_major,
 };
 
 #[derive(Clone, Debug)]
@@ -798,7 +799,8 @@ impl ObKeyPartDesc {
         };
         match collation_type {
             CollationType::UTF8MB4GeneralCi => {
-                if part_func_type == KeyV3 || part_func_type == KeyImplicitV2 {
+                if ob_vsn_major() >= 4 || part_func_type == KeyV3 || part_func_type == KeyImplicitV2
+                {
                     Ok(ObHashSortUtf8mb4::ob_hash_sort_utf8_mb4(
                         &bytes,
                         bytes.len() as i32,
@@ -818,7 +820,8 @@ impl ObKeyPartDesc {
                 }
             }
             CollationType::UTF8MB4Bin => {
-                if part_func_type == KeyV3 || part_func_type == KeyImplicitV2 {
+                if ob_vsn_major() >= 4 || part_func_type == KeyV3 || part_func_type == KeyImplicitV2
+                {
                     Ok(murmur2::murmur64a(&bytes, hash_code))
                 } else {
                     Ok(ObHashSortUtf8mb4::ob_hash_sort_mb_bin(
@@ -830,7 +833,8 @@ impl ObKeyPartDesc {
                 }
             }
             CollationType::Binary => {
-                if part_func_type == KeyV3 || part_func_type == KeyImplicitV2 {
+                if ob_vsn_major() >= 4 || part_func_type == KeyV3 || part_func_type == KeyImplicitV2
+                {
                     Ok(murmur2::murmur64a(&bytes, hash_code))
                 } else {
                     Ok(ObHashSortUtf8mb4::ob_hash_sort_bin(

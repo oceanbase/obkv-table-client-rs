@@ -27,7 +27,7 @@ use std::{
 };
 
 use mysql as my;
-use mysql::{prelude::Queryable, PoolConstraints, PoolOpts, Row, PooledConn};
+use mysql::{prelude::Queryable, PoolConstraints, PoolOpts, Row};
 use rand::{seq::SliceRandom, thread_rng};
 
 use self::ob_part_desc::{ObHashPartDesc, ObKeyPartDesc, ObPartDesc, ObRangePartDesc};
@@ -35,15 +35,15 @@ use crate::{
     client::{table_client::ServerRoster, ClientConfig},
     constant::*,
     error::{CommonErrCode, Error::Common as CommonErr, Result},
-    rpc::protocol::{codes::ResultCodes, partition::ob_column::ObColumn},
-    util as u,
-    util::{
-        obversion::{ob_vsn_major, parse_ob_vsn_from_sql},
-        HandyRwLock,
+    location::{
+        ob_part_constants::{extract_part_idx, extract_subpart_idx},
+        util::LocationUtil,
+        ObServerRole::InvalidRole,
     },
+    rpc::protocol::partition::ob_column::ObColumn,
+    util as u,
+    util::{obversion::ob_vsn_major, HandyRwLock},
 };
-use crate::location::ObServerRole::InvalidRole;
-use crate::location::util::LocationUtil;
 
 pub mod ob_part_constants;
 mod ob_part_desc;
@@ -194,10 +194,10 @@ pub enum ObServerRole {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum ObReplicaType {
-    ReplicaTypeFull = 0,
-    ReplicaTypeLogOnly = 5,
-    ReplicaTypeReadOnly = 16,
-    ReplicaTypeInvalid = i32::MAX as isize,
+    Full = 0,
+    LogOnly = 5,
+    ReadOnly = 16,
+    Invalid = i32::MAX as isize,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -228,6 +228,7 @@ pub struct TableEntryKey {
     table_name: String,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct TableEntry {
     table_id: i64,
@@ -293,7 +294,7 @@ impl ObPartitionInfo {
             part_columns: Vec::new(),
             row_key_element: HashMap::<String, i32>::new(),
             part_name_id_map: HashMap::<String, i64>::new(),
-            part_tablet_id_map: HashMap::<i64, i64>::new()
+            part_tablet_id_map: HashMap::<i64, i64>::new(),
         }
     }
 
@@ -326,6 +327,26 @@ impl ObPartitionInfo {
 
     pub fn part_tablet_id_map(&self) -> &HashMap<i64, i64> {
         &self.part_tablet_id_map
+    }
+
+    pub fn get_partid_from_phyid(&self, phy_id: i64) -> i64 {
+        if ob_vsn_major() >= 4 {
+            let part_num = self
+                .sub_part_desc
+                .as_ref()
+                .map_or(0, |desc| desc.get_part_num());
+            let part_idx = extract_part_idx(phy_id) * part_num as i64 + extract_subpart_idx(phy_id);
+            self.part_tablet_id_map
+                .get(&part_idx)
+                .copied()
+                .unwrap_or_else(|| {
+                    warn!("get_partid_from_phyid can not get part id / tablet id from phy id");
+                    -1
+                })
+        } else {
+            // partId is the phy part id in 3.x
+            phy_id
+        }
     }
 
     pub fn prepare(&mut self) -> Result<()> {
@@ -413,18 +434,41 @@ impl ObPartitionEntry {
         &self,
         part_id: i64,
     ) -> Option<&ObPartitionLocation> {
-        // logic_id = part_id in partition one
         self.parititon_location.get(&part_id)
     }
 
-    pub fn get_sub_partition_location_with_part_id(
+    pub fn get_partition_location_with_phy_id(
         &self,
-        part_id: i64,
-        sub_part_nums: i32,
+        phy_id: i64,
+        partid_tablet_map: Option<&HashMap<i64, i64>>,
     ) -> Option<&ObPartitionLocation> {
-        // only for template sub partition
-        let logic_id = ob_part_constants::extract_part_idx(part_id) * sub_part_nums as i64
-            + ob_part_constants::extract_subpart_idx(part_id);
+        // logic_id = part_id in partition one
+        let mut logic_id = extract_part_idx(phy_id);
+        if ob_vsn_major() >= 4 {
+            logic_id = partid_tablet_map.and_then(|m| m.get(&logic_id).copied())
+                .unwrap_or_else(|| {
+                    error!("get_sub_partition_location_with_part_id could not get tablet from logic id because the map is None or the logic_id is not present");
+                    -1
+                });
+        }
+        self.parititon_location.get(&logic_id)
+    }
+
+    pub fn get_sub_partition_location_with_phy_id(
+        &self,
+        phy_id: i64,
+        sub_part_nums: i32,
+        partid_tablet_map: Option<&HashMap<i64, i64>>,
+    ) -> Option<&ObPartitionLocation> {
+        let mut logic_id = ob_part_constants::extract_part_idx(phy_id) * sub_part_nums as i64
+            + ob_part_constants::extract_subpart_idx(phy_id);
+        if ob_vsn_major() >= 4 {
+            logic_id = partid_tablet_map.and_then(|m| m.get(&logic_id).copied())
+                .unwrap_or_else(|| {
+                    error!("get_sub_partition_location_with_phy_id could not get tablet from logic id because the map is None or the logic_id is not present");
+                    -1
+                });
+        }
         self.parititon_location.get(&logic_id)
     }
 }
@@ -466,17 +510,18 @@ impl ObServerRole {
 impl ObReplicaType {
     pub fn from_int(i: i32) -> ObReplicaType {
         match i {
-            0 => ObReplicaType::ReplicaTypeFull,
-            5 => ObReplicaType::ReplicaTypeLogOnly,
-            16 => ObReplicaType::ReplicaTypeReadOnly,
-            _ => ObReplicaType::ReplicaTypeInvalid,
+            0 => ObReplicaType::Full,
+            5 => ObReplicaType::LogOnly,
+            16 => ObReplicaType::ReadOnly,
+            _ => ObReplicaType::Invalid,
         }
     }
 }
 
 impl ObServerStatus {
     pub fn from_string(s: String) -> ObServerStatus {
-        match s.as_ref() {
+        let s = s.clone();
+        match s.to_lowercase().as_str() {
             "active" => ObServerStatus::Active,
             "inactive" => ObServerStatus::Inactive,
             "deleting" => ObServerStatus::Deleting,
@@ -495,6 +540,10 @@ impl TableEntry {
 
     pub fn is_partition_table(&self) -> bool {
         self.partition_num > 1
+    }
+
+    pub fn table_id(&self) -> i64 {
+        self.table_id
     }
 
     pub fn partition_entry(&self) -> &Option<ObPartitionEntry> {
@@ -525,21 +574,22 @@ impl TableEntry {
         }
     }
 
-    pub fn get_part_tablet_id_map(&self) -> Option<&HashMap<i64, i64>>{
+    pub fn part_tablet_id_map(&self) -> Option<&HashMap<i64, i64>> {
         match self.partition_info {
             Some(ref info) => Some(info.part_tablet_id_map()),
-            None => {
-                return None;
-            },
+            None => None,
         }
     }
 
-    pub fn get_partition_location_with_part_id(
-        &self,
-        part_id: i64,
-    ) -> Option<&ObPartitionLocation> {
+    pub fn get_partition_location_with_phy_id(&self, phy_id: i64) -> Option<&ObPartitionLocation> {
         match self.partition_entry {
-            Some(ref entry) => entry.get_partition_location_with_part_id(part_id),
+            Some(ref entry) => {
+                if phy_id == 0 && self.partition_info.is_none() {
+                    entry.get_partition_location_with_part_id(phy_id)
+                } else {
+                    entry.get_partition_location_with_phy_id(phy_id, self.part_tablet_id_map())
+                }
+            }
             None => None,
         }
     }
@@ -913,7 +963,7 @@ impl ObTableLocation {
         }
 
         // majority of implementation is in LocationUtil
-        let table_entry = LocationUtil::get_table_entry_from_remote(&mut conn, key)?;
+        let table_entry = LocationUtil::get_table_entry_from_remote_inner(&mut conn, key)?;
 
         Ok(table_entry)
     }

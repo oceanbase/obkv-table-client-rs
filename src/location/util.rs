@@ -15,24 +15,36 @@
  * #L%
  */
 
-use std::{collections::HashMap, i32, i64, u8};
-use std::sync::Arc;
-use std::sync::atomic::AtomicUsize;
-use chrono::Utc;
+use std::{
+    collections::HashMap,
+    i32, i64,
+    sync::{atomic::AtomicUsize, Arc},
+    u8,
+};
 
+use chrono::Utc;
 use mysql as my;
-use mysql::{PooledConn, prelude::Queryable, Row};
+use mysql::{prelude::Queryable, PooledConn, Row};
 
 use super::{
     ob_part_constants, part_func_type::PartFuncType, ObHashPartDesc, ObKeyPartDesc, ObPartDesc,
     ObPartitionInfo, ObPartitionLevel, ObRangePartDesc, TableEntry,
 };
-use crate::{error::{CommonErrCode, Error::Common as CommonErr, Result}, ResultCodes, rpc::protocol::partition::{
-    ob_column::{ObColumn, ObGeneratedColumn, ObSimpleColumn},
-    ob_partition_key::{Comparable, ObPartitionKey},
-}, serde_obkv::value::{CollationLevel, CollationType, ObjMeta, ObjType, Value}};
-use crate::location::{OB_INVALID_ID, ObPartitionEntry, ObPartitionLocation, ObReplicaType, ObServerAddr, ObServerInfo, ObServerRole, ObServerStatus, ReplicaLocation, TableEntryKey, TableLocation};
-use crate::util::obversion::{ob_vsn_major, parse_ob_vsn_from_sql};
+use crate::{
+    constant::ALL_DUMMY_TABLE,
+    error::{CommonErrCode, Error::Common as CommonErr, Result},
+    location::{
+        ObPartitionEntry, ObPartitionLocation, ObReplicaType, ObServerAddr, ObServerInfo,
+        ObServerRole, ObServerStatus, ReplicaLocation, TableEntryKey, TableLocation, OB_INVALID_ID,
+    },
+    rpc::protocol::partition::{
+        ob_column::{ObColumn, ObGeneratedColumn, ObSimpleColumn},
+        ob_partition_key::{Comparable, ObPartitionKey},
+    },
+    serde_obkv::value::{CollationLevel, CollationType, ObjMeta, ObjType, Value},
+    util::obversion::{ob_vsn_major, parse_ob_vsn_from_sql},
+    ResultCodes,
+};
 
 pub const TEMPLATE_PART_ID: i32 = -1;
 
@@ -56,7 +68,7 @@ impl LocationUtil {
                 parse_ob_vsn_from_sql(cluster_version);
             }
         }
-        return Ok(())
+        Ok(())
     }
 
     // getTableEntryLocationFromRemote
@@ -67,19 +79,17 @@ impl LocationUtil {
     ) -> Result<ObPartitionEntry> {
         let partition_num = table_entry.partition_num;
         let mut part_str = String::with_capacity((partition_num * 7) as usize);
-        let mut sql = String::with_capacity((partition_num * 7) as usize);
-
-        // format sql
-        if ob_vsn_major() >= 4 {
+        let sql: String = if ob_vsn_major() >= 4 {
             if table_entry.is_partition_table() {
-                let idx: i64 = 0;
-                match table_entry.get_part_tablet_id_map() {
+                let mut idx: i64 = 0;
+                match table_entry.part_tablet_id_map() {
                     Some(part_tablet_id_map) => {
-                        for (key, value) in part_tablet_id_map {
+                        for value in part_tablet_id_map.values() {
                             if idx > 0 {
                                 part_str.push(',');
                             }
                             part_str.push_str(&format!("{value}"));
+                            idx += 1;
                         }
                     }
                     None => {
@@ -100,7 +110,7 @@ impl LocationUtil {
                     part_str.push_str(&format!("{idx}"));
                 }
             }
-            sql = format!("SELECT /*+READ_CONSISTENCY(WEAK)*/ A.tablet_id as tablet_id, A.svr_ip as svr_ip, A.sql_port as sql_port,
+            format!("SELECT /*+READ_CONSISTENCY(WEAK)*/ A.tablet_id as tablet_id, A.svr_ip as svr_ip, A.sql_port as sql_port,
                             A.table_id as table_id, A.role as role, A.replica_num as replica_num, A.part_num as part_num, B.svr_port as svr_port, B.status as status, B.stop_time as stop_time,
                             A.spare1 as replica_type FROM oceanbase.__all_virtual_proxy_schema A inner join oceanbase.__all_server B on A.svr_ip = B.svr_ip and A.sql_port = B.inner_port
                             WHERE tenant_name = '{}' and database_name= '{}' and table_name = '{}' and tablet_id in ({})",
@@ -108,20 +118,36 @@ impl LocationUtil {
                             &key.database_name,
                             &key.table_name,
                             &part_str,
-            );
+            )
         } else {
             if table_entry.is_partition_table()
                 && table_entry.partition_info.is_some()
-                && table_entry.partition_info.as_ref().unwrap().sub_part_desc.is_some() {
+                && table_entry
+                    .partition_info
+                    .as_ref()
+                    .unwrap()
+                    .sub_part_desc
+                    .is_some()
+            {
                 // confirm sub part num
-                let first_part_num: i64 = table_entry.partition_info.as_ref().unwrap().first_part_desc.as_ref().unwrap().get_part_num() as i64;
-                let sub_part_num: i64 = table_entry.partition_info.as_ref().unwrap().sub_part_desc.as_ref().unwrap().get_part_num() as i64;
-                for i in  0..first_part_num {
+                let first_part_num: i64 = table_entry
+                    .partition_info
+                    .as_ref()
+                    .and_then(|info| info.first_part_desc.as_ref())
+                    .map_or(0, |desc| desc.get_part_num() as i64);
+                let sub_part_num: i64 = table_entry
+                    .partition_info
+                    .as_ref()
+                    .and_then(|info| info.sub_part_desc.as_ref())
+                    .map_or(0, |desc| desc.get_part_num() as i64);
+                for i in 0..first_part_num {
                     for j in 0..sub_part_num {
                         if i > 0 || j > 0 {
                             part_str.push(',');
                         }
-                        let part_id = ObPartIdCalculator::generate_part_id(Option::from(i), Option::from(j)).unwrap();
+                        let part_id =
+                            ObPartIdCalculator::generate_part_id(Option::from(i), Option::from(j))
+                                .unwrap();
                         part_str.push_str(&format!("{part_id}"));
                     }
                 }
@@ -133,7 +159,7 @@ impl LocationUtil {
                     part_str.push_str(&format!("{idx}"));
                 }
             }
-            sql = format!("SELECT /*+READ_CONSISTENCY(WEAK)*/ A.partition_id as partition_id, A.svr_ip as svr_ip, A.sql_port as sql_port,
+            format!("SELECT /*+READ_CONSISTENCY(WEAK)*/ A.partition_id as partition_id, A.svr_ip as svr_ip, A.sql_port as sql_port,
                             A.table_id as table_id, A.role as role, A.replica_num as replica_num, A.part_num as part_num, B.svr_port as svr_port,
                             B.status as status, B.stop_time as stop_time, A.spare1 as replica_type FROM oceanbase.__all_virtual_proxy_schema A
                             inner join oceanbase.__all_server B on A.svr_ip = B.svr_ip and A.sql_port = B.inner_port
@@ -142,35 +168,52 @@ impl LocationUtil {
                             &key.database_name,
                             &key.table_name,
                             &part_str,
-            );
-        }
+            )
+        };
 
         // getPartitionLocationFromResultSet in java client
         let mut partition_location = HashMap::new();
 
         for row in conn.query::<Row, String>(sql)? {
-            let (part_id, svr_ip, sql_port, table_id, role, replica_num, part_num, svr_port, status, stop_time, replica_type) =
-                match my::from_row_opt(row) {
-                    Ok(tuple) => tuple,
-                    Err(e) => {
-                        error!("ObTableLocation::get_table_location_from_remote: fail to do mysql row conversion, err:{}", e);
-                        return Err(CommonErr(
-                            CommonErrCode::ConvertFailed,
-                            format!("mysql row conversion err:{e}"),
-                        ));
-                    }
-                };
-
-            let mut partition_id;
-            if ob_vsn_major() >= 4 {
-                partition_id = part_id;
-            } else {
-                partition_id = part_id;
-                if table_entry.is_partition_table() && table_entry.partition_info.is_some() && table_entry.partition_info.as_ref().unwrap().sub_part_desc.is_some() {
-                    // have sub part
-                    partition_id = ObPartIdCalculator::get_part_idx(part_id, table_entry.partition_info.as_ref().unwrap().sub_part_desc.as_ref().unwrap().get_part_num() as i64);
+            let (
+                part_id,
+                svr_ip,
+                sql_port,
+                table_id,
+                role,
+                replica_num,
+                part_num,
+                svr_port,
+                status,
+                stop_time,
+                replica_type,
+            ) = match my::from_row_opt(row) {
+                Ok(tuple) => tuple,
+                Err(e) => {
+                    error!("ObTableLocation::get_table_location_from_remote: fail to do mysql row conversion, err:{}", e);
+                    return Err(CommonErr(
+                        CommonErrCode::ConvertFailed,
+                        format!("mysql row conversion err:{e}"),
+                    ));
                 }
-            }
+            };
+
+            let partition_id: i64 = if ob_vsn_major() >= 4 {
+                part_id
+            } else if table_entry.is_partition_table() {
+                table_entry
+                    .partition_info
+                    .as_ref()
+                    .and_then(|partition_info| partition_info.sub_part_desc.as_ref())
+                    .map_or(part_id, |sub_part_desc| {
+                        ObPartIdCalculator::get_part_idx(
+                            part_id,
+                            sub_part_desc.get_part_num() as i64,
+                        )
+                    })
+            } else {
+                part_id
+            };
             let _: i64 = table_id;
             let _: i64 = replica_num;
             let _: i64 = part_num;
@@ -183,7 +226,6 @@ impl LocationUtil {
             observer_addr.address(svr_ip);
             observer_addr.set_sql_port(sql_port);
             observer_addr.set_svr_port(svr_port);
-            let replica_type = replica_type;
 
             let observer_info = ObServerInfo { stop_time, status };
             if !observer_info.is_active() {
@@ -227,9 +269,18 @@ impl LocationUtil {
         }
 
         // Check partition info.
-        for part_id in 0..table_entry.partition_num {
-            let location = partition_location.get(&part_id);
+        for part_idx in 0..table_entry.partition_num {
+            // get real partition id
+            let part_id = if ob_vsn_major() >= 4 {
+                table_entry
+                    .part_tablet_id_map()
+                    .and_then(|m| m.get(&part_idx).copied())
+                    .unwrap_or(part_idx)
+            } else {
+                part_idx
+            };
 
+            let location = partition_location.get(&part_id);
             if location.is_none() {
                 error!("Location::get_table_location_from_remote: partition num={} is not exists, table={:?}, locations={:?}",
                    part_id, table_entry, partition_location);
@@ -255,12 +306,12 @@ impl LocationUtil {
         })
     }
 
-    pub fn get_table_entry_from_remote(conn: &mut PooledConn,
-                                       key: &TableEntryKey) -> Result<TableEntry> {
-        let sql: String;
-
-        if ob_vsn_major() >= 4 {
-            sql = match key.table_name.clone() {
+    pub fn get_table_entry_from_remote_inner(
+        conn: &mut PooledConn,
+        key: &TableEntryKey,
+    ) -> Result<TableEntry> {
+        let sql: String = if ob_vsn_major() >= 4 {
+            match key.table_name.clone().as_str() {
                 ALL_DUMMY_TABLE => format!("SELECT /*+READ_CONSISTENCY(WEAK)*/ A.tablet_id as tablet_id, A.svr_ip as svr_ip, A.sql_port as sql_port,
                                                 A.table_id as table_id, A.role as role, A.replica_num as replica_num, A.part_num as part_num, B.svr_port as svr_port,
                                                 B.status as status, B.stop_time as stop_time, A.spare1 as replica_type FROM oceanbase.__all_virtual_proxy_schema A
@@ -277,9 +328,9 @@ impl LocationUtil {
                                 &key.tenant_name,
                                 &key.database_name,
                                 &key.table_name),
-            };
+            }
         } else {
-            sql = match key.table_name.clone() {
+            match key.table_name.clone().as_str() {
                 ALL_DUMMY_TABLE => format!("SELECT /*+READ_CONSISTENCY(WEAK)*/ A.partition_id as partition_id, A.svr_ip as svr_ip, A.sql_port as sql_port,
                                                 A.table_id as table_id, A.role as role, A.replica_num as replica_num, A.part_num as part_num, B.svr_port as svr_port,
                                                 B.status as status, B.stop_time as stop_time, A.spare1 as replica_type FROM oceanbase.__all_virtual_proxy_schema A
@@ -296,8 +347,8 @@ impl LocationUtil {
                                 &key.tenant_name,
                                 &key.database_name,
                                 &key.table_name),
-            };
-        }
+            }
+        };
 
         //  get table entry from result set
         let mut table_entry: TableEntry;
@@ -316,13 +367,13 @@ impl LocationUtil {
                 Err(e) => {
                     table_entry.partition_info = None;
                     error!(
-                        "Location::get_table_entry_from_remote fetch_partition_info error:{}",
+                        "Location::get_table_entry_from_remote_inner fetch_partition_info error:{}",
                         e
                     );
                     return Err(CommonErr(
                         CommonErrCode::PartitionError,
                         format!(
-                            "location::get_table_entry_from_remote fetch_partition_info error:{e}",
+                            "location::get_table_entry_from_remote_inner fetch_partition_info error:{e}",
                         ),
                     ));
                 }
@@ -331,20 +382,12 @@ impl LocationUtil {
                 // fetch first part
                 if let Some(first_part_desc) = &v.first_part_desc {
                     let ob_part_func_type = first_part_desc.get_part_func_type();
-                    LocationUtil::fetch_first_part(
-                        conn,
-                        &mut table_entry,
-                        ob_part_func_type,
-                    )?;
+                    LocationUtil::fetch_first_part(conn, &mut table_entry, ob_part_func_type)?;
                 }
                 // fetch sub part
                 if let Some(sub_part_desc) = &v.sub_part_desc {
                     let ob_part_func_type = sub_part_desc.get_part_func_type();
-                    LocationUtil::fetch_sub_part(
-                        conn,
-                        &mut table_entry,
-                        ob_part_func_type,
-                    )?;
+                    LocationUtil::fetch_sub_part(conn, &mut table_entry, ob_part_func_type)?;
                 }
             }
             if let Some(v) = &mut table_entry.partition_info {
@@ -359,26 +402,39 @@ impl LocationUtil {
         Ok(table_entry)
     }
 
-    pub fn get_table_entry_from_conn(conn: &mut my::PooledConn,
-                                     sql: String,
-                                     key: &TableEntryKey) -> Result<TableEntry> {
+    pub fn get_table_entry_from_conn(
+        conn: &mut my::PooledConn,
+        sql: String,
+        key: &TableEntryKey,
+    ) -> Result<TableEntry> {
         let mut table_id = OB_INVALID_ID;
         let mut replica_num = OB_INVALID_ID;
         let mut partition_num = OB_INVALID_ID;
         let mut replica_locations = Vec::new();
 
         for row in conn.query::<Row, String>(sql.clone())? {
-            let (partition_id, svr_ip, sql_port, tbl_id, role, repl_num, part_num, svr_port, status, stop_time, replica_type) =
-                match my::from_row_opt(row) {
-                    Ok(tuple) => tuple,
-                    Err(e) => {
-                        error!("ObTableLocation::get_table_entry_from_remote: fail to do mysql row conversion, err:{}", e);
-                        return Err(CommonErr(
-                            CommonErrCode::ConvertFailed,
-                            format!("mysql row conversion err:{e}"),
-                        ));
-                    }
-                };
+            let (
+                partition_id,
+                svr_ip,
+                sql_port,
+                tbl_id,
+                role,
+                repl_num,
+                part_num,
+                svr_port,
+                status,
+                stop_time,
+                replica_type,
+            ) = match my::from_row_opt(row) {
+                Ok(tuple) => tuple,
+                Err(e) => {
+                    error!("ObTableLocation::get_table_entry_from_conn: fail to do mysql row conversion, err:{}", e);
+                    return Err(CommonErr(
+                        CommonErrCode::ConvertFailed,
+                        format!("mysql row conversion err:{e}"),
+                    ));
+                }
+            };
             // unused
             let _: i64 = partition_id;
             // for table_entry
@@ -439,25 +495,24 @@ impl LocationUtil {
         conn: &mut PooledConn,
         table_entry: &TableEntry,
     ) -> Result<ObPartitionInfo> {
-        let mut sql: String;
-        if ob_vsn_major() >= 4 {
-            sql = format!("SELECT /*+READ_CONSISTENCY(WEAK)*/ part_level, part_num, part_type, part_space, part_expr,
+        let sql: String = if ob_vsn_major() >= 4 {
+            format!("SELECT /*+READ_CONSISTENCY(WEAK)*/ part_level, part_num, part_type, part_space, part_expr,
                 part_range_type, sub_part_num, sub_part_type, sub_part_space, sub_part_range_type, sub_part_expr,
                 part_key_name, part_key_type, part_key_idx, part_key_extra, part_key_collation_type
                 FROM oceanbase.__all_virtual_proxy_partition_info WHERE tenant_name = '{}' and table_id = {}
                 group by part_key_name order by part_key_name LIMIT {};",
                     table_entry.table_entry_key.tenant_name,
                     table_entry.table_id,
-                    i64::MAX);
+                    i64::MAX)
         } else {
-             sql = format!("SELECT /*+READ_CONSISTENCY(WEAK)*/ part_level, part_num, part_type, part_space, part_expr,
+            format!("SELECT /*+READ_CONSISTENCY(WEAK)*/ part_level, part_num, part_type, part_space, part_expr,
                 part_range_type, part_interval_bin, interval_start_bin, sub_part_num, sub_part_type, sub_part_space, sub_part_range_type,
                 def_sub_part_interval_bin, def_sub_interval_start_bin, sub_part_expr, part_key_name, part_key_type, part_key_idx,
                 part_key_extra, spare1 FROM oceanbase.__all_virtual_proxy_partition_info
                 WHERE table_id = {} GROUP BY part_key_name ORDER BY part_key_name LIMIT {};",
                       table_entry.table_id,
-                      i64::MAX);
-        }
+                      i64::MAX)
+        };
 
         let mut info = ObPartitionInfo::new();
         // in java sdk is parsePartitionInfo()
@@ -510,12 +565,11 @@ impl LocationUtil {
             let part_key_name: String = row.take("part_key_name").unwrap();
             let part_key_idx: i32 = row.take("part_key_idx").unwrap();
             let part_key_type: u8 = row.take("part_key_type").unwrap();
-            let collation_type_label: u8;
-            if ob_vsn_major() > 4 {
-                collation_type_label = row.take("part_key_collation_type").unwrap()
+            let collation_type_label: u8 = if ob_vsn_major() >= 4 {
+                row.take("part_key_collation_type").unwrap()
             } else {
-                collation_type_label = row.take("spare1").unwrap();
-            }
+                row.take("spare1").unwrap()
+            };
 
             // get part key for each loop
             if !part_key_extra.is_empty() {
@@ -552,10 +606,7 @@ impl LocationUtil {
             Some(first_part_desc) => {
                 if first_part_desc.is_list_part() || first_part_desc.is_range_part() {
                     first_ordered_parted_columns =
-                        LocationUtil::get_ordered_part_columns(
-                            &info.part_columns,
-                            first_part_desc,
-                        );
+                        LocationUtil::get_ordered_part_columns(&info.part_columns, first_part_desc);
                 }
             }
         }
@@ -565,11 +616,10 @@ impl LocationUtil {
                 None => (),
                 Some(sub_part_desc) => {
                     if sub_part_desc.is_list_part() || first_part_desc.is_range_part() {
-                        sub_ordered_parted_columns =
-                            LocationUtil::get_ordered_part_columns(
-                                &info.part_columns,
-                                sub_part_desc,
-                            );
+                        sub_ordered_parted_columns = LocationUtil::get_ordered_part_columns(
+                            &info.part_columns,
+                            sub_part_desc,
+                        );
                     }
                 }
             }
@@ -638,8 +688,7 @@ impl LocationUtil {
                 row.take(&*format!("{part_level_prefix}part_space"))
                     .unwrap(),
             );
-
-            if ob_vsn_major() <4 {
+            if ob_vsn_major() < 4 {
                 hash_desc.set_part_name_id_map(LocationUtil::build_default_part_name_id_map(
                     hash_desc.get_part_num(),
                 ));
@@ -752,23 +801,22 @@ impl LocationUtil {
         table_entry: &mut TableEntry,
         ob_part_func_type: PartFuncType,
     ) -> Result<()> {
-        let sql: String;
-        if ob_vsn_major() >= 4 {
-            sql = format!(
+        let sql: String = if ob_vsn_major() >= 4 {
+            format!(
                 "SELECT /*+READ_CONSISTENCY(WEAK)*/ part_id, part_name, tablet_id, high_bound_val, sub_part_num
-                    FROM oceanbase.__all_virtual_proxy_partitionWHERE tenant_name = '{}' and table_id = {} LIMIT {};",
+                    FROM oceanbase.__all_virtual_proxy_partition WHERE tenant_name = '{}' and table_id = {} LIMIT {};",
                 table_entry.table_entry_key.tenant_name,
                 table_entry.table_id,
                 i32::MAX
-            );
+            )
         } else {
-            sql = format!(
+            format!(
                 "SELECT /*+READ_CONSISTENCY(WEAK)*/ part_id, part_name, high_bound_val
                     FROM oceanbase.__all_virtual_proxy_partition WHERE table_id = {} LIMIT {};",
                 table_entry.table_id,
                 i32::MAX
-            );
-        }
+            )
+        };
         if ob_part_func_type.is_range_part() {
             // in java sdk is parseFirstPartRange
             let bounds = LocationUtil::parse_range_part(conn, sql, table_entry, false)?;
@@ -794,7 +842,9 @@ impl LocationUtil {
             //                    .map(|mut row| {})
             //                    .collect()
             //            })?;
-        } else if ob_vsn_major() >= 4 && (ob_part_func_type.is_hash_part() || ob_part_func_type.is_key_part()) {
+        } else if ob_vsn_major() >= 4
+            && (ob_part_func_type.is_hash_part() || ob_part_func_type.is_key_part())
+        {
             // parseFirstPartKeyHash
             match &mut table_entry.partition_info {
                 None => {
@@ -805,21 +855,25 @@ impl LocationUtil {
                         "LocationUtil:fetch_first_part partition_info is None".to_owned(),
                     ));
                 }
-                Some(_) => {
-                    match LocationUtil::parse_key_hash_part(conn, sql, table_entry, false) {
-                        Ok(v) => {
-                            let mut info = table_entry.partition_info.as_mut().unwrap();
-                            info.set_tablet_id_map(v)
-                        },
-                        Err(e) => {
-                            error!("LocationUtil::fetch_first_part parse_key_hash_part error:{}", e);
-                            return Err(CommonErr(
-                                CommonErrCode::PartitionError,
-                                format!("LocationUtil::fetch_first_part parse_key_hash_part error:{}", e),
-                            ));
-                        }
+                Some(_) => match LocationUtil::parse_key_hash_part(conn, sql, table_entry, false) {
+                    Ok(v) => {
+                        let info = table_entry.partition_info.as_mut().unwrap();
+                        info.set_tablet_id_map(v)
                     }
-                }
+                    Err(e) => {
+                        error!(
+                            "LocationUtil::fetch_first_part parse_key_hash_part error:{}",
+                            e
+                        );
+                        return Err(CommonErr(
+                            CommonErrCode::PartitionError,
+                            format!(
+                                "LocationUtil::fetch_first_part parse_key_hash_part error:{}",
+                                e
+                            ),
+                        ));
+                    }
+                },
             }
         }
         Ok(())
@@ -831,14 +885,25 @@ impl LocationUtil {
         table_entry: &mut TableEntry,
         sub_part_func_type: PartFuncType,
     ) -> Result<()> {
-        let sql = format!(
-            "SELECT /*+READ_CONSISTENCY(WEAK)*/ sub_part_id, part_name, high_bound_val
+        let sql: String = if ob_vsn_major() >= 4 {
+            format!(
+                "SELECT /*+READ_CONSISTENCY(WEAK)*/ sub_part_id, part_name, tablet_id, high_bound_val
+                FROM oceanbase.__all_virtual_proxy_sub_partition WHERE tenant_name = '{}' and table_id = {} LIMIT {};",
+                table_entry.table_entry_key.tenant_name,
+                table_entry.table_id,
+                i32::MAX,
+            )
+        } else {
+            format!(
+                "SELECT /*+READ_CONSISTENCY(WEAK)*/ sub_part_id, part_name, high_bound_val
                 FROM oceanbase.__all_virtual_proxy_sub_partition
                 WHERE table_id = {} and part_id = {} LIMIT {};",
-            table_entry.table_id,
-            TEMPLATE_PART_ID,
-            i32::MAX
-        );
+                table_entry.table_id,
+                TEMPLATE_PART_ID,
+                i32::MAX,
+            )
+        };
+
         if sub_part_func_type.is_range_part() {
             // in java sdk is parseFirstPartRange
             let bounds = LocationUtil::parse_range_part(conn, sql, table_entry, true)?;
@@ -864,7 +929,9 @@ impl LocationUtil {
             //                    .map(|mut row| {})
             //                    .collect()
             //            })?;
-        } else if ob_vsn_major() >= 4 && (sub_part_func_type.is_hash_part() || sub_part_func_type.is_key_part()) {
+        } else if ob_vsn_major() >= 4
+            && (sub_part_func_type.is_hash_part() || sub_part_func_type.is_key_part())
+        {
             // parseSubPartKeyHash
             match &mut table_entry.partition_info {
                 None => {
@@ -875,30 +942,41 @@ impl LocationUtil {
                         "LocationUtil:fetch_first_part partition_info is None".to_owned(),
                     ));
                 }
-                Some(_) => {
-                    match LocationUtil::parse_key_hash_part(conn, sql, table_entry, true) {
-                        Ok(v) => {
-                            let mut info = table_entry.partition_info.as_mut().unwrap();
-                            info.set_tablet_id_map(v)
-                        },
-                        Err(e) => {
-                            error!("LocationUtil::fetch_first_part parse_key_hash_part error:{}", e);
-                            return Err(CommonErr(
-                                CommonErrCode::PartitionError,
-                                format!("LocationUtil::fetch_first_part parse_key_hash_part error:{}", e),
-                            ));
-                        }
+                Some(_) => match LocationUtil::parse_key_hash_part(conn, sql, table_entry, true) {
+                    Ok(v) => {
+                        let info = table_entry.partition_info.as_mut().unwrap();
+                        info.set_tablet_id_map(v)
                     }
-                }
+                    Err(e) => {
+                        error!(
+                            "LocationUtil::fetch_first_part parse_key_hash_part error:{}",
+                            e
+                        );
+                        return Err(CommonErr(
+                            CommonErrCode::PartitionError,
+                            format!(
+                                "LocationUtil::fetch_first_part parse_key_hash_part error:{}",
+                                e
+                            ),
+                        ));
+                    }
+                },
             }
         }
         Ok(())
     }
 
-    fn parse_key_hash_part(conn: &mut my::PooledConn, sql: String, table_entry: &mut TableEntry, is_sub_part: bool) -> Result<HashMap<i64, i64>> {
-        let mut idx: i64 = 0;
+    /*
+     * parse_key_hash_part parse tablet_id_map from sql result and return
+     */
+    fn parse_key_hash_part(
+        conn: &mut my::PooledConn,
+        sql: String,
+        table_entry: &mut TableEntry,
+        is_sub_part: bool,
+    ) -> Result<HashMap<i64, i64>> {
         let mut part_tablet_id_map: HashMap<i64, i64> = HashMap::new();
-        for mut row in conn.query::<Row, String>(sql)? {
+        for (idx, mut row) in (0_i64..).zip(conn.query::<Row, String>(sql)?.into_iter()) {
             // set sub part num into first part desc, consider refactor
             match table_entry.partition_info {
                 None => {
@@ -909,26 +987,22 @@ impl LocationUtil {
                     ));
                 }
                 Some(ref mut info) => {
-                    match info.sub_part_desc {
-                        Some(ref mut sub_part_desc) => {
-                            if !is_sub_part && sub_part_desc.get_part_num() == 0 {
-                                match sub_part_desc {
-                                    ObPartDesc::Hash(v) => {
-                                        v.set_part_num(row.take("sub_part_num").unwrap());
-                                    }
-                                    ObPartDesc::Key(v) => {
-                                        v.set_part_num(row.take("sub_part_num").unwrap());
-                                    }
-                                    _ => warn!("LocationUtil::parse_key_hash_part never be here"),
+                    if let Some(ref mut sub_part_desc) = info.sub_part_desc {
+                        if !is_sub_part && sub_part_desc.get_part_num() == 0 {
+                            match sub_part_desc {
+                                ObPartDesc::Hash(v) => {
+                                    v.set_part_num(row.take("sub_part_num").unwrap());
                                 }
+                                ObPartDesc::Key(v) => {
+                                    v.set_part_num(row.take("sub_part_num").unwrap());
+                                }
+                                _ => warn!("LocationUtil::parse_key_hash_part never be here"),
                             }
                         }
-                        _ => {}
                     }
                 }
             }
             part_tablet_id_map.insert(idx, row.take("tablet_id").unwrap());
-            idx += 1;
         }
         Ok(part_tablet_id_map)
     }
@@ -947,7 +1021,7 @@ impl LocationUtil {
         };
 
         // get partition info
-        let mut info = match table_entry.partition_info {
+        let info = match table_entry.partition_info {
             None => {
                 error!("LocationUtil::parse_range_part partition_info is None");
                 return Err(CommonErr(
@@ -979,18 +1053,15 @@ impl LocationUtil {
         for mut row in conn.query::<Row, String>(sql)? {
             // client only support template partition table
             // set sub part num into first part desc
-            match &info.sub_part_desc {
-                Some(sub_part_desc) => {
-                    if !is_sub_part && sub_part_desc.get_part_num() == 0 {
-                        match sub_part_desc {
-                            ObPartDesc::Range(_) => {
-                                sub_part_num = row.take("sub_part_num").unwrap();
-                            }
-                            _ => error!("LocationUtil::parse_range_part never be here"),
+            if let Some(sub_part_desc) = &info.sub_part_desc {
+                if !is_sub_part && sub_part_desc.get_part_num() == 0 {
+                    match sub_part_desc {
+                        ObPartDesc::Range(_) => {
+                            sub_part_num = row.take("sub_part_num").unwrap();
                         }
+                        _ => error!("LocationUtil::parse_range_part never be here"),
                     }
                 }
-                _ => {}
             }
 
             let high_bound_val: String = row.take("high_bound_val").unwrap();
@@ -1034,26 +1105,26 @@ impl LocationUtil {
 
         if ob_vsn_major() >= 4 {
             info.set_tablet_id_map(part_tablet_id_map);
+        } else if is_sub_part {
+            // 3.x sub part
+            match info.sub_part_desc {
+                Some(ref mut sub_part_desc) => {
+                    sub_part_desc.set_part_name_id_map(part_name_id_map);
+                }
+                _ => error!("LocationUtil::parse_range_part never be here"),
+            }
         } else {
-            if is_sub_part {
-                match info.sub_part_desc {
-                    Some(ref mut sub_part_desc) => {
-                        sub_part_desc.set_part_name_id_map(part_name_id_map);
-                    }
-                    _ => error!("LocationUtil::parse_range_part never be here"),
+            // 3.x
+            match info.first_part_desc {
+                Some(ref mut first_part_desc) => {
+                    first_part_desc.set_part_name_id_map(part_name_id_map);
                 }
-            } else {
-                match info.first_part_desc {
-                    Some(ref mut first_part_desc) => {
-                        first_part_desc.set_part_name_id_map(part_name_id_map);
-                    }
-                    _ => error!("LocationUtil::parse_range_part never be here"),
-                }
+                _ => error!("LocationUtil::parse_range_part never be here"),
             }
         }
 
         // set sub_part_num
-        // since we could not set sub_part_num into info in the loop (mutably borrow twice)
+        // since we could not set sub_part_num into info in the loop
         match table_entry.partition_info {
             None => {
                 error!("LocationUtil::parse_range_part partition_info is None");
@@ -1063,18 +1134,15 @@ impl LocationUtil {
                 ));
             }
             Some(ref mut info) => {
-                match info.sub_part_desc {
-                    Some(ref mut sub_part_desc) => {
-                        if !is_sub_part && sub_part_desc.get_part_num() == 0 {
-                            match sub_part_desc {
-                                ObPartDesc::Range(v) => {
-                                    v.set_part_num(sub_part_num);
-                                }
-                                _ => error!("LocationUtil::parse_range_part never be here"),
+                if let Some(ref mut sub_part_desc) = info.sub_part_desc {
+                    if !is_sub_part && sub_part_desc.get_part_num() == 0 {
+                        match sub_part_desc {
+                            ObPartDesc::Range(v) => {
+                                v.set_part_num(sub_part_num);
                             }
+                            _ => error!("LocationUtil::parse_range_part never be here"),
                         }
                     }
-                    _ => {}
                 }
             }
         }
@@ -1103,21 +1171,13 @@ pub struct ObPartIdCalculator {}
 
 impl ObPartIdCalculator {
     pub fn generate_part_id(part_id1: Option<i64>, part_id2: Option<i64>) -> Option<i64> {
-        if part_id1.is_none() {
-            return None;
-        }
-        if part_id2.is_none() {
-            return part_id1;
-        }
-        if let Some(id1) = part_id1 {
-            if let Some(id2) = part_id2 {
-                return Some(ob_part_constants::generate_phy_part_id(id1, id2));
-            }
-        }
-        None
+        Some(ob_part_constants::generate_phy_part_id(
+            part_id1?, part_id2?,
+        ))
     }
 
     pub fn get_part_idx(part_id: i64, sub_part_num: i64) -> i64 {
-        ob_part_constants::extract_part_idx(part_id) * sub_part_num + ob_part_constants::extract_subpart_idx(part_id)
+        ob_part_constants::extract_part_idx(part_id) * sub_part_num
+            + ob_part_constants::extract_subpart_idx(part_id)
     }
 }
