@@ -155,6 +155,16 @@ impl Error {
         }
     }
 
+    /// Returns the result msg of ob exception, return none if it's not an ob
+    /// exception.
+    pub fn ob_result_msg(&self) -> Option<&String> {
+        if let Error::Common(CommonErrCode::ObException(_code), desc) = self {
+            Some(desc)
+        } else {
+            None
+        }
+    }
+
     pub fn need_retry(&self) -> bool {
         if let Error::Common(CommonErrCode::ObException(code), _) = self {
             code.need_retry()

@@ -1425,7 +1425,7 @@ impl ObTableClientInner {
                         Err(CommonErr(
                             CommonErrCode::ObException(result_code),
                             format!(
-                                "OBKV server return exception, the msg is: {}.",
+                                "OBKV server return operation result exception, the msg is: {}.",
                                 result.header().message()
                             ),
                         ))

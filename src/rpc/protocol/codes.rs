@@ -717,6 +717,11 @@ pub enum ResultCodes {
     OB_CLUSTER_NAME_NOT_EQUAL = -9016,
     OB_RS_LIST_INVAILD = -9017,
     //OB_AGENT_HAS_FAILED_TASK=-9018, FIXME
+    OB_KV_CREDENTIAL_NOT_MATCH = -10509,
+    OB_KV_ROWKEY_COUNT_NOT_MATCH = -10510,
+    OB_KV_COLUMN_TYPE_NOT_MATCH = -10511,
+    OB_KV_COLLATION_MISMATCH = -10512,
+    OB_KV_SCAN_RANGE_MISSING = -10513,
 }
 
 impl ResultCodes {
@@ -1417,6 +1422,11 @@ impl ResultCodes {
             -9015 => ResultCodes::OB_AGENT_INITING_BACKUP_COUNT_ERROR,
             -9016 => ResultCodes::OB_CLUSTER_NAME_NOT_EQUAL,
             -9017 => ResultCodes::OB_RS_LIST_INVAILD,
+            -10509 => ResultCodes::OB_KV_CREDENTIAL_NOT_MATCH,
+            -10510 => ResultCodes::OB_KV_ROWKEY_COUNT_NOT_MATCH,
+            -10511 => ResultCodes::OB_KV_COLUMN_TYPE_NOT_MATCH,
+            -10512 => ResultCodes::OB_KV_COLLATION_MISMATCH,
+            -10513 => ResultCodes::OB_KV_SCAN_RANGE_MISSING,
             _ => {
                 warn!("ResultCodes::from_i32 unknown ob result code: {}.", i);
                 ResultCodes::OB_INVALID_ERROR

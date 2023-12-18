@@ -653,10 +653,21 @@ impl BaseTest {
 
         let e = result.unwrap_err();
         assert!(e.is_ob_exception());
-        assert_eq!(
-            ResultCodes::OB_ERR_COLUMN_NOT_FOUND,
-            e.ob_result_code().unwrap()
-        );
+        if self.client.ob_vsn_major() >= 4 {
+            assert_eq!(
+                ResultCodes::OB_ERR_BAD_FIELD_ERROR,
+                e.ob_result_code().unwrap()
+            );
+            assert!(e
+                .ob_result_msg()
+                .unwrap()
+                .contains("message:Unknown column 'c4' in"));
+        } else {
+            assert_eq!(
+                ResultCodes::OB_ERR_COLUMN_NOT_FOUND,
+                e.ob_result_code().unwrap()
+            );
+        }
 
         // TODO
         // column/rowkey type error
@@ -681,7 +692,18 @@ impl BaseTest {
             .await;
         let e = result.unwrap_err();
         assert!(e.is_ob_exception());
-        assert_eq!(ResultCodes::OB_OBJ_TYPE_ERROR, e.ob_result_code().unwrap());
+        if self.client.ob_vsn_major() >= 4 {
+            assert_eq!(
+                ResultCodes::OB_KV_COLUMN_TYPE_NOT_MATCH,
+                e.ob_result_code().unwrap()
+            );
+            assert!(e
+                .ob_result_msg()
+                .unwrap()
+                .contains("Column type for 'c2' not match, schema column type is 'VARCHAR'"));
+        } else {
+            assert_eq!(ResultCodes::OB_OBJ_TYPE_ERROR, e.ob_result_code().unwrap());
+        }
 
         // null value
         let result = self
