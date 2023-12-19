@@ -210,6 +210,7 @@ async fn test_cse_index_key_table() {
 
     let ids = "ids";
     let mut batch_ops = client.batch_operation(100);
+    batch_ops.set_atomic_op(false);
     for row in rows.clone() {
         let row = row.into_iter().map(Value::from).collect();
         batch_ops.insert(

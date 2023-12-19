@@ -404,6 +404,7 @@ async fn test_batch() {
         vec!["c2".to_owned()],
         vec![Value::from("batchValue_1")],
     );
+    batch_op.set_atomic_op(false);
     let result = client.execute_batch(TABLE_NAME, batch_op).await;
     assert!(result.is_ok());
 }

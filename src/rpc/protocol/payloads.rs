@@ -25,7 +25,9 @@ use std::{
 
 use bytes::{Buf, BufMut, BytesMut};
 
-use super::{BasePayLoad, ObPayload, ObTablePacketCode, ProtoDecoder, ProtoEncoder, Result};
+use super::{
+    BasePayLoad, ObPayload, ObTablePacketCode, ProtoDecoder, ProtoEncoder, Result, TraceId,
+};
 use crate::{
     location::OB_INVALID_ID,
     rpc::protocol::codes::ResultCodes,
@@ -491,7 +493,7 @@ impl ObTableBatchOperation {
             read_only: true,
             same_type: true,
             same_properties_names: true,
-            atomic_op: false,
+            atomic_op: true,
         }
     }
 
@@ -1242,6 +1244,7 @@ pub struct ObTableOperationResult {
     operation_type: ObTableOperationType,
     entity: ObTableEntity,
     affected_rows: i64,
+    trace_id: TraceId,
 }
 
 impl Default for ObTableOperationResult {
@@ -1258,6 +1261,7 @@ impl ObTableOperationResult {
             header: ObTableResult::new(),
             entity: ObTableEntity::new(vec![]),
             affected_rows: 0,
+            trace_id: TraceId(0, 0),
         }
     }
 
@@ -1276,6 +1280,10 @@ impl ObTableOperationResult {
     pub fn take_entity(self) -> ObTableEntity {
         self.entity
     }
+
+    pub fn trace_id(&self) -> TraceId {
+        self.trace_id
+    }
 }
 
 impl ObPayload for ObTableOperationResult {
@@ -1289,6 +1297,10 @@ impl ObPayload for ObTableOperationResult {
 
     fn base_mut(&mut self) -> &mut BasePayLoad {
         &mut self.base
+    }
+
+    fn set_trace_id(&mut self, trace_id: TraceId) {
+        self.trace_id = trace_id;
     }
 }
 

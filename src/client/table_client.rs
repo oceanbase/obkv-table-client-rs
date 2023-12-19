@@ -1020,6 +1020,7 @@ impl ObTableClientInner {
                         && e.as_ref().err().unwrap().ob_result_code().unwrap()
                             == ResultCodes::OB_ERR_UNKNOWN_TABLE
                     {
+                        // table not found
                         return Err(e.err().unwrap());
                     }
                     if self
@@ -1425,8 +1426,9 @@ impl ObTableClientInner {
                         Err(CommonErr(
                             CommonErrCode::ObException(result_code),
                             format!(
-                                "OBKV server return operation result exception, the msg is: {}.",
-                                result.header().message()
+                                "OBKV server return operation result exception, trace_id: {}, the msg is: {}.",
+                                result.trace_id(),
+                                result.header().message(),
                             ),
                         ))
                     }

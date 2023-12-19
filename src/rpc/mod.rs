@@ -584,7 +584,12 @@ impl Connection {
                 code: _code,
             }) => {
                 let header = header.unwrap();
-                let server_trace_id = header.trace_id();
+                let server_trace_id = if header.is_empty_trace_id() {
+                    trace_id
+                } else {
+                    header.trace_id()
+                };
+                response.set_trace_id(server_trace_id);
                 response.set_header(header);
                 let mut result_code = ObRpcResultCode::new();
                 result_code.decode(&mut content)?;
