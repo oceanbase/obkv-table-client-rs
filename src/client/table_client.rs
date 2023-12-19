@@ -565,6 +565,19 @@ impl ObTableClientInner {
             || table_entry.is_partition_level(ObPartitionLevel::Zero)
         {
             //Level zero or not partitioned.
+            // check empty row keys
+            if start.is_empty() || end.is_empty() {
+                error!(
+                    "ObTableClientInner::get_partition_leaders invalid start keys :{:?} or end keys :{:?}",
+                    start,
+                    end,
+                );
+                return Err(CommonErr(
+                    CommonErrCode::InvalidParam,
+                    "ObTableClientInner::get_partition_leaders start or end key is empty"
+                        .to_owned(),
+                ));
+            }
             self.fill_partition_location_with_phy_id(
                 &mut result,
                 table_entry,
@@ -783,7 +796,20 @@ impl ObTableClientInner {
         })?;
 
         match partition_info.level() {
-            ObPartitionLevel::Zero => Ok(0),
+            ObPartitionLevel::Zero => {
+                // check empty row keys
+                if row_key.is_empty() {
+                    error!(
+                        "ObTableClientInner::get_partition invalid row keys :{:?}",
+                        row_key
+                    );
+                    return Err(CommonErr(
+                        CommonErrCode::InvalidParam,
+                        "ObTableClientInner::get_partition row_key is empty".to_owned(),
+                    ));
+                }
+                Ok(0)
+            }
             ObPartitionLevel::One => {
                 let first_part_desc =
                     partition_info.first_part_desc().as_ref().ok_or_else(|| {
