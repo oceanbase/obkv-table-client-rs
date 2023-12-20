@@ -64,6 +64,12 @@ where
     }
 }
 
+impl From<()> for Value {
+    fn from(_: ()) -> Self {
+        Value::Null(ObjMeta::default_obj_meta(ObjType::Null))
+    }
+}
+
 impl From<i8> for Value {
     fn from(i: i8) -> Self {
         Value::Int8(i, ObjMeta::default_obj_meta(ObjType::TinyInt))

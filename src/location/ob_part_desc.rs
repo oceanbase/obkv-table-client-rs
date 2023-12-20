@@ -546,7 +546,7 @@ impl ObHashPartDesc {
             );
             return Err(CommonErr(
                 CommonErrCode::PartitionError,
-                "ObHashPartDesc::get_part_id get_part_id: row_key is empty".to_owned(),
+                "ObHashPartDesc::get_part_id: row_key is empty".to_owned(),
             ));
         }
         // TODO: evalRowKeyValues
@@ -682,7 +682,7 @@ impl ObKeyPartDesc {
             error!("ObKeyPartDesc::get_part_id invalid row keys :{:?}", row_key);
             return Err(CommonErr(
                 CommonErrCode::PartitionError,
-                "ObKeyPartDesc::get_part_id get_part_id: row_key is empty".to_owned(),
+                "ObKeyPartDesc::get_part_id: row_key is empty".to_owned(),
             ));
         }
         // TODO: evalRowKeyValues

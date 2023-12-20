@@ -784,6 +784,18 @@ impl ObTableClientInner {
      * phy id is part id in 3.x, not partId or partIdx in 4.x
      */
     fn get_partition(&self, table_entry: &Arc<TableEntry>, row_key: &[Value]) -> Result<i64> {
+        // check empty row keys
+        if row_key.is_empty() {
+            error!(
+                "ObTableClientInner::get_partition invalid row keys :{:?}",
+                row_key
+            );
+            return Err(CommonErr(
+                CommonErrCode::InvalidParam,
+                "ObTableClientInner::get_partition row_key is empty".to_owned(),
+            ));
+        }
+
         if !table_entry.is_partition_table() {
             return Ok(0);
         }
@@ -796,20 +808,7 @@ impl ObTableClientInner {
         })?;
 
         match partition_info.level() {
-            ObPartitionLevel::Zero => {
-                // check empty row keys
-                if row_key.is_empty() {
-                    error!(
-                        "ObTableClientInner::get_partition invalid row keys :{:?}",
-                        row_key
-                    );
-                    return Err(CommonErr(
-                        CommonErrCode::InvalidParam,
-                        "ObTableClientInner::get_partition row_key is empty".to_owned(),
-                    ));
-                }
-                Ok(0)
-            }
+            ObPartitionLevel::Zero => Ok(0),
             ObPartitionLevel::One => {
                 let first_part_desc =
                     partition_info.first_part_desc().as_ref().ok_or_else(|| {
