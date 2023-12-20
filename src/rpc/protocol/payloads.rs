@@ -20,6 +20,7 @@
 use std::{
     collections::{HashMap, HashSet},
     io, mem,
+    net::SocketAddr,
     time::Duration,
 };
 
@@ -1244,7 +1245,9 @@ pub struct ObTableOperationResult {
     operation_type: ObTableOperationType,
     entity: ObTableEntity,
     affected_rows: i64,
+    // debug info
     trace_id: TraceId,
+    peer_addr: Option<SocketAddr>,
 }
 
 impl Default for ObTableOperationResult {
@@ -1262,6 +1265,7 @@ impl ObTableOperationResult {
             entity: ObTableEntity::new(vec![]),
             affected_rows: 0,
             trace_id: TraceId(0, 0),
+            peer_addr: None,
         }
     }
 
@@ -1284,6 +1288,10 @@ impl ObTableOperationResult {
     pub fn trace_id(&self) -> TraceId {
         self.trace_id
     }
+
+    pub fn peer_addr(&self) -> Option<SocketAddr> {
+        self.peer_addr
+    }
 }
 
 impl ObPayload for ObTableOperationResult {
@@ -1301,6 +1309,10 @@ impl ObPayload for ObTableOperationResult {
 
     fn set_trace_id(&mut self, trace_id: TraceId) {
         self.trace_id = trace_id;
+    }
+
+    fn set_peer_addr(&mut self, addr: SocketAddr) {
+        self.peer_addr = Some(addr);
     }
 }
 

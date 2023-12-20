@@ -1451,7 +1451,8 @@ impl ObTableClientInner {
                         Err(CommonErr(
                             CommonErrCode::ObException(result_code),
                             format!(
-                                "OBKV server return operation result exception, trace_id: {}, the msg is: {}.",
+                                "OBKV server return operation result exception, addr: {}, trace_id: {}, the msg is: {}.",
+                                result.peer_addr().map_or(String::from("None"), |addr| { addr.to_string() }),
                                 result.trace_id(),
                                 result.header().message(),
                             ),

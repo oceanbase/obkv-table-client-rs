@@ -590,6 +590,7 @@ impl Connection {
                     header.trace_id()
                 };
                 response.set_trace_id(server_trace_id);
+                response.set_peer_addr(self.addr);
                 response.set_header(header);
                 let mut result_code = ObRpcResultCode::new();
                 result_code.decode(&mut content)?;

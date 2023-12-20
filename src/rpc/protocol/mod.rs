@@ -18,6 +18,7 @@
 use std::{
     fmt,
     io::{self, Cursor},
+    net::SocketAddr,
     sync::atomic::{AtomicI32, Ordering},
 };
 
@@ -667,6 +668,8 @@ pub trait ObPayload: ProtoEncoder + ProtoDecoder {
     fn set_header(&mut self, _header: ObRpcPacketHeader) {}
     // set trace id
     fn set_trace_id(&mut self, _trace_id: TraceId) {}
+    // set peer addr
+    fn set_peer_addr(&mut self, _addr: SocketAddr) {}
 }
 
 #[allow(dead_code)]
