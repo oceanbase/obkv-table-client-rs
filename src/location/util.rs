@@ -471,6 +471,13 @@ impl LocationUtil {
         }
 
         if replica_locations.is_empty() {
+            if key.table_name == ALL_DUMMY_TABLE {
+                return Err(CommonErr(
+                    CommonErrCode::InvalidParam,
+                    format!("Failed to collect dummy data from the server: Possible incorrect user credentials. tenant:{}, cluster:{}, database:{}", key.tenant_name, key.cluster_name, key.database_name),
+                ));
+            }
+
             return Err(CommonErr(
                 CommonErrCode::ObException(ResultCodes::OB_ERR_UNKNOWN_TABLE),
                 format!("table not found:{}", key.table_name),

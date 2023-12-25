@@ -1355,7 +1355,7 @@ impl ObTableClientInner {
         if conn_count == 0 {
             return Err(CommonErr(
                 CommonErrCode::InvalidServerAddr,
-                    "ObTableClientInner::init_metadata failed because all ob server address are invalid!".to_string()
+                    "ObTableClientInner::init_metadata failed: All OB servers are invalid. This may be due to incorrect user credentials or network connectivity issues.".to_string()
                 ));
         }
 
