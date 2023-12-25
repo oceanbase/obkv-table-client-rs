@@ -1439,6 +1439,7 @@ impl ResultCodes {
         matches!(
             self,
             ResultCodes::OB_NOT_MASTER
+                | ResultCodes::OB_SCHEMA_ERROR
                 | ResultCodes::OB_RS_NOT_MASTER
                 | ResultCodes::OB_RS_SHUTDOWN
                 | ResultCodes::OB_RPC_CONNECT_ERROR
