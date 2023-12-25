@@ -84,10 +84,11 @@ lazy_static! {
 
 const MAX_PRIORITY: isize = 50;
 
-// part id <=> tablet id <=> phy id
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PartInfo {
     pub table_id: i64,
+    // part_id is partition id in 3.x, tablet_id in 4.x.
+    // both part_id is generated from phy_id.
     pub part_id: i64,
 }
 
@@ -499,9 +500,7 @@ impl ObTableClientInner {
         Ok(result)
     }
 
-    /*
-     * fill_partition_location_with_phy_id will return gt part_id in PartInfo
-     */
+    /// fill_partition_location_with_phy_id will return gt part_id in PartInfo
     fn fill_partition_location_with_phy_id(
         &self,
         result: &mut Vec<(PartInfo, ReplicaLocation)>,
@@ -548,9 +547,7 @@ impl ObTableClientInner {
         Ok(())
     }
 
-    /*
-     * get_partition_leaders will return gt part ids
-     */
+    /// get_partition_leaders will return gt part ids
     fn get_partition_leaders(
         &self,
         table_entry: &TableEntry,
@@ -734,9 +731,7 @@ impl ObTableClientInner {
         }
     }
 
-    /*
-     * get_partition_leader will return gt part id
-     */
+    /// get_partition_leader will return gt part id (partition id or tablet id)
     fn get_partition_leader(
         &self,
         table_entry: &Arc<TableEntry>,
@@ -779,10 +774,8 @@ impl ObTableClientInner {
         Some((part_id, leader_location))
     }
 
-    /*
-     * get_partition will return phy part id
-     * phy id is part id in 3.x, not partId or partIdx in 4.x
-     */
+    /// get_partition will return phy part id. phy id is part id in 3.x, not
+    /// partId or partIdx in 4.x
     fn get_partition(&self, table_entry: &Arc<TableEntry>, row_key: &[Value]) -> Result<i64> {
         // check empty row keys
         if row_key.is_empty() {

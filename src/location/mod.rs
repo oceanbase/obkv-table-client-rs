@@ -443,14 +443,15 @@ impl ObPartitionEntry {
         partid_tablet_map: Option<&HashMap<i64, i64>>,
     ) -> Option<&ObPartitionLocation> {
         // logic_id = part_id in partition one
-        let mut logic_id = phy_id;
-        if ob_vsn_major() >= 4 {
-            logic_id = partid_tablet_map.and_then(|m| m.get(&logic_id).copied())
+        let logic_id = if ob_vsn_major() >= 4 {
+            partid_tablet_map.and_then(|m| m.get(&phy_id).copied())
                 .unwrap_or_else(|| {
                     error!("get_sub_partition_location_with_part_id could not get tablet from logic id because the map is None or the logic_id is not present");
                     -1
-                });
-        }
+                })
+        } else {
+            phy_id
+        };
         self.parititon_location.get(&logic_id)
     }
 
@@ -460,8 +461,8 @@ impl ObPartitionEntry {
         sub_part_nums: i32,
         partid_tablet_map: Option<&HashMap<i64, i64>>,
     ) -> Option<&ObPartitionLocation> {
-        let mut logic_id = ob_part_constants::extract_part_idx(phy_id) * sub_part_nums as i64
-            + ob_part_constants::extract_subpart_idx(phy_id);
+        let mut logic_id =
+            extract_part_idx(phy_id) * sub_part_nums as i64 + extract_subpart_idx(phy_id);
         if ob_vsn_major() >= 4 {
             logic_id = partid_tablet_map.and_then(|m| m.get(&logic_id).copied())
                 .unwrap_or_else(|| {

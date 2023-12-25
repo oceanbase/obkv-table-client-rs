@@ -666,9 +666,7 @@ pub trait ObPayload: ProtoEncoder + ProtoDecoder {
     fn set_credential(&mut self, _credential: &[u8]) {}
     // set request'rpc header into payload
     fn set_header(&mut self, _header: ObRpcPacketHeader) {}
-    // set trace id
     fn set_trace_id(&mut self, _trace_id: TraceId) {}
-    // set peer addr
     fn set_peer_addr(&mut self, _addr: SocketAddr) {}
 }
 

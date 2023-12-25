@@ -71,7 +71,8 @@ impl LocationUtil {
         Ok(())
     }
 
-    // getTableEntryLocationFromRemote
+    /// getTableEntryLocationFromRemote will try get location of every
+    /// partition/tablet from server
     pub fn get_table_location_from_remote(
         conn: &mut my::PooledConn,
         key: &TableEntryKey,
@@ -435,8 +436,8 @@ impl LocationUtil {
                     ));
                 }
             };
-            // unused
-            let _: i64 = partition_id;
+            // for compile (type inference)
+            let _part_id: i64 = partition_id;
             // for table_entry
             table_id = tbl_id;
             replica_num = repl_num;
