@@ -500,7 +500,8 @@ impl ObTableClientInner {
         Ok(result)
     }
 
-    /// fill_partition_location_with_phy_id will return gt part_id in PartInfo
+    /// fill_partition_location_with_phy_id will return real partId/tabletId
+    /// and corresponding executable table in PartInfo
     fn fill_partition_location_with_phy_id(
         &self,
         result: &mut Vec<(PartInfo, ReplicaLocation)>,
