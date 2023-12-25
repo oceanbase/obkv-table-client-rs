@@ -853,7 +853,7 @@ impl LocationUtil {
         } else if ob_vsn_major() >= 4
             && (ob_part_func_type.is_hash_part() || ob_part_func_type.is_key_part())
         {
-            // parseFirstPartKeyHash
+            // Parse the the first partition information of Key/Hash func
             match &mut table_entry.partition_info {
                 None => {
                     // dont have a partition info
