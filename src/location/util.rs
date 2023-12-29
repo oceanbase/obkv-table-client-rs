@@ -71,6 +71,111 @@ impl LocationUtil {
         Ok(())
     }
 
+    pub fn generate_table_location_from_remote_sqlv3(
+        key: &TableEntryKey,
+        table_entry: &TableEntry,
+    ) -> Result<String> {
+        let partition_num = table_entry.partition_num;
+        let mut part_str = String::with_capacity((partition_num * 7) as usize);
+        if table_entry.is_partition_table()
+            && table_entry.partition_info.is_some()
+            && table_entry
+                .partition_info
+                .as_ref()
+                .unwrap()
+                .sub_part_desc
+                .is_some()
+        {
+            // confirm sub part num
+            let first_part_num: i64 = table_entry
+                .partition_info
+                .as_ref()
+                .and_then(|info| info.first_part_desc.as_ref())
+                .map_or(0, |desc| desc.get_part_num() as i64);
+            let sub_part_num: i64 = table_entry
+                .partition_info
+                .as_ref()
+                .and_then(|info| info.sub_part_desc.as_ref())
+                .map_or(0, |desc| desc.get_part_num() as i64);
+            for i in 0..first_part_num {
+                for j in 0..sub_part_num {
+                    if i > 0 || j > 0 {
+                        part_str.push(',');
+                    }
+                    let part_id =
+                        ObPartIdCalculator::generate_part_id(Option::from(i), Option::from(j))
+                            .unwrap();
+                    part_str.push_str(&format!("{part_id}"));
+                }
+            }
+        } else {
+            for idx in 0..partition_num {
+                if idx > 0 {
+                    part_str.push(',');
+                }
+                part_str.push_str(&format!("{idx}"));
+            }
+        }
+        Ok(format!("SELECT /*+READ_CONSISTENCY(WEAK)*/ A.partition_id as partition_id, A.svr_ip as svr_ip, A.sql_port as sql_port,
+                            A.table_id as table_id, A.role as role, A.replica_num as replica_num, A.part_num as part_num, B.svr_port as svr_port,
+                            B.status as status, B.stop_time as stop_time, A.spare1 as replica_type FROM oceanbase.__all_virtual_proxy_schema A
+                            inner join oceanbase.__all_server B on A.svr_ip = B.svr_ip and A.sql_port = B.inner_port
+                            WHERE tenant_name = '{}' and database_name= '{}' and table_name = '{}' and partition_id in ({})",
+                &key.tenant_name,
+                &key.database_name,
+                &key.table_name,
+                &part_str,
+        ))
+    }
+
+    pub fn generate_table_location_from_remote_sqlv4(
+        key: &TableEntryKey,
+        table_entry: &TableEntry,
+    ) -> Result<String> {
+        let partition_num = table_entry.partition_num;
+        let mut part_str = String::with_capacity((partition_num * 7) as usize);
+        if table_entry.is_partition_table() {
+            let mut idx: i64 = 0;
+            match table_entry.part_tablet_id_map() {
+                Some(part_tablet_id_map) => {
+                    for value in part_tablet_id_map.values() {
+                        if idx > 0 {
+                            part_str.push(',');
+                        }
+                        part_str.push_str(&format!("{value}"));
+                        idx += 1;
+                    }
+                }
+                None => {
+                    error!("Location::generate_table_location_from_remote_sqlv4: partition table has no part_tablet_id_map, table={:?}",
+                               table_entry);
+                    return Err(CommonErr(
+                        CommonErrCode::PartitionError,
+                        format!("Location::generate_table_location_from_remote_sqlv4: partition table has no part_tablet_id_map, table={:?}",
+                                table_entry),
+                    ));
+                }
+            }
+        } else {
+            for idx in 0..partition_num {
+                if idx > 0 {
+                    part_str.push(',');
+                }
+                part_str.push_str(&format!("{idx}"));
+            }
+        }
+
+        Ok(format!("SELECT /*+READ_CONSISTENCY(WEAK)*/ A.tablet_id as tablet_id, A.svr_ip as svr_ip, A.sql_port as sql_port,
+                            A.table_id as table_id, A.role as role, A.replica_num as replica_num, A.part_num as part_num, B.svr_port as svr_port, B.status as status, B.stop_time as stop_time,
+                            A.spare1 as replica_type FROM oceanbase.__all_virtual_proxy_schema A inner join oceanbase.__all_server B on A.svr_ip = B.svr_ip and A.sql_port = B.inner_port
+                            WHERE tenant_name = '{}' and database_name= '{}' and table_name = '{}' and tablet_id in ({})",
+                &key.tenant_name,
+                &key.database_name,
+                &key.table_name,
+                &part_str,
+        ))
+    }
+
     /// getTableEntryLocationFromRemote will try get location of every
     /// partition/tablet from server
     pub fn get_table_location_from_remote(
@@ -78,98 +183,10 @@ impl LocationUtil {
         key: &TableEntryKey,
         table_entry: &TableEntry,
     ) -> Result<ObPartitionEntry> {
-        let partition_num = table_entry.partition_num;
-        let mut part_str = String::with_capacity((partition_num * 7) as usize);
         let sql: String = if ob_vsn_major() >= 4 {
-            if table_entry.is_partition_table() {
-                let mut idx: i64 = 0;
-                match table_entry.part_tablet_id_map() {
-                    Some(part_tablet_id_map) => {
-                        for value in part_tablet_id_map.values() {
-                            if idx > 0 {
-                                part_str.push(',');
-                            }
-                            part_str.push_str(&format!("{value}"));
-                            idx += 1;
-                        }
-                    }
-                    None => {
-                        error!("Location::get_table_location_from_remote: partition table has no part_tablet_id_map, table={:?}",
-                               table_entry);
-                        return Err(CommonErr(
-                            CommonErrCode::PartitionError,
-                            format!("Location::get_table_location_from_remote: partition table has no part_tablet_id_map, table={:?}",
-                                    table_entry),
-                        ));
-                    }
-                }
-            } else {
-                for idx in 0..partition_num {
-                    if idx > 0 {
-                        part_str.push(',');
-                    }
-                    part_str.push_str(&format!("{idx}"));
-                }
-            }
-            format!("SELECT /*+READ_CONSISTENCY(WEAK)*/ A.tablet_id as tablet_id, A.svr_ip as svr_ip, A.sql_port as sql_port,
-                            A.table_id as table_id, A.role as role, A.replica_num as replica_num, A.part_num as part_num, B.svr_port as svr_port, B.status as status, B.stop_time as stop_time,
-                            A.spare1 as replica_type FROM oceanbase.__all_virtual_proxy_schema A inner join oceanbase.__all_server B on A.svr_ip = B.svr_ip and A.sql_port = B.inner_port
-                            WHERE tenant_name = '{}' and database_name= '{}' and table_name = '{}' and tablet_id in ({})",
-                            &key.tenant_name,
-                            &key.database_name,
-                            &key.table_name,
-                            &part_str,
-            )
+            LocationUtil::generate_table_location_from_remote_sqlv4(key, table_entry)?
         } else {
-            if table_entry.is_partition_table()
-                && table_entry.partition_info.is_some()
-                && table_entry
-                    .partition_info
-                    .as_ref()
-                    .unwrap()
-                    .sub_part_desc
-                    .is_some()
-            {
-                // confirm sub part num
-                let first_part_num: i64 = table_entry
-                    .partition_info
-                    .as_ref()
-                    .and_then(|info| info.first_part_desc.as_ref())
-                    .map_or(0, |desc| desc.get_part_num() as i64);
-                let sub_part_num: i64 = table_entry
-                    .partition_info
-                    .as_ref()
-                    .and_then(|info| info.sub_part_desc.as_ref())
-                    .map_or(0, |desc| desc.get_part_num() as i64);
-                for i in 0..first_part_num {
-                    for j in 0..sub_part_num {
-                        if i > 0 || j > 0 {
-                            part_str.push(',');
-                        }
-                        let part_id =
-                            ObPartIdCalculator::generate_part_id(Option::from(i), Option::from(j))
-                                .unwrap();
-                        part_str.push_str(&format!("{part_id}"));
-                    }
-                }
-            } else {
-                for idx in 0..partition_num {
-                    if idx > 0 {
-                        part_str.push(',');
-                    }
-                    part_str.push_str(&format!("{idx}"));
-                }
-            }
-            format!("SELECT /*+READ_CONSISTENCY(WEAK)*/ A.partition_id as partition_id, A.svr_ip as svr_ip, A.sql_port as sql_port,
-                            A.table_id as table_id, A.role as role, A.replica_num as replica_num, A.part_num as part_num, B.svr_port as svr_port,
-                            B.status as status, B.stop_time as stop_time, A.spare1 as replica_type FROM oceanbase.__all_virtual_proxy_schema A
-                            inner join oceanbase.__all_server B on A.svr_ip = B.svr_ip and A.sql_port = B.inner_port
-                            WHERE tenant_name = '{}' and database_name= '{}' and table_name = '{}' and partition_id in ({})",
-                            &key.tenant_name,
-                            &key.database_name,
-                            &key.table_name,
-                            &part_str,
-            )
+            LocationUtil::generate_table_location_from_remote_sqlv3(key, table_entry)?
         };
 
         // getPartitionLocationFromResultSet in java client
@@ -282,23 +299,27 @@ impl LocationUtil {
             };
 
             let location = partition_location.get(&part_id);
-            if location.is_none() {
-                error!("Location::get_table_location_from_remote: partition num={} is not exists, table={:?}, locations={:?}",
-                   part_id, table_entry, partition_location);
-                return Err(CommonErr(
-                    CommonErrCode::PartitionError,
-                    format!("Location::get_table_location_from_remote: Table maybe dropped. partition num={part_id} is not exists, table={table_entry:?}, locations={partition_location:?}"),
-                ));
-            }
-
-            if location.unwrap().leader.is_none() {
-                error!("Location::get_table_location_from_remote: partition num={} has no leader, table={:?}, locations={:?}",
-                   part_id, table_entry, partition_location);
-
-                return Err(CommonErr(
-                    CommonErrCode::PartitionError,
-                    format!("Location::get_table_location_from_remote: partition num={part_id} has no leader, table={table_entry:?}, locations={partition_location:?}, maybe rebalancing"),
-                ));
+            match location {
+                Some(location_ref) if location_ref.leader.is_some() => {
+                    // do nothing
+                }
+                Some(_) => {
+                    error!("Location::get_table_location_from_remote: partition num={} has no leader, table={:?}, locations={:?}",
+                        part_id, table_entry, partition_location);
+                    return Err(CommonErr(
+                        CommonErrCode::PartitionError,
+                        format!("Location::get_table_location_from_remote: partition num={part_id} has no leader, table={table_entry:?}, locations={partition_location:?}, maybe rebalancing"),
+                    ));
+                }
+                None => {
+                    // if location not exist
+                    error!("Location::get_table_location_from_remote: partition num={} is not exists, table={:?}, locations={:?}",
+                        part_id, table_entry, partition_location);
+                    return Err(CommonErr(
+                        CommonErrCode::PartitionError,
+                        format!("Location::get_table_location_from_remote: Table maybe dropped. partition num={part_id} is not exists, table={table_entry:?}, locations={partition_location:?}"),
+                    ));
+                }
             }
         }
 
@@ -312,6 +333,7 @@ impl LocationUtil {
         key: &TableEntryKey,
     ) -> Result<TableEntry> {
         let sql: String = if ob_vsn_major() >= 4 {
+            // generate SQL for OB Server 4.x
             match key.table_name.clone().as_str() {
                 ALL_DUMMY_TABLE => format!("SELECT /*+READ_CONSISTENCY(WEAK)*/ A.tablet_id as tablet_id, A.svr_ip as svr_ip, A.sql_port as sql_port,
                                                 A.table_id as table_id, A.role as role, A.replica_num as replica_num, A.part_num as part_num, B.svr_port as svr_port,
@@ -331,6 +353,7 @@ impl LocationUtil {
                                 &key.table_name),
             }
         } else {
+            // generate SQL for OB Server 3.x
             match key.table_name.clone().as_str() {
                 ALL_DUMMY_TABLE => format!("SELECT /*+READ_CONSISTENCY(WEAK)*/ A.partition_id as partition_id, A.svr_ip as svr_ip, A.sql_port as sql_port,
                                                 A.table_id as table_id, A.role as role, A.replica_num as replica_num, A.part_num as part_num, B.svr_port as svr_port,
