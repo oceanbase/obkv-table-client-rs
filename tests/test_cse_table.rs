@@ -106,30 +106,6 @@ async fn test_cse_data_range_table() {
     assert_eq!("bb".to_owned().into_bytes(), value.as_bytes());
 }
 
-#[tokio::test]
-#[serial]
-async fn test_data_range_part() {
-    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
-    let client = client_handle.await.unwrap();
-    let cse_table = "cse_data_20190308_1";
-    client
-        .truncate_table(cse_table)
-        .expect("Succeed in truncating table");
-    client.add_row_key_element(
-        cse_table,
-        vec![
-            "series_id".to_string(),
-            "field_id".to_string(),
-            "start_time".to_string(),
-        ],
-    );
-    let rowk_keys = vec![Value::from(11i64), Value::from(1i32), Value::from(3600i32)];
-
-    let ret = client.get_table(cse_table, &rowk_keys, false);
-    assert!(ret.is_ok());
-    assert_eq!(1, ret.unwrap().0);
-}
-
 // ```sql
 // create table cse_meta_data_0 (
 //      id INT NOT NULL AUTO_INCREMENT,
@@ -234,6 +210,7 @@ async fn test_cse_index_key_table() {
 
     let ids = "ids";
     let mut batch_ops = client.batch_operation(100);
+    batch_ops.set_atomic_op(false);
     for row in rows.clone() {
         let row = row.into_iter().map(Value::from).collect();
         batch_ops.insert(
@@ -291,30 +268,6 @@ async fn test_cse_index_key_table() {
         }
     }
     result_set.close().await.expect("Fail to close result set");
-}
-
-#[tokio::test]
-#[serial]
-async fn test_index_key_part() {
-    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
-    let client = client_handle.await.unwrap();
-    let cse_table = "cse_index_1";
-
-    client
-        .truncate_table(cse_table)
-        .expect("Fail to truncate table");
-    client.add_row_key_element(
-        cse_table,
-        vec![
-            "measurement".to_string(),
-            "tag_key".to_string(),
-            "tag_value".to_string(),
-        ],
-    );
-    let rowk_keys = vec![Value::from("a"), Value::from("site"), Value::from("et2")];
-
-    let result = client.get_table(cse_table, &rowk_keys, false);
-    assert_eq!(8, result.unwrap().0);
 }
 
 // ```sql
@@ -399,27 +352,6 @@ async fn test_cse_field_key_table() {
     let value = result.remove("id").unwrap();
     assert!(value.is_i32());
     assert_eq!(4i32, value.as_i32());
-}
-
-#[tokio::test]
-#[serial]
-async fn test_field_key_part() {
-    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
-    let client = client_handle.await.unwrap();
-    let cse_table = "cse_field_1";
-
-    client
-        .truncate_table(cse_table)
-        .expect("Fail to truncate table");
-    client.add_row_key_element(
-        cse_table,
-        vec!["measurement".to_string(), "field_name".to_string()],
-    );
-    let rowk_keys = vec![Value::from("11bb"), Value::from("11cc")];
-
-    let ret = client.get_table(cse_table, &rowk_keys, false);
-    assert!(ret.is_ok());
-    assert_eq!(6, ret.unwrap().0);
 }
 
 // The create sql of the test table is:

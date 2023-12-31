@@ -29,6 +29,7 @@ use std::{
 #[allow(unused)]
 use obkv::error::CommonErrCode;
 use obkv::{Builder, ObTableClient, RunningMode};
+use tokio::task;
 
 // TODO: use test conf to control which environments to test.
 const TEST_FULL_USER_NAME: &str = "test";
@@ -61,4 +62,12 @@ pub fn build_hbase_client() -> ObTableClient {
 
 pub fn build_normal_client() -> ObTableClient {
     build_client(RunningMode::Normal)
+}
+
+pub async fn execute_sql(client: Arc<ObTableClient>, sql: String) -> obkv::error::Result<()> {
+    let sql_handle = task::spawn_blocking(move || sync_execute_sql(client, sql));
+    sql_handle.await.unwrap()
+}
+pub fn sync_execute_sql(client: Arc<ObTableClient>, sql: String) -> obkv::error::Result<()> {
+    client.execute_sql(&sql)
 }

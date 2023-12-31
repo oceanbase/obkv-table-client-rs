@@ -68,6 +68,7 @@ use crate::{
     serde_obkv::value::Value,
     util::{
         assert_not_empty, current_time_millis, duration_to_millis, millis_to_secs,
+        obversion::ob_vsn_major,
         permit::{PermitGuard, Permits},
         HandyRwLock,
     },
@@ -82,6 +83,20 @@ lazy_static! {
 }
 
 const MAX_PRIORITY: isize = 50;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PartInfo {
+    pub table_id: i64,
+    // part_id is partition id in 3.x, tablet_id in 4.x.
+    // both part_id is generated from phy_id.
+    pub part_id: i64,
+}
+
+impl PartInfo {
+    fn new(table_id: i64, part_id: i64) -> Self {
+        PartInfo { table_id, part_id }
+    }
+}
 
 pub struct ServerRoster {
     max_priority: AtomicIsize,
@@ -432,10 +447,11 @@ impl ObTableClientInner {
         table_name: &str,
         row_key: &[Value],
         refresh: bool,
-    ) -> Result<(i64, Arc<ObTable>)> {
+    ) -> Result<(PartInfo, Arc<ObTable>)> {
         let table_entry = self.get_or_refresh_table_entry(table_name, refresh)?;
-        let part_id = self.get_partition(&table_entry, row_key)?;
-        self.get_or_create_table(table_name, &table_entry, part_id)
+        // actually phy id here
+        let phy_id = self.get_partition(&table_entry, row_key)?;
+        self.get_or_create_table(table_name, &table_entry, phy_id)
     }
 
     fn get_tables(
@@ -446,81 +462,72 @@ impl ObTableClientInner {
         end: &[Value],
         end_inclusive: bool,
         refresh: bool,
-    ) -> Result<Vec<(i64, Arc<ObTable>)>> {
+    ) -> Result<Vec<(PartInfo, Arc<ObTable>)>> {
         // 1. get table entry info
         let table_entry = self.get_or_refresh_table_entry(table_name, refresh)?;
 
         // 2. get replica location
-        let part_id_with_replicas: Vec<(i64, ReplicaLocation)> =
+        let part_info_with_replicas: Vec<(PartInfo, ReplicaLocation)> =
             self.get_partition_leaders(&table_entry, start, start_inclusive, end, end_inclusive)?;
 
-        let mut result: Vec<(i64, Arc<ObTable>)> = vec![];
+        let mut result: Vec<(PartInfo, Arc<ObTable>)> = vec![];
 
-        for (part_id, replica_location) in part_id_with_replicas {
+        for (part_info, replica_location) in part_info_with_replicas {
             if let Some(table) = self.table_roster.rl().get(replica_location.addr()) {
-                result.push((part_id, table.clone()));
+                result.push((part_info, table.clone()));
                 continue;
             }
             // Table not found, try to refresh it and retry get it again.
-            warn!("ObTableClientInner::get_tables can not get ob table by address {:?} so that will sync refresh metadata.",
+            warn!("ObTableClientInner::get_tables can not get ob table by address {:?} so that will refresh metadata.",
                   replica_location.addr());
-            self.sync_refresh_metadata()?;
-            let table_entry = self.get_or_refresh_table_entry(table_name, true)?;
-            match table_entry.get_partition_location_with_part_id(part_id) {
-                Some(location) => match location.leader() {
-                    Some(leader) => {
-                        //Found leader of replication ,try to get table from table roster
-                        if let Some(ob_table) = self.table_roster.rl().get(leader.addr()) {
-                            result.push((part_id, ob_table.clone()));
-                        } else {
-                            return Err(CommonErr(
-                                CommonErrCode::NotFound,
-                                format!("ObTable to {leader:?} not found in table_roster."),
-                            ));
-                        }
-                    }
-                    None => {
-                        //Leader not found
-                        return Err(CommonErr(
-                            CommonErrCode::NotFound,
-                            format!("Leader not found part_id={part_id} for table {table_entry:?}"),
-                        ));
-                    }
-                },
-                None => {
-                    //Replica not found.
-                    return Err(CommonErr(
-                        CommonErrCode::NotFound,
-                        format!(
-                            "Replica not found part_id={} for table {:?}",
-                            part_id,
-                            table_entry.to_owned(),
-                        ),
-                    ));
+
+            match self.refresh_sender.try_send(table_name.to_owned()) {
+                Ok(_) => {
+                    warn!("ObTableClientInner::get_tables: Need Refresh / try to refresh schema actively succeed, table_name:{table_name}");
+                }
+                Err(error) => {
+                    warn!("ObTableClientInner::get_tables: Need Refresh / try to refresh schema actively failed, maybe other thread has sent, table_name:{table_name}, error:{error}");
                 }
             }
+
+            let error_message = format!(
+                "get_tables can not get table by address {:?}, already try to refresh schema",
+                replica_location.addr()
+            );
+            return Err(CommonErr(CommonErrCode::NotFound, error_message));
         }
 
         Ok(result)
     }
 
-    fn fill_partition_location_with_part_id(
+    /// fill_partition_location_with_phy_id will return real partId/tabletId
+    /// and corresponding executable table in [`PartInfo`]
+    fn fill_partition_location_with_phy_id(
         &self,
-        result: &mut Vec<(i64, ReplicaLocation)>,
+        result: &mut Vec<(PartInfo, ReplicaLocation)>,
         table_entry: &TableEntry,
-        part_id: i64,
+        phy_id: i64,
+        table_id: i64,
     ) -> Result<()> {
-        match table_entry.get_partition_location_with_part_id(part_id) {
+        match table_entry.get_partition_location_with_phy_id(phy_id) {
             Some(location) => match location.leader() {
                 Some(leader) => {
-                    result.push((part_id, leader.clone()));
+                    if ob_vsn_major() >= 4 {
+                        let part_id = table_entry
+                            .part_tablet_id_map()
+                            .and_then(|m| m.get(&phy_id).copied())
+                            .unwrap_or(0);
+                        result.push((PartInfo::new(table_id, part_id), leader.clone()));
+                    } else {
+                        result.push((PartInfo::new(table_id, phy_id), leader.clone()));
+                    }
                 }
                 None => {
                     return Err(CommonErr(
                         CommonErrCode::NotFound,
                         format!(
                             "Leader not found part_id={} for table {:?}",
-                            part_id,
+                            phy_id,
                             table_entry.to_owned(),
                         ),
                     ));
@@ -531,7 +538,7 @@ impl ObTableClientInner {
                     CommonErrCode::NotFound,
                     format!(
                         "Replica not found part_id={} for table {:?}",
-                        part_id,
+                        phy_id,
                         table_entry.to_owned(),
                     ),
                 ));
@@ -541,6 +548,7 @@ impl ObTableClientInner {
         Ok(())
     }
 
+    /// get_partition_leaders will return gt part ids
     fn get_partition_leaders(
         &self,
         table_entry: &TableEntry,
@@ -548,27 +556,47 @@ impl ObTableClientInner {
         start_inclusive: bool,
         end: &[Value],
         end_inclusive: bool,
-    ) -> Result<Vec<(i64, ReplicaLocation)>> {
-        let mut result: Vec<(i64, ReplicaLocation)> = vec![];
+    ) -> Result<Vec<(PartInfo, ReplicaLocation)>> {
+        let mut result: Vec<(PartInfo, ReplicaLocation)> = vec![];
 
         if !table_entry.is_partition_table()
             || table_entry.is_partition_level(ObPartitionLevel::Zero)
         {
             //Level zero or not partitioned.
-            self.fill_partition_location_with_part_id(&mut result, table_entry, 0)?;
+            // check empty row keys
+            if start.is_empty() || end.is_empty() {
+                error!(
+                    "ObTableClientInner::get_partition_leaders invalid start keys :{:?} or end keys :{:?}",
+                    start,
+                    end,
+                );
+                return Err(CommonErr(
+                    CommonErrCode::InvalidParam,
+                    "ObTableClientInner::get_partition_leaders start or end key is empty"
+                        .to_owned(),
+                ));
+            }
+            self.fill_partition_location_with_phy_id(
+                &mut result,
+                table_entry,
+                0,
+                table_entry.table_id(),
+            )?;
             Ok(result)
         } else if table_entry.is_partition_level(ObPartitionLevel::One) {
             //Level one
             match table_entry.partition_info() {
                 Some(info) => match info.first_part_desc() {
                     Some(part_desc) => {
+                        // actually phy id here
                         let part_ids =
                             part_desc.get_part_ids(start, start_inclusive, end, end_inclusive)?;
                         for part_id in part_ids {
-                            self.fill_partition_location_with_part_id(
+                            self.fill_partition_location_with_phy_id(
                                 &mut result,
                                 table_entry,
                                 part_id,
+                                table_entry.table_id(),
                             )?;
                         }
                         Ok(result)
@@ -675,18 +703,21 @@ impl ObTableClientInner {
         &self,
         table_name: &str,
         table_entry: &Arc<TableEntry>,
-        part_id: i64,
-    ) -> Result<(i64, Arc<ObTable>)> {
-        match self.get_partition_leader(table_entry, part_id) {
+        phy_id: i64,
+    ) -> Result<(PartInfo, Arc<ObTable>)> {
+        match self.get_partition_leader(table_entry, phy_id) {
             Some((part_id, replica)) => match replica {
                 Some(r) => {
                     let addr = r.addr();
                     if let Some(table) = self.table_roster.rl().get(addr) {
-                        return Ok((part_id, table.clone()));
+                        return Ok((
+                            PartInfo::new(table_entry.table_id(), part_id),
+                            table.clone(),
+                        ));
                     }
 
                     let ob_table = self.add_ob_table(addr)?;
-                    Ok((part_id, ob_table))
+                    Ok((PartInfo::new(table_entry.table_id(), part_id), ob_table))
                 }
 
                 None => Err(CommonErr(
@@ -696,171 +727,140 @@ impl ObTableClientInner {
             },
             None => Err(CommonErr(
                 CommonErrCode::NotFound,
-                format!("Partition leader not found for table {table_name}-{part_id}"),
+                format!("Partition leader not found for table {table_name}-{phy_id}"),
             )),
         }
     }
 
+    /// get_partition_leader will return gt part id (partition id or tablet id)
     fn get_partition_leader(
         &self,
         table_entry: &Arc<TableEntry>,
-        part_id: i64,
+        phy_id: i64,
     ) -> Option<(i64, Option<ReplicaLocation>)> {
-        match table_entry.partition_info() {
-            Some(ref partition_info) => match partition_info.level() {
-                ObPartitionLevel::Two => Some((
-                    part_id,
-                    match table_entry.partition_entry() {
-                        Some(entry) => match entry.get_sub_partition_location_with_part_id(
-                            part_id,
-                            partition_info.sub_part_desc().as_ref()?.get_part_num(),
-                        ) {
-                            Some(v) => v.leader().to_owned(),
-                            None => None,
-                        },
-                        None => None,
-                    },
-                )),
-                _ => Some((
-                    part_id,
-                    match table_entry.partition_entry() {
-                        Some(entry) => match entry.get_partition_location_with_part_id(part_id) {
-                            Some(v) => v.leader().to_owned(),
-                            None => None,
-                        },
-                        None => None,
-                    },
-                )),
-            },
-            _ => Some((
-                part_id,
-                match table_entry.partition_entry() {
-                    Some(entry) => match entry.get_partition_location_with_part_id(part_id) {
-                        Some(v) => v.leader().to_owned(),
-                        None => None,
-                    },
-                    None => None,
-                },
-            )),
-        }
+        let partition_info = match table_entry.partition_info() {
+            Some(partition_info) => partition_info,
+            None => {
+                if phy_id == 0 {
+                    // partition_info not exist -> not partition table
+                    // only have one tablet/partition, then return 0/loc of p0
+                    return table_entry.partition_entry().as_ref().map(|entry| {
+                        (
+                            phy_id,
+                            entry
+                                .get_partition_location_with_part_id(phy_id)
+                                .and_then(|location| location.leader().to_owned()),
+                        )
+                    });
+                }
+                warn!("get_partition_leader can not get partition_info");
+                return Some((phy_id, None));
+            }
+        };
+        let part_id = partition_info.get_partid_from_phyid(phy_id);
+
+        let leader_location = table_entry.partition_entry().as_ref().and_then(|entry| {
+            let partition_location = match partition_info.level() {
+                ObPartitionLevel::Two => entry.get_sub_partition_location_with_phy_id(
+                    phy_id,
+                    partition_info.sub_part_desc().as_ref()?.get_part_num(),
+                    table_entry.part_tablet_id_map(),
+                ),
+                _ => entry
+                    .get_partition_location_with_phy_id(phy_id, table_entry.part_tablet_id_map()),
+            };
+            partition_location.and_then(|location| location.leader().to_owned())
+        });
+
+        Some((part_id, leader_location))
     }
 
+    /// get_partition will return phy part id. phy id is part id in 3.x, not
+    /// partId or partIdx in 4.x
     fn get_partition(&self, table_entry: &Arc<TableEntry>, row_key: &[Value]) -> Result<i64> {
+        // check empty row keys
+        if row_key.is_empty() {
+            error!(
+                "ObTableClientInner::get_partition invalid row keys :{:?}",
+                row_key
+            );
+            return Err(CommonErr(
+                CommonErrCode::InvalidParam,
+                "ObTableClientInner::get_partition row_key is empty".to_owned(),
+            ));
+        }
+
         if !table_entry.is_partition_table() {
             return Ok(0);
         }
-        if let Some(partition_info) = table_entry.partition_info() {
-            match partition_info.level() {
-                ObPartitionLevel::Zero => return Ok(0),
-                ObPartitionLevel::One => {
-                    if partition_info.first_part_desc().is_none() {
+
+        let partition_info = table_entry.partition_info().as_ref().ok_or_else(|| {
+            CommonErr(
+                CommonErrCode::PartitionError,
+                "get_partition error: partition_info is None".to_owned(),
+            )
+        })?;
+
+        match partition_info.level() {
+            ObPartitionLevel::Zero => Ok(0),
+            ObPartitionLevel::One => {
+                let first_part_desc =
+                    partition_info.first_part_desc().as_ref().ok_or_else(|| {
                         error!(
                             "get_partition: partition_info level is one, first_part_desc is none"
                         );
-                        return Err(CommonErr(
+                        CommonErr(
                             CommonErrCode::PartitionError,
                             "get_partition: partition_info level is one, first_part_desc is none"
                                 .to_owned(),
-                        ));
+                        )
+                    })?;
+                first_part_desc.get_part_id(row_key)
+            }
+            ObPartitionLevel::Two => {
+                let (first_part_desc, sub_part_desc) = match (
+                    partition_info.first_part_desc(),
+                    partition_info.sub_part_desc(),
+                ) {
+                    (Some(first_part_desc), Some(sub_part_desc)) => {
+                        (first_part_desc, sub_part_desc)
                     }
-                    if let Some(first_part_desc) = partition_info.first_part_desc() {
-                        return first_part_desc.get_part_id(row_key);
+                    _ => {
+                        let error_msg = "get_partition: partition_info level is two, first_part_desc or sub_part_desc is none".to_string();
+                        error!("{}", error_msg);
+                        return Err(CommonErr(CommonErrCode::PartitionError, error_msg));
                     }
-                }
-                ObPartitionLevel::Two => {
-                    match (
-                        partition_info.first_part_desc(),
-                        partition_info.sub_part_desc(),
-                    ) {
-                        (None, None) => {
-                            error!("get_partition: partition_info level is two, first_part_desc is none, sub_part_desc is none");
-                            return Err(CommonErr(
-                                CommonErrCode::PartitionError,
-                                "get_partition: partition_info level is two, first_part_desc is none, sub_part_desc is none".to_owned(),
-                            ));
-                        }
-                        (Some(_), None) => {
-                            error!(
-                                "get_partition: partition_info level is two, sub_part_desc is none"
-                            );
-                            return Err(CommonErr(
-                                CommonErrCode::PartitionError,
-                                "get_partition: partition_info level is two, sub_part_desc is none"
-                                    .to_owned(),
-                            ));
-                        }
-                        (None, Some(_)) => {
-                            error!("get_partition: partition_info level is two, first_part_desc is none");
-                            return Err(CommonErr(
-                                CommonErrCode::PartitionError,
-                                "get_partition: partition_info level is two, first_part_desc is none".to_owned(),
-                            ));
-                        }
-                        (Some(first_part_desc), Some(sub_part_desc)) => {
-                            let first_part_len =
-                                first_part_desc.get_ordered_part_column_names().len();
-                            let sub_part_len = sub_part_desc.get_ordered_part_column_names().len();
-                            if first_part_len + sub_part_len > row_key.len() {
-                                return Err(CommonErr(
-                                    CommonErrCode::PartitionError,
-                                    "number of rowkey is less than the length of partition column"
-                                        .to_owned(),
-                                ));
-                            }
+                };
 
-                            let first_part_id =
-                                first_part_desc.get_part_id(&row_key[..first_part_len]);
-                            let sub_part_id = sub_part_desc.get_part_id(&row_key[first_part_len..]);
-                            return match (first_part_id, sub_part_id) {
-                                (Err(e1), Err(e2)) => {
-                                    error!("first_part_desc get_part_id err:{:?}, sub_part_desc get_part_id err:{:?}", e1, e2);
-                                    Err(CommonErr(
-                                        CommonErrCode::PartitionError,
-                                        "first_part_desc get_part_id err and sub_part_desc get_part_id err".to_owned(),
-                                    ))
-                                }
-                                (Err(e1), Ok(_)) => {
-                                    error!("first_part_desc get_part_id err:{:?}", e1);
-                                    Err(CommonErr(
-                                        CommonErrCode::PartitionError,
-                                        "first_part_desc get_part_id err ".to_owned(),
-                                    ))
-                                }
-                                (Ok(_), Err(e2)) => {
-                                    error!("sub_part_desc get_part_id err:{:?}", e2);
-                                    Err(CommonErr(
-                                        CommonErrCode::PartitionError,
-                                        "sub_part_desc get_part_id err".to_owned(),
-                                    ))
-                                }
-                                (Ok(id1), Ok(id2)) => {
-                                    if id1 < 0 || id2 < 0 {
-                                        error!("first_part_desc get_part_id:{}, sub_part_desc get_part_id:{}", id1, id2);
-                                        Err(CommonErr(
-                                            CommonErrCode::PartitionError,
-                                            "first_part_desc get_part_id or sub_part_desc get_part_id is less than 0".to_owned(),
-                                        ))
-                                    } else {
-                                        Ok(generate_phy_part_id(id1, id2))
-                                    }
-                                }
-                            };
-                        }
-                    }
+                let first_part_len = first_part_desc.get_ordered_part_column_names().len();
+                let sub_part_len = sub_part_desc.get_ordered_part_column_names().len();
+                if first_part_len + sub_part_len > row_key.len() {
+                    let error_msg =
+                        "number of rowkey is less than the length of partition column".to_owned();
+                    error!("{}", error_msg);
+                    return Err(CommonErr(CommonErrCode::PartitionError, error_msg));
                 }
-                ObPartitionLevel::Unknown => {
-                    error!("get_partition error:ObPartitionLevel is Unknown");
-                    return Err(CommonErr(
-                        CommonErrCode::PartitionError,
-                        "get_partition error:ObPartitionLevel is Unknown".to_owned(),
-                    ));
+
+                let first_part_id = first_part_desc.get_part_id(&row_key[..first_part_len])?;
+                let sub_part_id = sub_part_desc.get_part_id(&row_key[first_part_len..])?;
+
+                if first_part_id < 0 || sub_part_id < 0 {
+                    let error_msg = format!(
+                        "first_part_desc get_part_id:{}, sub_part_desc get_part_id:{}",
+                        first_part_id, sub_part_id
+                    );
+                    error!("{}", error_msg);
+                    return Err(CommonErr(CommonErrCode::PartitionError, error_msg));
                 }
+
+                Ok(generate_phy_part_id(first_part_id, sub_part_id))
+            }
+            ObPartitionLevel::Unknown => {
+                let error_msg = "get_partition error: ObPartitionLevel is Unknown".to_owned();
+                error!("{}", error_msg);
+                Err(CommonErr(CommonErrCode::PartitionError, error_msg))
             }
         }
-        Err(CommonErr(
-            CommonErrCode::PartitionError,
-            "get_partition error:partition_info is None".to_owned(),
-        ))
     }
 
     fn need_refresh_table_entry(
@@ -1039,6 +1039,7 @@ impl ObTableClientInner {
                         && e.as_ref().err().unwrap().ob_result_code().unwrap()
                             == ResultCodes::OB_ERR_UNKNOWN_TABLE
                     {
+                        // table not found
                         return Err(e.err().unwrap());
                     }
                     if self
@@ -1348,7 +1349,7 @@ impl ObTableClientInner {
         if conn_count == 0 {
             return Err(CommonErr(
                 CommonErrCode::InvalidServerAddr,
-                    "ObTableClientInner::init_metadata failed because all ob server address are invalid!".to_string()
+                    "ObTableClientInner::init_metadata failed: All OB servers are invalid. This may be due to incorrect user credentials or network connectivity issues.".to_string()
                 ));
         }
 
@@ -1390,7 +1391,7 @@ impl ObTableClientInner {
     ) -> Result<ObTableOperationResult> {
         self.check_status()?;
 
-        let (part_id, table) = self.get_table(table_name, &row_keys, false)?;
+        let (part_info, table) = self.get_table(table_name, &row_keys, false)?;
 
         let start = Instant::now();
 
@@ -1403,7 +1404,8 @@ impl ObTableClientInner {
             self.config.rpc_operation_timeout,
             self.config.log_level_flag,
         );
-        payload.set_partition_id(part_id);
+        payload.set_table_id(part_info.table_id);
+        payload.set_partition_id(part_info.part_id);
         let mut result = ObTableOperationResult::new();
         table.execute_payload(&mut payload, &mut result).await?;
 
@@ -1443,8 +1445,10 @@ impl ObTableClientInner {
                         Err(CommonErr(
                             CommonErrCode::ObException(result_code),
                             format!(
-                                "OBKV server return exception, the msg is: {}.",
-                                result.header().message()
+                                "OBKV server return operation result exception, addr: {}, trace_id: {}, the msg is: {}.",
+                                result.peer_addr().map_or(String::from("None"), |addr| { addr.to_string() }),
+                                result.trace_id(),
+                                result.header().message(),
                             ),
                         ))
                     }
@@ -1544,6 +1548,11 @@ pub struct ObTableClient {
 }
 
 impl ObTableClient {
+    /// Get OB server major version of remote
+    pub fn ob_vsn_major(&self) -> i32 {
+        ob_vsn_major()
+    }
+
     /// Add row key element for table.
     pub fn add_row_key_element(&self, table_name: &str, columns: Vec<String>) {
         self.inner.add_row_key_element(table_name, columns);
@@ -1610,7 +1619,7 @@ impl ObTableClient {
         table_name: &str,
         row_key: &[Value],
         refresh: bool,
-    ) -> Result<(i64, Arc<ObTable>)> {
+    ) -> Result<(PartInfo, Arc<ObTable>)> {
         self.inner.get_table(table_name, row_key, refresh)
     }
 
@@ -1630,9 +1639,9 @@ impl ObTableClient {
 
         let mut part_batch_ops = HashMap::with_capacity(1);
         for op in batch_op.take_raw_ops() {
-            let partition_id = self.inner.get_partition(&table_entry, &op.1)?;
+            let phy_id = self.inner.get_partition(&table_entry, &op.1)?;
             part_batch_ops
-                .entry(partition_id)
+                .entry(phy_id)
                 .or_insert_with(ObTableBatchOperation::new)
                 .add_op(op);
         }
@@ -1644,13 +1653,14 @@ impl ObTableClient {
 
         // fast path: to process batch operations involving only one partition
         if part_batch_ops.len() == 1 {
-            let (part_id, mut part_batch_op) = part_batch_ops.into_iter().next().unwrap();
-            part_batch_op.set_partition_id(part_id);
+            let (phy, mut part_batch_op) = part_batch_ops.into_iter().next().unwrap();
+            let (part_info, table) =
+                self.inner
+                    .get_or_create_table(table_name, &table_entry, phy)?;
+            part_batch_op.set_table_id(part_info.table_id);
             part_batch_op.set_table_name(table_name.to_owned());
+            part_batch_op.set_partition_id(part_info.part_id);
             part_batch_op.set_atomic_op(batch_op.is_atomic_op());
-            let (_, table) = self
-                .inner
-                .get_or_create_table(table_name, &table_entry, part_id)?;
             return table.execute_batch(table_name, part_batch_op).await;
         }
 
@@ -1669,14 +1679,15 @@ impl ObTableClient {
         let mut all_results = Vec::new();
         let mut handles = Vec::with_capacity(part_batch_ops.len());
 
-        for (part_id, mut batch_op) in part_batch_ops {
-            let (_, table) = self
-                .inner
-                .get_or_create_table(table_name, &table_entry, part_id)?;
+        for (phy_id, mut batch_op) in part_batch_ops {
+            let (part_info, table) =
+                self.inner
+                    .get_or_create_table(table_name, &table_entry, phy_id)?;
             let table_name = table_name.to_owned();
             handles.push(self.inner.runtimes.bg_runtime.spawn(async move {
-                batch_op.set_partition_id(part_id);
+                batch_op.set_table_id(part_info.table_id);
                 batch_op.set_table_name(table_name.clone());
+                batch_op.set_partition_id(part_info.part_id);
                 table.execute_batch(&table_name, batch_op).await
             }));
         }
@@ -2028,7 +2039,7 @@ impl ObTableClientQueryImpl {
     }
 
     pub async fn execute(&self) -> Result<QueryResultSet> {
-        let mut partition_table: HashMap<i64, (i64, Arc<ObTable>)> = HashMap::new();
+        let mut partition_table: HashMap<i64, (PartInfo, Arc<ObTable>)> = HashMap::new();
 
         self.table_query.verify()?;
 
@@ -2043,11 +2054,11 @@ impl ObTableClientQueryImpl {
                 false,
             )?;
 
-            for (part_id, ob_table) in pairs {
-                if partition_table.contains_key(&part_id) {
+            for (part_info, ob_table) in pairs {
+                if partition_table.contains_key(&part_info.part_id) {
                     continue;
                 }
-                partition_table.insert(part_id, (part_id, ob_table));
+                partition_table.insert(part_info.part_id, (part_info, ob_table));
             }
         }
 

@@ -18,6 +18,7 @@
 use std::{
     fmt,
     io::{self, Cursor},
+    net::SocketAddr,
     sync::atomic::{AtomicI32, Ordering},
 };
 
@@ -345,6 +346,11 @@ impl ObRpcPacketHeader {
     }
 
     #[inline]
+    pub fn is_empty_trace_id(&self) -> bool {
+        self.trace_id0 == 0 && self.trace_id1 == 0
+    }
+
+    #[inline]
     pub fn trace_id(&self) -> TraceId {
         TraceId(self.trace_id0, self.trace_id1)
     }
@@ -660,6 +666,8 @@ pub trait ObPayload: ProtoEncoder + ProtoDecoder {
     fn set_credential(&mut self, _credential: &[u8]) {}
     // set request'rpc header into payload
     fn set_header(&mut self, _header: ObRpcPacketHeader) {}
+    fn set_trace_id(&mut self, _trace_id: TraceId) {}
+    fn set_peer_addr(&mut self, _addr: SocketAddr) {}
 }
 
 #[allow(dead_code)]

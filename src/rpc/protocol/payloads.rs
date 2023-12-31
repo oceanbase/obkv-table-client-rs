@@ -20,12 +20,15 @@
 use std::{
     collections::{HashMap, HashSet},
     io, mem,
+    net::SocketAddr,
     time::Duration,
 };
 
 use bytes::{Buf, BufMut, BytesMut};
 
-use super::{BasePayLoad, ObPayload, ObTablePacketCode, ProtoDecoder, ProtoEncoder, Result};
+use super::{
+    BasePayLoad, ObPayload, ObTablePacketCode, ProtoDecoder, ProtoEncoder, Result, TraceId,
+};
 use crate::{
     location::OB_INVALID_ID,
     rpc::protocol::codes::ResultCodes,
@@ -369,6 +372,10 @@ impl ObTableOperationRequest {
         }
     }
 
+    pub fn set_table_id(&mut self, table_id: i64) {
+        self.table_id = table_id;
+    }
+
     pub fn set_partition_id(&mut self, partition_id: i64) {
         self.partition_id = partition_id;
     }
@@ -396,7 +403,11 @@ impl ObPayload for ObTableOperationRequest {
         Ok(util::encoded_length_bytes_string(&self.credential)
             + util::encoded_length_vstring(&self.table_name)
             + util::encoded_length_vi64(self.table_id)
-            + util::encoded_length_vi64(self.partition_id)
+            + if ob_vsn_major() >= 4 {
+                8
+            } else {
+                util::encoded_length_vi64(self.partition_id)
+            }
             + util::encoded_length_i8(self.entity_type as i8)
             + util::encoded_length_i8(self.consistency_level as i8)
             + util::encoded_length_i8(self.return_row_key as i8)
@@ -483,7 +494,7 @@ impl ObTableBatchOperation {
             read_only: true,
             same_type: true,
             same_properties_names: true,
-            atomic_op: false,
+            atomic_op: true,
         }
     }
 
@@ -513,6 +524,10 @@ impl ObTableBatchOperation {
 
     pub fn set_partition_id(&mut self, part_id: i64) {
         self.partition_id = part_id
+    }
+
+    pub fn set_table_id(&mut self, table_id: i64) {
+        self.table_id = table_id
     }
 
     pub fn is_read_only(&self) -> bool {
@@ -770,7 +785,11 @@ impl ObPayload for ObTableBatchOperationRequest {
         Ok(util::encoded_length_bytes_string(&self.credential)
             + util::encoded_length_vstring(&self.table_name)
             + util::encoded_length_vi64(self.table_id)
-            + util::encoded_length_vi64(self.partition_id)
+            + if ob_vsn_major() >= 4 {
+                8
+            } else {
+                util::encoded_length_vi64(self.partition_id)
+            }
             + self.batch_operation.len()?
             + util::encoded_length_i8(self.entity_type as i8)
             + util::encoded_length_i8(self.consistency_level as i8)
@@ -795,7 +814,11 @@ impl ProtoEncoder for ObTableBatchOperationRequest {
         buf.put_i8(self.return_row_key as i8);
         buf.put_i8(self.return_affected_entity as i8);
         buf.put_i8(self.return_affected_rows as i8);
-        util::encode_vi64(self.partition_id, buf)?;
+        if ob_vsn_major() >= 4 {
+            buf.put_i64(self.partition_id);
+        } else {
+            util::encode_vi64(self.partition_id, buf)?;
+        }
         buf.put_i8(self.atomic_op as i8);
         Ok(())
     }
@@ -1115,6 +1138,10 @@ impl ObTableLoginResult {
     pub fn tenant_id(&self) -> u64 {
         self.tenant_id
     }
+
+    pub fn serer_version(&self) -> &str {
+        &self.server_version
+    }
 }
 
 impl ObPayload for ObTableLoginResult {
@@ -1218,6 +1245,9 @@ pub struct ObTableOperationResult {
     operation_type: ObTableOperationType,
     entity: ObTableEntity,
     affected_rows: i64,
+    // debug info
+    trace_id: TraceId,
+    peer_addr: Option<SocketAddr>,
 }
 
 impl Default for ObTableOperationResult {
@@ -1234,6 +1264,8 @@ impl ObTableOperationResult {
             header: ObTableResult::new(),
             entity: ObTableEntity::new(vec![]),
             affected_rows: 0,
+            trace_id: TraceId(0, 0),
+            peer_addr: None,
         }
     }
 
@@ -1252,6 +1284,14 @@ impl ObTableOperationResult {
     pub fn take_entity(self) -> ObTableEntity {
         self.entity
     }
+
+    pub fn trace_id(&self) -> TraceId {
+        self.trace_id
+    }
+
+    pub fn peer_addr(&self) -> Option<SocketAddr> {
+        self.peer_addr
+    }
 }
 
 impl ObPayload for ObTableOperationResult {
@@ -1265,6 +1305,14 @@ impl ObPayload for ObTableOperationResult {
 
     fn base_mut(&mut self) -> &mut BasePayLoad {
         &mut self.base
+    }
+
+    fn set_trace_id(&mut self, trace_id: TraceId) {
+        self.trace_id = trace_id;
+    }
+
+    fn set_peer_addr(&mut self, addr: SocketAddr) {
+        self.peer_addr = Some(addr);
     }
 }
 

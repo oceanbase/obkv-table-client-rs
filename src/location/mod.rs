@@ -35,9 +35,14 @@ use crate::{
     client::{table_client::ServerRoster, ClientConfig},
     constant::*,
     error::{CommonErrCode, Error::Common as CommonErr, Result},
-    rpc::protocol::{codes::ResultCodes, partition::ob_column::ObColumn},
+    location::{
+        ob_part_constants::{extract_part_idx, extract_subpart_idx},
+        util::LocationUtil,
+        ObServerRole::InvalidRole,
+    },
+    rpc::protocol::partition::ob_column::ObColumn,
     util as u,
-    util::HandyRwLock,
+    util::{obversion::ob_vsn_major, HandyRwLock},
 };
 
 pub mod ob_part_constants;
@@ -188,6 +193,14 @@ pub enum ObServerRole {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub enum ObReplicaType {
+    Full = 0,
+    LogOnly = 5,
+    ReadOnly = 16,
+    Invalid = i32::MAX as isize,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct ObServerInfo {
     stop_time: i64,
     status: ObServerStatus,
@@ -215,10 +228,13 @@ pub struct TableEntryKey {
     table_name: String,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct TableEntry {
     table_id: i64,
     partition_num: i64,
+    replica_num: i64,
+    table_entry_key: TableEntryKey,
     refresh_time_mills: Arc<AtomicUsize>,
     partition_info: Option<ObPartitionInfo>,
     //table entry location
@@ -260,6 +276,7 @@ pub struct ObPartitionInfo {
     part_columns: Vec<Box<dyn ObColumn>>,
     row_key_element: HashMap<String, i32>,
     part_name_id_map: HashMap<String, i64>,
+    part_tablet_id_map: HashMap<i64, i64>,
 }
 
 impl Default for ObPartitionInfo {
@@ -277,6 +294,7 @@ impl ObPartitionInfo {
             part_columns: Vec::new(),
             row_key_element: HashMap::<String, i32>::new(),
             part_name_id_map: HashMap::<String, i64>::new(),
+            part_tablet_id_map: HashMap::<i64, i64>::new(),
         }
     }
 
@@ -291,6 +309,10 @@ impl ObPartitionInfo {
         self.row_key_element = row_key_element;
     }
 
+    pub fn set_tablet_id_map(&mut self, tablet_id_map: HashMap<i64, i64>) {
+        self.part_tablet_id_map = tablet_id_map;
+    }
+
     pub fn level(&self) -> ObPartitionLevel {
         self.level.clone()
     }
@@ -301,6 +323,30 @@ impl ObPartitionInfo {
 
     pub fn sub_part_desc(&self) -> &Option<ObPartDesc> {
         &self.sub_part_desc
+    }
+
+    pub fn part_tablet_id_map(&self) -> &HashMap<i64, i64> {
+        &self.part_tablet_id_map
+    }
+
+    pub fn get_partid_from_phyid(&self, phy_id: i64) -> i64 {
+        if ob_vsn_major() >= 4 {
+            let part_num = self
+                .sub_part_desc
+                .as_ref()
+                .map_or(0, |desc| desc.get_part_num());
+            let part_idx = extract_part_idx(phy_id) * part_num as i64 + extract_subpart_idx(phy_id);
+            self.part_tablet_id_map
+                .get(&part_idx)
+                .copied()
+                .unwrap_or_else(|| {
+                    warn!("get_partid_from_phyid can not get part id / tablet id from phy id");
+                    -1
+                })
+        } else {
+            // partId is the phy part id in 3.x
+            phy_id
+        }
     }
 
     pub fn prepare(&mut self) -> Result<()> {
@@ -388,18 +434,42 @@ impl ObPartitionEntry {
         &self,
         part_id: i64,
     ) -> Option<&ObPartitionLocation> {
-        // logic_id = part_id in partition one
         self.parititon_location.get(&part_id)
     }
 
-    pub fn get_sub_partition_location_with_part_id(
+    pub fn get_partition_location_with_phy_id(
         &self,
-        part_id: i64,
-        sub_part_nums: i32,
+        phy_id: i64,
+        partid_tablet_map: Option<&HashMap<i64, i64>>,
     ) -> Option<&ObPartitionLocation> {
-        // only for template sub partition
-        let logic_id = ob_part_constants::extract_part_idx(part_id) * sub_part_nums as i64
-            + ob_part_constants::extract_subpart_idx(part_id);
+        // logic_id = part_id in partition one
+        let logic_id = if ob_vsn_major() >= 4 {
+            partid_tablet_map.and_then(|m| m.get(&phy_id).copied())
+                .unwrap_or_else(|| {
+                    error!("get_sub_partition_location_with_part_id could not get tablet from logic id because the map is None or the logic_id is not present");
+                    -1
+                })
+        } else {
+            phy_id
+        };
+        self.parititon_location.get(&logic_id)
+    }
+
+    pub fn get_sub_partition_location_with_phy_id(
+        &self,
+        phy_id: i64,
+        sub_part_nums: i32,
+        partid_tablet_map: Option<&HashMap<i64, i64>>,
+    ) -> Option<&ObPartitionLocation> {
+        let mut logic_id =
+            extract_part_idx(phy_id) * sub_part_nums as i64 + extract_subpart_idx(phy_id);
+        if ob_vsn_major() >= 4 {
+            logic_id = partid_tablet_map.and_then(|m| m.get(&logic_id).copied())
+                .unwrap_or_else(|| {
+                    error!("get_sub_partition_location_with_phy_id could not get tablet from logic id because the map is None or the logic_id is not present");
+                    -1
+                });
+        }
         self.parititon_location.get(&logic_id)
     }
 }
@@ -409,6 +479,7 @@ pub struct ReplicaLocation {
     addr: ObServerAddr,
     info: ObServerInfo,
     role: ObServerRole,
+    replica_type: ObReplicaType,
 }
 
 impl ReplicaLocation {
@@ -418,6 +489,11 @@ impl ReplicaLocation {
 
     pub fn info(&self) -> &ObServerInfo {
         &self.info
+    }
+
+    pub fn is_valid(&self) -> bool {
+        // default: addr and info are not null
+        InvalidRole != self.role && self.info.is_active()
     }
 }
 
@@ -432,9 +508,21 @@ impl ObServerRole {
     }
 }
 
+impl ObReplicaType {
+    pub fn from_int(i: i32) -> ObReplicaType {
+        match i {
+            0 => ObReplicaType::Full,
+            5 => ObReplicaType::LogOnly,
+            16 => ObReplicaType::ReadOnly,
+            _ => ObReplicaType::Invalid,
+        }
+    }
+}
+
 impl ObServerStatus {
     pub fn from_string(s: String) -> ObServerStatus {
-        match s.as_ref() {
+        let s = s.clone();
+        match s.to_lowercase().as_str() {
             "active" => ObServerStatus::Active,
             "inactive" => ObServerStatus::Inactive,
             "deleting" => ObServerStatus::Deleting,
@@ -453,6 +541,10 @@ impl TableEntry {
 
     pub fn is_partition_table(&self) -> bool {
         self.partition_num > 1
+    }
+
+    pub fn table_id(&self) -> i64 {
+        self.table_id
     }
 
     pub fn partition_entry(&self) -> &Option<ObPartitionEntry> {
@@ -483,12 +575,22 @@ impl TableEntry {
         }
     }
 
-    pub fn get_partition_location_with_part_id(
-        &self,
-        part_id: i64,
-    ) -> Option<&ObPartitionLocation> {
+    pub fn part_tablet_id_map(&self) -> Option<&HashMap<i64, i64>> {
+        match self.partition_info {
+            Some(ref info) => Some(info.part_tablet_id_map()),
+            None => None,
+        }
+    }
+
+    pub fn get_partition_location_with_phy_id(&self, phy_id: i64) -> Option<&ObPartitionLocation> {
         match self.partition_entry {
-            Some(ref entry) => entry.get_partition_location_with_part_id(part_id),
+            Some(ref entry) => {
+                if phy_id == 0 && self.partition_info.is_none() {
+                    entry.get_partition_location_with_part_id(phy_id)
+                } else {
+                    entry.get_partition_location_with_phy_id(phy_id, self.part_tablet_id_map())
+                }
+            }
             None => None,
         }
     }
@@ -821,7 +923,7 @@ impl ObTableLocation {
 
         let mut conn = pool.try_get_conn(connect_timeout)?;
 
-        let part_entry = self.get_table_location_from_remote(&mut conn, key, table_entry)?;
+        let part_entry = LocationUtil::get_table_location_from_remote(&mut conn, key, table_entry)?;
         //Clone a new table entry to return.
         let mut table_entry = table_entry.clone();
         //Update partiton entry and refresh_time
@@ -838,6 +940,7 @@ impl ObTableLocation {
         connect_timeout: Duration,
         sock_timeout: Duration,
     ) -> Result<TableEntry> {
+        // create mysql connection pool and get connection
         let pool = self.get_or_create_mysql_pool(
             &self.config.sys_user_name,
             &self.config.sys_password,
@@ -846,246 +949,24 @@ impl ObTableLocation {
             Some(connect_timeout),
             Some(sock_timeout),
         )?;
-
-        let mut table_id = OB_INVALID_ID;
-        let mut partition_num = OB_INVALID_ID;
         let mut conn = pool.try_get_conn(connect_timeout)?;
-        let sql = match key.table_name.as_ref() {
-        ALL_DUMMY_TABLE => format!("SELECT /*+READ_CONSISTENCY(WEAK)*/ A.partition_id as partition_id, A.svr_ip as svr_ip, A.sql_port as sql_port,
-                                    A.table_id as table_id, A.role as role, A.part_num as part_num, B.svr_port as svr_port,
-                                    B.status as status, B.stop_time as stop_time FROM oceanbase.__all_virtual_proxy_schema A inner join oceanbase.__all_server
-                                    B on A.svr_ip = B.svr_ip and A.sql_port = B.inner_port WHERE tenant_name = '{}' and database_name='{}'
-                                    and table_name ='{}'",
-                                   &key.tenant_name,
-                                   &key.database_name,
-                                   &key.table_name),
-        _ => format!("SELECT /*+READ_CONSISTENCY(WEAK)*/ A.partition_id as partition_id, A.svr_ip as svr_ip, A.sql_port as sql_port, A.table_id as table_id,
-                      A.role as role, A.part_num as part_num, B.svr_port as svr_port, B.status as status, B.stop_time as
-                      stop_time FROM oceanbase.__all_virtual_proxy_schema A inner join oceanbase.__all_server B on A.svr_ip = B.svr_ip and
-                      A.sql_port = B.inner_port WHERE tenant_name = '{}' and database_name='{}' and table_name = '{}' and partition_id = 0",
-                     &key.tenant_name,
-                     &key.database_name,
-                     &key.table_name),
-        };
-        let mut replica_locations = Vec::new();
-        for row in conn.query::<Row, String>(sql)? {
-            let (id, svr_ip, sql_port, tbl_id, role, part_num, svr_port, status, stop_time) =
-                match my::from_row_opt(row) {
-                    Ok(tuple) => tuple,
-                    Err(e) => {
-                        error!("ObTableLocation::get_table_entry_from_remote: fail to do mysql row conversion, err:{}", e);
-                        return Err(CommonErr(
-                            CommonErrCode::ConvertFailed,
-                            format!("mysql row conversion err:{e}"),
-                        ));
-                    }
-                };
-            // just for id type infer
-            let _: i64 = id;
-            table_id = tbl_id;
-            partition_num = part_num;
-            let role: ObServerRole = ObServerRole::from_int(role);
-            let status: ObServerStatus = ObServerStatus::from_string(status);
 
-            let mut observer_addr = ObServerAddr::new();
-
-            observer_addr.address(svr_ip);
-            observer_addr.set_sql_port(sql_port);
-            observer_addr.set_svr_port(svr_port);
-
-            let observer_info = ObServerInfo { stop_time, status };
-            if !observer_info.is_active() {
-                warn!(
-                    "ObTableLocation::get_table_entry_from_remote: inactive observer found, \
-                     server_info:{:?}, addr:{:?}",
-                    observer_info, observer_addr
-                );
-                continue;
-            }
-
-            replica_locations.push(ReplicaLocation {
-                addr: observer_addr,
-                info: observer_info,
-                role,
-            });
-        }
-
-        if replica_locations.is_empty() {
-            return Err(CommonErr(
-                CommonErrCode::ObException(ResultCodes::OB_ERR_UNKNOWN_TABLE),
-                format!("table not found:{}", key.table_name),
-            ));
-        }
-        let table_location = TableLocation { replica_locations };
-        let mut table_entry = TableEntry {
-            table_id,
-            partition_num,
-            refresh_time_mills: Arc::new(AtomicUsize::new(0)),
-            partition_info: None,
-            table_location,
-            partition_entry: None,
-            row_key_element: HashMap::new(),
-        };
-
-        let part_entry = self.get_table_location_from_remote(&mut conn, key, &table_entry)?;
-        table_entry.partition_entry = Some(part_entry);
-        table_entry.set_refresh_time_mills(u::current_time_millis());
-
-        if table_entry.is_partition_table() {
-            // fetch partition info
-            match util::LocationUtil::fetch_partition_info(&mut conn, &table_entry) {
-                Ok(v) => table_entry.partition_info = Some(v),
-                Err(e) => {
-                    table_entry.partition_info = None;
-                    error!(
-                        "Location::get_table_entry_from_remote fetch_partition_info error:{}",
-                        e
-                    );
-                    return Err(CommonErr(
-                        CommonErrCode::PartitionError,
-                        format!(
-                            "location::get_table_entry_from_remote fetch_partition_info error:{e}",
-                        ),
-                    ));
-                }
-            }
-            if let Some(v) = table_entry.partition_info.clone() {
-                // fetch first range part
-                if let Some(first_part_desc) = &v.first_part_desc {
-                    let ob_part_func_type = first_part_desc.get_part_func_type();
-                    if ob_part_func_type.is_range_part() || ob_part_func_type.is_list_part() {
-                        util::LocationUtil::fetch_first_part(
-                            &mut conn,
-                            &mut table_entry,
-                            ob_part_func_type,
-                        )?;
-                    }
-                }
-                // fetch sub range part
-                if let Some(sub_part_desc) = &v.sub_part_desc {
-                    let ob_part_func_type = sub_part_desc.get_part_func_type();
-                    if ob_part_func_type.is_range_part() || ob_part_func_type.is_list_part() {
-                        util::LocationUtil::fetch_sub_part(
-                            &mut conn,
-                            &mut table_entry,
-                            ob_part_func_type,
-                        )?;
-                    }
-                }
-            }
-            if let Some(v) = &mut table_entry.partition_info {
-                v.part_name_id_map = util::LocationUtil::build_part_name_id_map(v);
+        // get ob_version
+        match util::LocationUtil::get_ob_version_from_server(&mut conn) {
+            Ok(_) => {}
+            Err(e) => {
+                // return err
+                return Err(CommonErr(
+                    CommonErrCode::ConvertFailed,
+                    format!("mysql row conversion err:{e}"),
+                ));
             }
         }
+
+        // majority of implementation is in LocationUtil
+        let table_entry = LocationUtil::get_table_entry_from_remote_inner(&mut conn, key)?;
 
         Ok(table_entry)
-    }
-
-    pub fn get_table_location_from_remote(
-        &self,
-        conn: &mut my::PooledConn,
-        key: &TableEntryKey,
-        table_entry: &TableEntry,
-    ) -> Result<ObPartitionEntry> {
-        let partition_num = table_entry.partition_num;
-        let mut part_str = String::with_capacity((partition_num * 2) as usize);
-        for i in 0..partition_num {
-            if i > 0 {
-                part_str.push(',');
-            }
-            part_str.push_str(&format!("{i}"));
-        }
-
-        let sql = format!("SELECT /*+READ_CONSISTENCY(WEAK)*/ A.partition_id as partition_id, A.svr_ip as svr_ip, A.sql_port as sql_port,
-                       A.role as role, B.svr_port as svr_port, B.status as status, B.stop_time as stop_time
-                       FROM oceanbase.__all_virtual_proxy_schema A inner join oceanbase.__all_server B on A.svr_ip = B.svr_ip and A.sql_port = B.inner_port
-                       WHERE tenant_name = '{}' and database_name='{}' and table_name = '{}' and partition_id in ({})",
-                      &key.tenant_name,
-                      &key.database_name,
-                      &key.table_name,
-                      &part_str);
-
-        let mut partition_location = HashMap::new();
-
-        for row in conn.query::<Row, String>(sql)? {
-            let (part_id, svr_ip, sql_port, role, svr_port, status, stop_time) =
-                match my::from_row_opt(row) {
-                    Ok(tuple) => tuple,
-                    Err(e) => {
-                        error!("ObTableLocation::get_table_location_from_remote: fail to do mysql row conversion, err:{}", e);
-                        return Err(CommonErr(
-                            CommonErrCode::ConvertFailed,
-                            format!("mysql row conversion err:{e}"),
-                        ));
-                    }
-                };
-
-            let partition_id = part_id;
-            let role = ObServerRole::from_int(role);
-            let status = ObServerStatus::from_string(status);
-
-            let mut observer_addr = ObServerAddr::new();
-            observer_addr.address(svr_ip);
-            observer_addr.set_sql_port(sql_port);
-            observer_addr.set_svr_port(svr_port);
-
-            let observer_info = ObServerInfo { stop_time, status };
-            if !observer_info.is_active() {
-                warn!(
-                    "ObTableLocation::get_table_location_from_remote: inactive observer found, \
-                    server_info:{:?}, addr:{:?}",
-                    observer_info, observer_addr
-                );
-                continue;
-            }
-
-            let replica = ReplicaLocation {
-                addr: observer_addr,
-                info: observer_info,
-                role: role.clone(),
-            };
-
-            let location = partition_location
-                .entry(partition_id)
-                .or_insert(ObPartitionLocation {
-                    leader: None,
-                    followers: vec![],
-                });
-
-            match role {
-                ObServerRole::Leader => location.leader = Some(replica),
-                ObServerRole::Follower => location.followers.push(replica),
-                _ => (),
-            };
-        }
-
-        // Check partition info.
-        for part_id in 0..table_entry.partition_num {
-            let location = partition_location.get(&part_id);
-
-            if location.is_none() {
-                error!("Location::get_table_location_from_remote: partition num={} is not exists, table={:?}, locations={:?}",
-                   part_id, table_entry, partition_location);
-                return Err(CommonErr(
-                CommonErrCode::PartitionError,
-                format!("Location::get_table_location_from_remote: Table maybe dropped. partition num={part_id} is not exists, table={table_entry:?}, locations={partition_location:?}"),
-            ));
-            }
-
-            if location.unwrap().leader.is_none() {
-                error!("Location::get_table_location_from_remote: partition num={} has no leader, table={:?}, locations={:?}",
-                   part_id, table_entry, partition_location);
-
-                return Err(CommonErr(
-                CommonErrCode::PartitionError,
-                format!("Location::get_table_location_from_remote: partition num={part_id} has no leader, table={table_entry:?}, locations={partition_location:?}, maybe rebalancing"),
-            ));
-            }
-        }
-
-        Ok(ObPartitionEntry {
-            parititon_location: partition_location,
-        })
     }
 }
 

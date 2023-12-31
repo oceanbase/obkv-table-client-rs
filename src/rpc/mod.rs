@@ -56,6 +56,7 @@ use crate::{
     monitors::{prometheus::OBKV_CLIENT_REGISTRY, rpc_metrics::RpcMetrics},
     rpc::{protocol::TraceId, util::checksum::ob_crc64::ObCrc64Sse42},
     runtime::{JoinHandle, RuntimeRef},
+    util::obversion::parse_ob_vsn_from_login,
 };
 
 lazy_static! {
@@ -583,7 +584,13 @@ impl Connection {
                 code: _code,
             }) => {
                 let header = header.unwrap();
-                let server_trace_id = header.trace_id();
+                let server_trace_id = if header.is_empty_trace_id() {
+                    trace_id
+                } else {
+                    header.trace_id()
+                };
+                response.set_trace_id(server_trace_id);
+                response.set_peer_addr(self.addr);
                 response.set_header(header);
                 let mut result_code = ObRpcResultCode::new();
                 result_code.decode(&mut content)?;
@@ -643,6 +650,7 @@ impl Connection {
 
         debug!("Connection::login, login result {:?}", login_result);
 
+        parse_ob_vsn_from_login(login_result.serer_version());
         self.credential = Some(login_result.take_credential());
         self.tenant_id = Some(login_result.tenant_id());
 

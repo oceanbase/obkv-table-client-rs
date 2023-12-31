@@ -20,6 +20,8 @@ pub mod test_table_client_base;
 #[allow(unused)]
 mod utils;
 
+use std::sync::Arc;
+
 use obkv::{ObTableClient, Value};
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use serial_test_derive::serial;
@@ -122,10 +124,10 @@ async fn insert_query_test_record(
 #[serial]
 async fn test_query() {
     let client_handle = task::spawn_blocking(utils::common::build_normal_client);
-    let client = client_handle.await.unwrap();
+    let client = Arc::new(client_handle.await.unwrap());
 
     const TABLE_NAME: &str = "TEST_QUERY_TABLE_KEY";
-    clean_table(client.to_owned(), TABLE_NAME);
+    clean_table(client.clone(), TABLE_NAME).await;
     client.add_row_key_element(TABLE_NAME, vec!["c1".to_string()]);
     insert_query_test_record(&client, TABLE_NAME, "123", "123c2").await;
     insert_query_test_record(&client, TABLE_NAME, "124", "124c2").await;
@@ -404,13 +406,14 @@ async fn test_batch() {
         vec!["c2".to_owned()],
         vec![Value::from("batchValue_1")],
     );
+    batch_op.set_atomic_op(false);
     let result = client.execute_batch(TABLE_NAME, batch_op).await;
     assert!(result.is_ok());
 }
 
-fn clean_table(client: ObTableClient, table_name: &str) {
+async fn clean_table(client: Arc<ObTableClient>, table_name: &str) {
     let sql = format!("DELETE FROM {table_name}");
-    client.execute_sql(&sql).expect("clean table failed");
+    let _ = utils::common::execute_sql(client, sql).await;
 }
 
 #[tokio::test]
@@ -527,7 +530,7 @@ async fn test_partition_complex() {
 #[tokio::test]
 async fn test_sub_partition_complex() {
     let client_handle = task::spawn_blocking(utils::common::build_normal_client);
-    let client = client_handle.await.unwrap();
+    let client = Arc::new(client_handle.await.unwrap());
     const TABLE_NAME: &str = "TEST_TABLE_SUB_PARTITION_COMPLEX_KEY";
     client.add_row_key_element(
         TABLE_NAME,
@@ -539,7 +542,7 @@ async fn test_sub_partition_complex() {
         ],
     );
 
-    clean_table(client.to_owned(), TABLE_NAME);
+    clean_table(client.clone(), TABLE_NAME).await;
 
     for i in 0..16 {
         let rowkey_c2: String = thread_rng()

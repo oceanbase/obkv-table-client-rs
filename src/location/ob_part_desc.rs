@@ -29,6 +29,7 @@ use crate::{
         util::hash::ob_hash_sort_utf8mb4::ObHashSortUtf8mb4,
     },
     serde_obkv::value::{CollationType, ObjType, Value},
+    util::obversion::ob_vsn_major,
 };
 
 #[derive(Clone, Debug)]
@@ -118,7 +119,6 @@ impl ObPartDesc {
     pub fn set_ordered_compare_columns(&mut self, ordered_part_column: Vec<Box<dyn ObColumn>>) {
         match self {
             ObPartDesc::Range(ref mut v) => v.ordered_compare_column = ordered_part_column,
-
             ObPartDesc::Hash(_) => (),
             ObPartDesc::Key(_) => (),
         }
@@ -323,6 +323,7 @@ pub struct ObRangePartDesc {
     ordered_compare_column: Vec<Box<dyn ObColumn>>,
     ordered_compare_column_types: Vec<ObjType>,
     bounds: Vec<(ObPartitionKey, i64)>,
+    part_num: i32,
 }
 
 impl Default for ObRangePartDesc {
@@ -338,6 +339,7 @@ impl ObRangePartDesc {
             ordered_compare_column: Vec::new(),
             ordered_compare_column_types: Vec::new(),
             bounds: Vec::new(),
+            part_num: 0,
         }
     }
 
@@ -388,6 +390,10 @@ impl ObRangePartDesc {
 
     pub fn set_bounds(&mut self, bounds: Vec<(ObPartitionKey, i64)>) {
         self.bounds = bounds;
+    }
+
+    pub fn set_part_num(&mut self, part_num: i32) {
+        self.part_num = part_num;
     }
 
     pub fn set_part_func_type(&mut self, part_func_type: PartFuncType) {
@@ -540,7 +546,7 @@ impl ObHashPartDesc {
             );
             return Err(CommonErr(
                 CommonErrCode::PartitionError,
-                "ObHashPartDesc::get_part_id get_part_id: row_key is empty".to_owned(),
+                "ObHashPartDesc::get_part_id: row_key is empty".to_owned(),
             ));
         }
         // TODO: evalRowKeyValues
@@ -676,7 +682,7 @@ impl ObKeyPartDesc {
             error!("ObKeyPartDesc::get_part_id invalid row keys :{:?}", row_key);
             return Err(CommonErr(
                 CommonErrCode::PartitionError,
-                "ObKeyPartDesc::get_part_id get_part_id: row_key is empty".to_owned(),
+                "ObKeyPartDesc::get_part_id: row_key is empty".to_owned(),
             ));
         }
         // TODO: evalRowKeyValues
@@ -793,7 +799,8 @@ impl ObKeyPartDesc {
         };
         match collation_type {
             CollationType::UTF8MB4GeneralCi => {
-                if part_func_type == KeyV3 || part_func_type == KeyImplicitV2 {
+                if ob_vsn_major() >= 4 || part_func_type == KeyV3 || part_func_type == KeyImplicitV2
+                {
                     Ok(ObHashSortUtf8mb4::ob_hash_sort_utf8_mb4(
                         &bytes,
                         bytes.len() as i32,
@@ -813,7 +820,8 @@ impl ObKeyPartDesc {
                 }
             }
             CollationType::UTF8MB4Bin => {
-                if part_func_type == KeyV3 || part_func_type == KeyImplicitV2 {
+                if ob_vsn_major() >= 4 || part_func_type == KeyV3 || part_func_type == KeyImplicitV2
+                {
                     Ok(murmur2::murmur64a(&bytes, hash_code))
                 } else {
                     Ok(ObHashSortUtf8mb4::ob_hash_sort_mb_bin(
@@ -825,7 +833,8 @@ impl ObKeyPartDesc {
                 }
             }
             CollationType::Binary => {
-                if part_func_type == KeyV3 || part_func_type == KeyImplicitV2 {
+                if ob_vsn_major() >= 4 || part_func_type == KeyV3 || part_func_type == KeyImplicitV2
+                {
                     Ok(murmur2::murmur64a(&bytes, hash_code))
                 } else {
                     Ok(ObHashSortUtf8mb4::ob_hash_sort_bin(

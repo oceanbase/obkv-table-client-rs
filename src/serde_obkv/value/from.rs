@@ -52,6 +52,24 @@ from_u32! {
     u32,UInt32
 }
 
+impl<T> From<Option<T>> for Value
+where
+    T: Into<Value>,
+{
+    fn from(option: Option<T>) -> Self {
+        match option {
+            None => Value::Null(ObjMeta::default_obj_meta(ObjType::Null)),
+            Some(inner) => inner.into(),
+        }
+    }
+}
+
+impl From<()> for Value {
+    fn from(_: ()) -> Self {
+        Value::Null(ObjMeta::default_obj_meta(ObjType::Null))
+    }
+}
+
 impl From<i8> for Value {
     fn from(i: i8) -> Self {
         Value::Int8(i, ObjMeta::default_obj_meta(ObjType::TinyInt))
