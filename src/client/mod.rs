@@ -19,10 +19,12 @@ use std::{collections::HashMap, time::Duration};
 
 use crate::{rpc::protocol::DEFAULT_FLAG, serde_obkv::value::Value};
 
+pub mod filter;
 mod ocp;
 pub mod query;
 pub mod table;
 pub mod table_client;
+
 use self::table::ObTable;
 
 #[derive(Clone, Debug)]
