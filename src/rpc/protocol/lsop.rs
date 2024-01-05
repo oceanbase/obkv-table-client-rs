@@ -17,16 +17,22 @@
 
 #![allow(dead_code)]
 
-use bytes::BytesMut;
+use std::{io, time::Duration};
+
+use bytes::{BufMut, BytesMut};
 
 use crate::{
     location::OB_INVALID_ID,
-    payloads::ObTableBatchOperation,
+    payloads::{
+        ObTableBatchOperation, ObTableConsistencyLevel, ObTableEntityType, ObTableOperationResult,
+    },
     query::ObTableQuery,
     rpc::protocol::{
-        query_and_mutate::ObTableQueryAndMutate, BasePayLoad, ObPayload, ProtoDecoder, ProtoEncoder,
+        query_and_mutate::ObTableQueryAndMutate, BasePayLoad, ObPayload, ObTablePacketCode,
+        ProtoDecoder, ProtoEncoder,
     },
     serde_obkv::util,
+    util::duration_to_millis,
 };
 
 /// Type of Operation for [`ObTableSingleOp`]
@@ -277,10 +283,8 @@ impl ObPayload for ObTableSingleOp {
     // payload size, without header bytes
     fn content_len(&self) -> crate::rpc::protocol::Result<usize> {
         let mut len: usize = 0;
-
         len += util::encoded_length_vi64(self.op_type.value());
         len += self.op.len()?;
-
         Ok(len)
     }
 }
@@ -288,10 +292,8 @@ impl ObPayload for ObTableSingleOp {
 impl ProtoEncoder for ObTableSingleOp {
     fn encode(&self, buf: &mut BytesMut) -> crate::rpc::protocol::Result<()> {
         self.encode_header(buf)?;
-
         util::encode_vi64(self.op_type.value(), buf)?;
         self.op.encode(buf)?;
-
         Ok(())
     }
 }
@@ -394,7 +396,6 @@ impl ObPayload for ObTableTabletOp {
     // payload size, without header bytes
     fn content_len(&self) -> crate::rpc::protocol::Result<usize> {
         let mut len: usize = 0;
-
         len += util::encoded_length_vi64(self.table_id);
         len += util::encoded_length_vi64(self.partition_id);
         len += util::encoded_length_vi64(self.option_flag.value());
@@ -402,7 +403,6 @@ impl ObPayload for ObTableTabletOp {
         for op in self.single_ops.iter() {
             len += op.len()?;
         }
-
         Ok(len)
     }
 }
@@ -410,7 +410,6 @@ impl ObPayload for ObTableTabletOp {
 impl ProtoEncoder for ObTableTabletOp {
     fn encode(&self, buf: &mut BytesMut) -> crate::rpc::protocol::Result<()> {
         self.encode_header(buf)?;
-
         util::encode_vi64(self.table_id, buf)?;
         util::encode_vi64(self.partition_id, buf)?;
         util::encode_vi64(self.option_flag.value(), buf)?;
@@ -418,7 +417,6 @@ impl ProtoEncoder for ObTableTabletOp {
         for op in self.single_ops.iter() {
             op.encode(buf)?;
         }
-
         Ok(())
     }
 }
@@ -426,6 +424,75 @@ impl ProtoEncoder for ObTableTabletOp {
 impl ProtoDecoder for ObTableTabletOp {
     fn decode(&mut self, _src: &mut BytesMut) -> crate::rpc::protocol::Result<()> {
         unimplemented!();
+    }
+}
+
+/// ObTableTabletOpResult is the result of [`ObTableTabletOp`] from server
+/// ObTableTabletOpResult may be modify in the future
+#[derive(Debug, Default)]
+pub struct ObTableTabletOpResult {
+    base: BasePayLoad,
+    op_results: Vec<ObTableOperationResult>,
+}
+
+impl ObTableTabletOpResult {
+    pub fn new() -> Self {
+        Self {
+            base: BasePayLoad::dummy(),
+            op_results: Vec::new(),
+        }
+    }
+
+    pub fn get_op_results(&self) -> &[ObTableOperationResult] {
+        &self.op_results
+    }
+
+    pub fn take_op_results(self) -> Vec<ObTableOperationResult> {
+        self.op_results
+    }
+}
+
+impl ObPayload for ObTableTabletOpResult {
+    fn pcode(&self) -> ObTablePacketCode {
+        ObTablePacketCode::BatchExecute
+    }
+
+    fn base(&self) -> &BasePayLoad {
+        &self.base
+    }
+
+    fn base_mut(&mut self) -> &mut BasePayLoad {
+        &mut self.base
+    }
+}
+
+impl ProtoEncoder for ObTableTabletOpResult {
+    fn encode(&self, _buf: &mut BytesMut) -> crate::rpc::protocol::Result<()> {
+        unimplemented!();
+    }
+}
+
+impl ProtoDecoder for ObTableTabletOpResult {
+    fn decode(&mut self, src: &mut BytesMut) -> crate::rpc::protocol::Result<()> {
+        self.decode_base(src)?;
+
+        let op_res_num = util::decode_vi64(src)?;
+        if op_res_num < 0 {
+            return Err(io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("invalid operation results num:{op_res_num}"),
+            ));
+        }
+        assert_eq!(0, self.op_results.len());
+        self.op_results.reserve(op_res_num as usize);
+
+        for _ in 0..op_res_num {
+            let mut op_res = ObTableOperationResult::new();
+            op_res.decode(src)?;
+            self.op_results.push(op_res);
+        }
+
+        Ok(())
     }
 }
 
@@ -514,14 +581,12 @@ impl ObPayload for ObTableLSOperation {
     // payload size, without header bytes
     fn content_len(&self) -> crate::rpc::protocol::Result<usize> {
         let mut len: usize = 0;
-
         len += util::encoded_length_vi64(self.ls_id);
         len += util::encoded_length_vi64(self.option_flag.value());
         len += util::encoded_length_vi64(self.tablet_ops.len() as i64);
         for op in self.tablet_ops.iter() {
             len += op.len()?;
         }
-
         Ok(len)
     }
 }
@@ -529,14 +594,12 @@ impl ObPayload for ObTableLSOperation {
 impl ProtoEncoder for ObTableLSOperation {
     fn encode(&self, buf: &mut BytesMut) -> crate::rpc::protocol::Result<()> {
         self.encode_header(buf)?;
-
         util::encode_vi64(self.ls_id, buf)?;
         util::encode_vi64(self.option_flag.value(), buf)?;
         util::encode_vi64(self.tablet_ops.len() as i64, buf)?;
         for op in self.tablet_ops.iter() {
             op.encode(buf)?;
         }
-
         Ok(())
     }
 }
@@ -544,5 +607,140 @@ impl ProtoEncoder for ObTableLSOperation {
 impl ProtoDecoder for ObTableLSOperation {
     fn decode(&mut self, _src: &mut BytesMut) -> crate::rpc::protocol::Result<()> {
         unimplemented!();
+    }
+}
+
+/// ObTableLSOpRequest is the request of [`ObTableLSOperation`]
+pub struct ObTableLSOpRequest {
+    base: BasePayLoad,
+    credential: Vec<u8>,
+    entity_type: ObTableEntityType,
+    consistency_level: ObTableConsistencyLevel,
+    ls_op: ObTableLSOperation,
+}
+
+impl ObTableLSOpRequest {
+    pub fn new(ls_op: ObTableLSOperation, timeout: Duration, flag: u16) -> Self {
+        let mut base = BasePayLoad::new();
+        base.timeout = duration_to_millis(&timeout);
+        base.flag = flag;
+        Self {
+            base,
+            credential: vec![],
+            entity_type: ObTableEntityType::Dynamic,
+            consistency_level: ObTableConsistencyLevel::Strong,
+            ls_op,
+        }
+    }
+}
+
+impl ObPayload for ObTableLSOpRequest {
+    fn pcode(&self) -> ObTablePacketCode {
+        ObTablePacketCode::LSExecute
+    }
+
+    fn base(&self) -> &BasePayLoad {
+        &self.base
+    }
+
+    fn base_mut(&mut self) -> &mut BasePayLoad {
+        &mut self.base
+    }
+
+    // payload size, without header bytes
+    fn content_len(&self) -> crate::rpc::protocol::Result<usize> {
+        Ok(util::encoded_length_bytes_string(&self.credential)
+            + util::encoded_length_i8(self.entity_type as i8)
+            + util::encoded_length_i8(self.consistency_level as i8)
+            + self.ls_op.len()?)
+    }
+
+    fn set_credential(&mut self, credential: &[u8]) {
+        self.credential = credential.to_owned();
+    }
+}
+
+impl ProtoEncoder for ObTableLSOpRequest {
+    fn encode(&self, buf: &mut BytesMut) -> crate::rpc::protocol::Result<()> {
+        self.encode_header(buf)?;
+        util::encode_bytes_string(&self.credential, buf)?;
+        buf.put_i8(self.entity_type as i8);
+        buf.put_i8(self.consistency_level as i8);
+        self.ls_op.encode(buf)?;
+        Ok(())
+    }
+}
+
+impl ProtoDecoder for ObTableLSOpRequest {
+    fn decode(&mut self, _src: &mut BytesMut) -> crate::rpc::protocol::Result<()> {
+        unimplemented!()
+    }
+}
+
+/// ObTableLSOpResult is the result of [`ObTableLSOpRequest`] from server
+#[derive(Debug, Default)]
+pub struct ObTableLSOpResult {
+    base: BasePayLoad,
+    op_results: Vec<ObTableTabletOpResult>,
+}
+
+impl ObTableLSOpResult {
+    pub fn new() -> Self {
+        Self {
+            base: BasePayLoad::dummy(),
+            op_results: Vec::new(),
+        }
+    }
+
+    pub fn get_op_results(&self) -> &[ObTableTabletOpResult] {
+        &self.op_results
+    }
+
+    pub fn take_op_results(self) -> Vec<ObTableTabletOpResult> {
+        self.op_results
+    }
+}
+
+impl ObPayload for ObTableLSOpResult {
+    fn pcode(&self) -> ObTablePacketCode {
+        ObTablePacketCode::BatchExecute
+    }
+
+    fn base(&self) -> &BasePayLoad {
+        &self.base
+    }
+
+    fn base_mut(&mut self) -> &mut BasePayLoad {
+        &mut self.base
+    }
+}
+
+impl ProtoEncoder for ObTableLSOpResult {
+    fn encode(&self, _buf: &mut BytesMut) -> crate::rpc::protocol::Result<()> {
+        unimplemented!();
+    }
+}
+
+impl ProtoDecoder for ObTableLSOpResult {
+    fn decode(&mut self, src: &mut BytesMut) -> crate::rpc::protocol::Result<()> {
+        self.decode_base(src)?;
+
+        let op_res_num = util::decode_vi64(src)?;
+        if op_res_num < 0 {
+            return Err(io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("invalid operation results num:{op_res_num}"),
+            ));
+        }
+        assert_eq!(0, self.op_results.len());
+        self.op_results.reserve(op_res_num as usize);
+
+        for _ in 0..op_res_num {
+            let mut op_res = ObTableTabletOpResult::new();
+            op_res.decode(src)?;
+            self.op_results.push(op_res);
+        }
+
+        Ok(())
     }
 }

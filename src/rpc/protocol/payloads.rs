@@ -30,6 +30,7 @@ use super::{
     BasePayLoad, ObPayload, ObTablePacketCode, ProtoDecoder, ProtoEncoder, Result, TraceId,
 };
 use crate::{
+    client::filter::Filter,
     location::OB_INVALID_ID,
     rpc::protocol::codes::ResultCodes,
     serde_obkv::{util, value::Value},
@@ -453,6 +454,7 @@ pub type RawObTableOperation = (
     Vec<Value>,
     Option<Vec<String>>,
     Option<Vec<Value>>,
+    Option<String>, // Filter String
 );
 
 #[derive(Debug, Clone)]
@@ -554,7 +556,12 @@ impl ObTableBatchOperation {
         if self.raw {
             self.raw_ops.push(raw_op);
         } else {
-            let (op_type, row_keys, columns, properties) = raw_op;
+            let (op_type, row_keys, columns, properties, filter_string) = raw_op;
+            // check if filter is exist
+            if filter_string.is_some() {
+                unimplemented!()
+            }
+
             // update read_only
             if self.read_only && op_type != ObTableOperationType::Get {
                 self.read_only = false;
@@ -602,7 +609,13 @@ impl ObTableBatchOperation {
     }
 
     pub fn get(&mut self, row_keys: Vec<Value>, columns: Vec<String>) {
-        self.add_op((ObTableOperationType::Get, row_keys, Some(columns), None));
+        self.add_op((
+            ObTableOperationType::Get,
+            row_keys,
+            Some(columns),
+            None,
+            None,
+        ));
     }
 
     pub fn insert(&mut self, row_keys: Vec<Value>, columns: Vec<String>, properties: Vec<Value>) {
@@ -611,11 +624,12 @@ impl ObTableBatchOperation {
             row_keys,
             Some(columns),
             Some(properties),
+            None,
         ));
     }
 
     pub fn delete(&mut self, row_keys: Vec<Value>) {
-        self.add_op((ObTableOperationType::Del, row_keys, None, None));
+        self.add_op((ObTableOperationType::Del, row_keys, None, None, None));
     }
 
     pub fn update(&mut self, row_keys: Vec<Value>, columns: Vec<String>, properties: Vec<Value>) {
@@ -624,6 +638,7 @@ impl ObTableBatchOperation {
             row_keys,
             Some(columns),
             Some(properties),
+            None,
         ));
     }
 
@@ -638,7 +653,24 @@ impl ObTableBatchOperation {
             row_keys,
             Some(columns),
             Some(properties),
+            None,
         ));
+    }
+
+    pub fn check_and_insert_up(
+        &mut self,
+        row_keys: Vec<Value>,
+        columns: Vec<String>,
+        properties: Vec<Value>,
+        filter: Box<dyn Filter>,
+    ) {
+        self.add_op((
+            ObTableOperationType::InsertOrUpdate,
+            row_keys,
+            Some(columns),
+            Some(properties),
+            Some(filter.string()),
+        ))
     }
 
     pub fn replace(&mut self, row_keys: Vec<Value>, columns: Vec<String>, properties: Vec<Value>) {
@@ -647,6 +679,7 @@ impl ObTableBatchOperation {
             row_keys,
             Some(columns),
             Some(properties),
+            None,
         ));
     }
 
@@ -661,6 +694,7 @@ impl ObTableBatchOperation {
             row_keys,
             Some(columns),
             Some(properties),
+            None,
         ));
     }
 
@@ -670,6 +704,7 @@ impl ObTableBatchOperation {
             row_keys,
             Some(columns),
             Some(properties),
+            None,
         ));
     }
 
