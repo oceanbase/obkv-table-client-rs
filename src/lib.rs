@@ -55,6 +55,7 @@ pub mod serde_obkv;
 mod util;
 pub use self::{
     client::{
+        filter,
         query::QueryResultSet,
         table::ObTable,
         table_client::{Builder, ObTableClient, RunningMode},

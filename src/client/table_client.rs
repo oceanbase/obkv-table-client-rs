@@ -1637,13 +1637,16 @@ impl ObTableClient {
 
         let table_entry = self.inner.get_or_refresh_table_entry(table_name, false)?;
 
+        // (origin_idx, operation) -> part_batch_ops
+        // we need origin_idx to recover the result
         let mut part_batch_ops = HashMap::with_capacity(1);
-        for op in batch_op.take_raw_ops() {
+        for (idx, op) in batch_op.take_raw_ops().into_iter().enumerate() {
             let phy_id = self.inner.get_partition(&table_entry, &op.1)?;
-            part_batch_ops
+            let (idx_vec, batch_op) = part_batch_ops
                 .entry(phy_id)
-                .or_insert_with(ObTableBatchOperation::new)
-                .add_op(op);
+                .or_insert_with(|| (Vec::new(), ObTableBatchOperation::new()));
+            batch_op.add_op(op);
+            idx_vec.push(idx);
         }
         if part_batch_ops.is_empty() {
             return Ok(Vec::new());
@@ -1657,11 +1660,11 @@ impl ObTableClient {
             let (part_info, table) =
                 self.inner
                     .get_or_create_table(table_name, &table_entry, phy)?;
-            part_batch_op.set_table_id(part_info.table_id);
-            part_batch_op.set_table_name(table_name.to_owned());
-            part_batch_op.set_partition_id(part_info.part_id);
-            part_batch_op.set_atomic_op(batch_op.is_atomic_op());
-            return table.execute_batch(table_name, part_batch_op).await;
+            part_batch_op.1.set_table_id(part_info.table_id);
+            part_batch_op.1.set_table_name(table_name.to_owned());
+            part_batch_op.1.set_partition_id(part_info.part_id);
+            part_batch_op.1.set_atomic_op(batch_op.is_atomic_op());
+            return table.execute_batch(table_name, part_batch_op.1).await;
         }
 
         // atomic now only support single partition
@@ -1676,28 +1679,48 @@ impl ObTableClient {
 
         // slow path: have to process operations involving multiple partitions
         // concurrent send the batch ops by partition
-        let mut all_results = Vec::new();
         let mut handles = Vec::with_capacity(part_batch_ops.len());
+        let mut loc = Vec::with_capacity(part_batch_ops.len());
+        let ops_count: usize = part_batch_ops
+            .values()
+            .map(|batch_op| batch_op.1.ops_len())
+            .sum();
 
         for (phy_id, mut batch_op) in part_batch_ops {
             let (part_info, table) =
                 self.inner
                     .get_or_create_table(table_name, &table_entry, phy_id)?;
             let table_name = table_name.to_owned();
+            loc.push(batch_op.0);
             handles.push(self.inner.runtimes.bg_runtime.spawn(async move {
-                batch_op.set_table_id(part_info.table_id);
-                batch_op.set_table_name(table_name.clone());
-                batch_op.set_partition_id(part_info.part_id);
-                table.execute_batch(&table_name, batch_op).await
+                batch_op.1.set_table_id(part_info.table_id);
+                batch_op.1.set_table_name(table_name.clone());
+                batch_op.1.set_partition_id(part_info.part_id);
+                table.execute_batch(&table_name, batch_op.1).await
             }));
         }
 
-        for handle in handles {
+        // set the result into correct place
+        let mut all_results: Vec<Option<TableOpResult>> = vec![None; ops_count];
+        for (handle, loc_vec) in handles.into_iter().zip(loc.into_iter()) {
             let results = handle.await??;
-            all_results.extend(results);
+            for (single_result, idx) in results.into_iter().zip(loc_vec.into_iter()) {
+                all_results[idx] = Some(single_result);
+            }
         }
 
-        Ok(all_results)
+        let result = all_results
+            .into_iter()
+            .collect::<Option<Vec<TableOpResult>>>()
+            .ok_or_else(|| {
+                CommonErr(
+                    CommonErrCode::ObException(ResultCodes::OB_ERR_UNEXPECTED),
+                    "execute_batch_once(): some result of the partition_execute() is None"
+                        .to_string(),
+                )
+            })?;
+
+        Ok(result)
     }
 
     #[inline]

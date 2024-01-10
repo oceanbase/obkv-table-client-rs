@@ -47,7 +47,8 @@ pub enum ObTableSingleOpType {
     SingleIncrement,
     SingleAppend,
     SingleMax, // reserved
-    Query,
+    SyncQuery,
+    AsyncQuery,
     QueryAndMutate,
     SingleOpTypeMax,
 }
@@ -64,9 +65,10 @@ impl ObTableSingleOpType {
             ObTableSingleOpType::SingleIncrement => 6,
             ObTableSingleOpType::SingleAppend => 7,
             ObTableSingleOpType::SingleMax => 63,
-            ObTableSingleOpType::Query => 64,
-            ObTableSingleOpType::QueryAndMutate => 65,
-            ObTableSingleOpType::SingleOpTypeMax => 66,
+            ObTableSingleOpType::SyncQuery => 64,
+            ObTableSingleOpType::AsyncQuery => 65,
+            ObTableSingleOpType::QueryAndMutate => 66,
+            ObTableSingleOpType::SingleOpTypeMax => 67,
         }
     }
 }
@@ -83,9 +85,10 @@ impl From<i64> for ObTableSingleOpType {
             6 => ObTableSingleOpType::SingleIncrement,
             7 => ObTableSingleOpType::SingleAppend,
             63 => ObTableSingleOpType::SingleMax,
-            64 => ObTableSingleOpType::Query,
-            65 => ObTableSingleOpType::QueryAndMutate,
-            66 => ObTableSingleOpType::SingleOpTypeMax,
+            64 => ObTableSingleOpType::SyncQuery,
+            65 => ObTableSingleOpType::AsyncQuery,
+            66 => ObTableSingleOpType::QueryAndMutate,
+            67 => ObTableSingleOpType::SingleOpTypeMax,
             _ => panic!("Invalid value for ObTableSingleOpType"),
         }
     }
@@ -107,22 +110,22 @@ impl ObTableTabletOpFlag {
     const FLAG_IS_SAME_PROPERTIES_NAMES: i64 = 1 << 1;
     const FLAG_IS_SAME_TYPE: i64 = 1 << 0;
 
-    fn new() -> Self {
+    pub fn new() -> Self {
         let mut flag = ObTableTabletOpFlag { flags: 0 };
-        flag.set_flag_is_same_type(true);
+        flag.set_flag_is_same_type(false);
         flag.set_flag_is_same_properties_names(false);
         flag
     }
 
-    fn value(&self) -> i64 {
+    pub fn value(&self) -> i64 {
         self.flags
     }
 
-    fn set_value(&mut self, flags: i64) {
+    pub fn set_value(&mut self, flags: i64) {
         self.flags = flags;
     }
 
-    fn set_flag_is_same_type(&mut self, is_same_type: bool) {
+    pub fn set_flag_is_same_type(&mut self, is_same_type: bool) {
         if is_same_type {
             self.flags |= Self::FLAG_IS_SAME_TYPE;
         } else {
@@ -130,7 +133,7 @@ impl ObTableTabletOpFlag {
         }
     }
 
-    fn set_flag_is_same_properties_names(&mut self, is_same_properties_names: bool) {
+    pub fn set_flag_is_same_properties_names(&mut self, is_same_properties_names: bool) {
         if is_same_properties_names {
             self.flags |= Self::FLAG_IS_SAME_PROPERTIES_NAMES;
         } else {
@@ -138,7 +141,7 @@ impl ObTableTabletOpFlag {
         }
     }
 
-    fn is_same_type(&self) -> bool {
+    pub fn is_same_type(&self) -> bool {
         (self.flags & Self::FLAG_IS_SAME_TYPE) != 0
     }
 
@@ -163,22 +166,22 @@ impl ObTableLSOpFlag {
     const FLAG_IS_SAME_PROPERTIES_NAMES: i64 = 1 << 1;
     const FLAG_IS_SAME_TYPE: i64 = 1 << 0;
 
-    fn new() -> Self {
+    pub fn new() -> Self {
         let mut flag = ObTableLSOpFlag { flags: 0 };
-        flag.set_flag_is_same_type(true);
+        flag.set_flag_is_same_type(false);
         flag.set_flag_is_same_properties_names(false);
         flag
     }
 
-    fn value(&self) -> i64 {
+    pub fn value(&self) -> i64 {
         self.flags
     }
 
-    fn set_value(&mut self, flags: i64) {
+    pub fn set_value(&mut self, flags: i64) {
         self.flags = flags;
     }
 
-    fn set_flag_is_same_type(&mut self, is_same_type: bool) {
+    pub fn set_flag_is_same_type(&mut self, is_same_type: bool) {
         if is_same_type {
             self.flags |= Self::FLAG_IS_SAME_TYPE;
         } else {
@@ -186,7 +189,7 @@ impl ObTableLSOpFlag {
         }
     }
 
-    fn set_flag_is_same_properties_names(&mut self, is_same_properties_names: bool) {
+    pub fn set_flag_is_same_properties_names(&mut self, is_same_properties_names: bool) {
         if is_same_properties_names {
             self.flags |= Self::FLAG_IS_SAME_PROPERTIES_NAMES;
         } else {
@@ -194,11 +197,11 @@ impl ObTableLSOpFlag {
         }
     }
 
-    fn is_same_type(&self) -> bool {
+    pub fn is_same_type(&self) -> bool {
         (self.flags & Self::FLAG_IS_SAME_TYPE) != 0
     }
 
-    fn is_same_properties_names(&self) -> bool {
+    pub fn is_same_properties_names(&self) -> bool {
         (self.flags & Self::FLAG_IS_SAME_PROPERTIES_NAMES) != 0
     }
 }
@@ -340,7 +343,7 @@ impl ObTableTabletOp {
     pub fn new(ops_num: usize) -> Self {
         ObTableTabletOp::internal_new(
             OB_INVALID_ID,
-            OB_INVALID_ID,
+            0,
             ObTableTabletOpFlag::default(),
             Vec::with_capacity(ops_num),
         )
@@ -397,7 +400,7 @@ impl ObPayload for ObTableTabletOp {
     fn content_len(&self) -> crate::rpc::protocol::Result<usize> {
         let mut len: usize = 0;
         len += util::encoded_length_vi64(self.table_id);
-        len += util::encoded_length_vi64(self.partition_id);
+        len += 8; // partition/tablet_id
         len += util::encoded_length_vi64(self.option_flag.value());
         len += util::encoded_length_vi64(self.single_ops.len() as i64);
         for op in self.single_ops.iter() {
@@ -411,7 +414,7 @@ impl ProtoEncoder for ObTableTabletOp {
     fn encode(&self, buf: &mut BytesMut) -> crate::rpc::protocol::Result<()> {
         self.encode_header(buf)?;
         util::encode_vi64(self.table_id, buf)?;
-        util::encode_vi64(self.partition_id, buf)?;
+        buf.put_i64(self.partition_id);
         util::encode_vi64(self.option_flag.value(), buf)?;
         util::encode_vi64(self.single_ops.len() as i64, buf)?;
         for op in self.single_ops.iter() {
@@ -581,7 +584,7 @@ impl ObPayload for ObTableLSOperation {
     // payload size, without header bytes
     fn content_len(&self) -> crate::rpc::protocol::Result<usize> {
         let mut len: usize = 0;
-        len += util::encoded_length_vi64(self.ls_id);
+        len += 8; // ls_id
         len += util::encoded_length_vi64(self.option_flag.value());
         len += util::encoded_length_vi64(self.tablet_ops.len() as i64);
         for op in self.tablet_ops.iter() {
@@ -594,7 +597,7 @@ impl ObPayload for ObTableLSOperation {
 impl ProtoEncoder for ObTableLSOperation {
     fn encode(&self, buf: &mut BytesMut) -> crate::rpc::protocol::Result<()> {
         self.encode_header(buf)?;
-        util::encode_vi64(self.ls_id, buf)?;
+        buf.put_i64(self.ls_id);
         util::encode_vi64(self.option_flag.value(), buf)?;
         util::encode_vi64(self.tablet_ops.len() as i64, buf)?;
         for op in self.tablet_ops.iter() {
@@ -692,12 +695,28 @@ impl ObTableLSOpResult {
         }
     }
 
-    pub fn get_op_results(&self) -> &[ObTableTabletOpResult] {
-        &self.op_results
+    pub fn get_op_results(&self) -> Vec<&ObTableOperationResult> {
+        let mut count = 0;
+        for tablet_res in &self.op_results {
+            count += tablet_res.get_op_results().len();
+        }
+        let mut res = Vec::with_capacity(count);
+        for tablet_res in &self.op_results {
+            res.extend(tablet_res.get_op_results());
+        }
+        res
     }
 
-    pub fn take_op_results(self) -> Vec<ObTableTabletOpResult> {
-        self.op_results
+    pub fn take_op_results(self) -> Vec<ObTableOperationResult> {
+        let mut count = 0;
+        for tablet_res in &self.op_results {
+            count += tablet_res.get_op_results().len();
+        }
+        let mut res = Vec::with_capacity(count);
+        for tablet_res in self.op_results {
+            res.extend(tablet_res.take_op_results());
+        }
+        res
     }
 }
 

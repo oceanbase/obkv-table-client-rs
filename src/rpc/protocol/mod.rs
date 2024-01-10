@@ -31,7 +31,7 @@ pub mod codes;
 pub mod payloads;
 pub mod query;
 
-mod lsop;
+pub(crate) mod lsop;
 pub mod partition;
 mod query_and_mutate;
 

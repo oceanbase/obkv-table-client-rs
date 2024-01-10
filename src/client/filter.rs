@@ -61,10 +61,11 @@ pub enum FilterOp {
 }
 
 pub struct ObTableFilterList {
-    op: FilterOp,
-    filters: Vec<Box<dyn Filter>>,
+    pub op: FilterOp,
+    pub filters: Vec<Box<dyn Filter>>,
 }
 
+#[macro_export]
 macro_rules! filter_list {
     ($op:expr, $($filter:expr),+ $(,)?) => {
         ObTableFilterList {
@@ -123,11 +124,12 @@ impl Filter for ObTableFilterList {
 
 #[derive(Debug, Clone)]
 pub struct ObTableValueFilter {
-    op: ObCompareOperator,
-    column_name: String,
-    value: String,
+    pub op: ObCompareOperator,
+    pub column_name: String,
+    pub value: String,
 }
 
+#[macro_export]
 macro_rules! value_filter {
     ($op:expr, $column_name:expr, $value:expr) => {
         ObTableValueFilter {

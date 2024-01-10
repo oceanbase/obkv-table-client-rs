@@ -32,7 +32,12 @@ use super::{
 use crate::{
     client::filter::Filter,
     location::OB_INVALID_ID,
-    rpc::protocol::codes::ResultCodes,
+    query::{ObNewRange, ObTableQuery},
+    rpc::protocol::{
+        codes::ResultCodes,
+        lsop::{ObTableSingleOp, ObTableSingleOpType, ObTableTabletOp, ObTableTabletOpFlag},
+        query_and_mutate::ObTableQueryAndMutate,
+    },
     serde_obkv::{util, value::Value},
     util::{
         decode_value, duration_to_millis, obversion::ob_vsn_major, security, string_from_bytes,
@@ -449,12 +454,37 @@ impl ProtoDecoder for ObTableOperationRequest {
     }
 }
 
+/// Option for [`RawObTableOperation`]
+#[derive(Debug, Clone, PartialEq)]
+pub struct RawObTableOperationFlag {
+    // whether a check_and_execute option
+    pub check_and_execute: bool,
+    // check whether any data meet the filter in check_and_execute
+    pub check_exist: bool,
+}
+
+impl Default for RawObTableOperationFlag {
+    fn default() -> Self {
+        RawObTableOperationFlag::new()
+    }
+}
+
+impl RawObTableOperationFlag {
+    pub fn new() -> Self {
+        RawObTableOperationFlag {
+            check_and_execute: false,
+            check_exist: true,
+        }
+    }
+}
+
 pub type RawObTableOperation = (
     ObTableOperationType,
     Vec<Value>,
     Option<Vec<String>>,
     Option<Vec<Value>>,
-    Option<String>, // Filter String
+    Option<String>,                  // Filter String
+    Option<RawObTableOperationFlag>, // option for RawObTableOperation
 );
 
 #[derive(Debug, Clone)]
@@ -470,6 +500,8 @@ pub struct ObTableBatchOperation {
     same_type: bool,
     same_properties_names: bool,
     atomic_op: bool,
+    filters: Vec<String>,
+    options: Vec<RawObTableOperationFlag>,
 }
 
 impl Default for ObTableBatchOperation {
@@ -497,6 +529,8 @@ impl ObTableBatchOperation {
             same_type: true,
             same_properties_names: true,
             atomic_op: true,
+            filters: Vec::new(),
+            options: Vec::new(),
         }
     }
 
@@ -520,12 +554,28 @@ impl ObTableBatchOperation {
         self.raw
     }
 
+    pub fn ops_len(&self) -> usize {
+        if self.raw_ops.is_empty() {
+            self.ops.len()
+        } else {
+            self.raw_ops.len()
+        }
+    }
+
     pub fn set_table_name(&mut self, table_name: String) {
         self.table_name = table_name;
     }
 
+    pub fn partition_id(&self) -> i64 {
+        self.partition_id
+    }
+
     pub fn set_partition_id(&mut self, part_id: i64) {
         self.partition_id = part_id
+    }
+
+    pub fn table_id(&self) -> i64 {
+        self.table_id
     }
 
     pub fn set_table_id(&mut self, table_id: i64) {
@@ -552,16 +602,15 @@ impl ObTableBatchOperation {
         self.atomic_op
     }
 
+    pub fn add_table_op(&mut self, op: ObTableOperation) {
+        self.ops.push(op)
+    }
+
     pub fn add_op(&mut self, raw_op: RawObTableOperation) {
         if self.raw {
             self.raw_ops.push(raw_op);
         } else {
-            let (op_type, row_keys, columns, properties, filter_string) = raw_op;
-            // check if filter is exist
-            if filter_string.is_some() {
-                unimplemented!()
-            }
-
+            let (op_type, row_keys, columns, properties, filter_string, option_flag) = raw_op;
             // update read_only
             if self.read_only && op_type != ObTableOperationType::Get {
                 self.read_only = false;
@@ -602,6 +651,17 @@ impl ObTableBatchOperation {
                     self.same_properties_names = false;
                 }
             }
+
+            // set filters
+            if let Some(filter) = filter_string {
+                self.filters.push(filter);
+            }
+
+            // set option flags
+            if let Some(option) = option_flag {
+                self.options.push(option);
+            }
+
             self.ops.push(ObTableOperation::new(
                 op_type, row_keys, columns, properties,
             ))
@@ -615,6 +675,7 @@ impl ObTableBatchOperation {
             Some(columns),
             None,
             None,
+            None,
         ));
     }
 
@@ -625,11 +686,12 @@ impl ObTableBatchOperation {
             Some(columns),
             Some(properties),
             None,
+            None,
         ));
     }
 
     pub fn delete(&mut self, row_keys: Vec<Value>) {
-        self.add_op((ObTableOperationType::Del, row_keys, None, None, None));
+        self.add_op((ObTableOperationType::Del, row_keys, None, None, None, None));
     }
 
     pub fn update(&mut self, row_keys: Vec<Value>, columns: Vec<String>, properties: Vec<Value>) {
@@ -638,6 +700,7 @@ impl ObTableBatchOperation {
             row_keys,
             Some(columns),
             Some(properties),
+            None,
             None,
         ));
     }
@@ -654,22 +717,32 @@ impl ObTableBatchOperation {
             Some(columns),
             Some(properties),
             None,
+            None,
         ));
     }
 
+    /// check the data with corresponding row_keys
+    /// whether meet the filter and execute the insertUp
+    /// if check_exist is true: check if any data meet the filter
+    /// if check_exist is false: check if all data do not meet the filter
     pub fn check_and_insert_up(
         &mut self,
         row_keys: Vec<Value>,
         columns: Vec<String>,
         properties: Vec<Value>,
         filter: Box<dyn Filter>,
+        check_exist: bool,
     ) {
+        let mut option = RawObTableOperationFlag::new();
+        option.check_and_execute = true;
+        option.check_exist = check_exist;
         self.add_op((
             ObTableOperationType::InsertOrUpdate,
             row_keys,
             Some(columns),
             Some(properties),
             Some(filter.string()),
+            Some(option),
         ))
     }
 
@@ -679,6 +752,7 @@ impl ObTableBatchOperation {
             row_keys,
             Some(columns),
             Some(properties),
+            None,
             None,
         ));
     }
@@ -695,6 +769,7 @@ impl ObTableBatchOperation {
             Some(columns),
             Some(properties),
             None,
+            None,
         ));
     }
 
@@ -704,6 +779,7 @@ impl ObTableBatchOperation {
             row_keys,
             Some(columns),
             Some(properties),
+            None,
             None,
         ));
     }
@@ -718,6 +794,64 @@ impl ObTableBatchOperation {
 
     pub fn take_raw_ops(&mut self) -> Vec<RawObTableOperation> {
         mem::take(&mut self.raw_ops)
+    }
+
+    pub fn take_ops(&mut self) -> Vec<ObTableOperation> {
+        mem::take(&mut self.ops)
+    }
+
+    pub fn get_filters(&self) -> &[String] {
+        &self.filters
+    }
+
+    pub fn take_filters(&mut self) -> Vec<String> {
+        mem::take(&mut self.filters)
+    }
+
+    pub fn get_options(&self) -> &[RawObTableOperationFlag] {
+        &self.options
+    }
+
+    pub fn take_options(&mut self) -> Vec<RawObTableOperationFlag> {
+        mem::take(&mut self.options)
+    }
+
+    pub fn generate_tablet_ops(&mut self) -> ObTableTabletOp {
+        // only use this method when all operation is insertUp
+        let mut ops = Vec::with_capacity(self.ops_len());
+        for ((op, filter_string), option) in self
+            .take_ops()
+            .into_iter()
+            .zip(self.take_filters().into_iter())
+            .zip(self.take_options().into_iter())
+        {
+            // generate batch operation
+            let mut batch_op = ObTableBatchOperation::new();
+            let row_key = op.get_row_key().clone();
+            batch_op.add_table_op(op);
+
+            // generate query
+            let mut query = ObTableQuery::new();
+            let range = ObNewRange::from_keys(row_key.keys.clone(), row_key.keys);
+            query.add_key_range(range);
+            query.set_filter_string(filter_string);
+
+            // generate query and mutate
+            let mut query_and_mutate = ObTableQueryAndMutate::new(query, batch_op);
+            query_and_mutate.set_is_check_and_execute(option.check_and_execute);
+            query_and_mutate.set_is_check_not_exists(!option.check_exist);
+
+            // generate singele operation
+            let single_op =
+                ObTableSingleOp::new(ObTableSingleOpType::QueryAndMutate, query_and_mutate);
+
+            ops.push(single_op);
+        }
+
+        let mut tablet_type = ObTableTabletOpFlag::default();
+        tablet_type.set_flag_is_same_type(true);
+
+        ObTableTabletOp::internal_new(OB_INVALID_ID, OB_INVALID_ID, tablet_type, ops)
     }
 }
 
