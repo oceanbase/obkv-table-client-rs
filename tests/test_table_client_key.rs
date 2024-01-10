@@ -599,6 +599,7 @@ async fn test_sub_partition_complex() {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_batch_order() {
     let client_handle = task::spawn_blocking(utils::common::build_normal_client);
     let client = client_handle.await.unwrap();
@@ -709,6 +710,7 @@ async fn test_batch_order() {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_batch_insert_or_update_with_filter() {
     let client_handle = task::spawn_blocking(utils::common::build_normal_client);
     let client = client_handle.await.unwrap();

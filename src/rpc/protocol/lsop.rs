@@ -54,7 +54,7 @@ pub enum ObTableSingleOpType {
 }
 
 impl ObTableSingleOpType {
-    fn value(&self) -> i64 {
+    fn value(&self) -> i8 {
         match self {
             ObTableSingleOpType::SingleGet => 0,
             ObTableSingleOpType::SingleInsert => 1,
@@ -73,8 +73,8 @@ impl ObTableSingleOpType {
     }
 }
 
-impl From<i64> for ObTableSingleOpType {
-    fn from(value: i64) -> Self {
+impl From<i8> for ObTableSingleOpType {
+    fn from(value: i8) -> Self {
         match value {
             0 => ObTableSingleOpType::SingleGet,
             1 => ObTableSingleOpType::SingleInsert,
@@ -286,7 +286,7 @@ impl ObPayload for ObTableSingleOp {
     // payload size, without header bytes
     fn content_len(&self) -> crate::rpc::protocol::Result<usize> {
         let mut len: usize = 0;
-        len += util::encoded_length_vi64(self.op_type.value());
+        len += 1; // op type
         len += self.op.len()?;
         Ok(len)
     }
@@ -295,7 +295,7 @@ impl ObPayload for ObTableSingleOp {
 impl ProtoEncoder for ObTableSingleOp {
     fn encode(&self, buf: &mut BytesMut) -> crate::rpc::protocol::Result<()> {
         self.encode_header(buf)?;
-        util::encode_vi64(self.op_type.value(), buf)?;
+        buf.put_i8(self.op_type.value());
         self.op.encode(buf)?;
         Ok(())
     }
