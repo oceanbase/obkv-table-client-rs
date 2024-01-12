@@ -14,6 +14,7 @@
  * See the Mulan PSL v2 for more details.
  * #L%
  */
+pub mod test_table_client_base;
 
 #[allow(unused_imports)]
 #[allow(unused)]
@@ -224,4 +225,13 @@ async fn test_obtable_client_batch_op() {
     let value = result.remove("c2").unwrap();
     assert!(value.is_string());
     assert_eq!("p4", value.as_string());
+}
+
+#[tokio::test]
+async fn test_obtable_time() {
+    let client_handle = task::spawn_blocking(utils::common::build_normal_client);
+    let client = client_handle.await.unwrap();
+    const TEST_TABLE_NAME: &str = "test_time";
+    let test = test_table_client_base::BaseTest::new(client);
+    test.test_time(TEST_TABLE_NAME).await;
 }

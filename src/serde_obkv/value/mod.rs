@@ -25,6 +25,7 @@ pub mod from;
 use std::hash::{Hash, Hasher};
 
 use bytes::{Buf, BufMut, BytesMut};
+use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
 use serde::ser::{Serialize, Serializer};
 
 use super::{
@@ -190,7 +191,7 @@ pub enum Value {
     Float(f32, ObjMeta),     //f32, uf32
     Double(f64, ObjMeta),    //f64,uf64
     Date(i32, ObjMeta),      //date, in seconds
-    Time(i64, ObjMeta),      //datetime, timestamp, in millseconds
+    Time(i64, ObjMeta),      //datetime, timestamp, in microsecond
     Bytes(Vec<u8>, ObjMeta), //varchar
     String(String, ObjMeta), //text,char
 }
@@ -425,6 +426,22 @@ impl Value {
         self.as_i8() as u8
     }
 
+    pub fn as_datetime(&self) -> NaiveDateTime {
+        match self {
+            Value::Time(i, _) => {
+                NaiveDateTime::from_timestamp_micros(*i).expect("Failed to cast:{self:?}")
+            }
+            _ => panic!("Fail to cast: {self:?}"),
+        }
+    }
+
+    pub fn as_timestamp(&self) -> DateTime<Utc> {
+        match self {
+            Value::Time(i, _) => Utc.timestamp_nanos(*i * 1000),
+            _ => panic!("Fail to cast: {self:?}"),
+        }
+    }
+
     fn decode_binary(buf: &mut BytesMut, meta: ObjMeta) -> Result<Value> {
         let v = if meta.cs_type == CollationType::Binary {
             let bs = decode_bytes_string(buf)?;
@@ -510,8 +527,8 @@ impl Value {
             ObjType::UFloat => Ok(Value::Float(decode_f32(buf)?, meta)),
             ObjType::UDouble => Ok(Value::Double(decode_f64(buf)?, meta)),
             //FIXME date and time
-            ObjType::DateTime => unimplemented!(),
-            ObjType::Timestamp => unimplemented!(),
+            ObjType::DateTime => Ok(Value::Time(decode_vi64(buf)?, meta)),
+            ObjType::Timestamp => Ok(Value::Time(decode_vi64(buf)?, meta)),
             ObjType::Date => unimplemented!(),
             ObjType::Time => unimplemented!(),
             ObjType::Year => unimplemented!(),
@@ -580,7 +597,7 @@ impl Value {
             }
             Value::Time(d, ref meta) => {
                 meta.encode(buf)?;
-                encode_vi64(d * 1000, buf)
+                encode_vi64(d, buf)
             }
             Value::Bytes(ref vc, ref meta) => {
                 meta.encode(buf)?;
