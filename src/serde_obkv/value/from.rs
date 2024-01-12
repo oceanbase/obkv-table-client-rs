@@ -15,6 +15,7 @@
  * #L%
  */
 
+use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
 use std::borrow::Cow;
 
 use super::{ObjMeta, ObjType, Value};
@@ -148,7 +149,34 @@ impl<'a> From<&'a [u8]> for Value {
     }
 }
 
-//TODO date and time
+impl From<DateTime<Utc>> for Value {
+    fn from(dt: DateTime<Utc>) -> Self {
+        Value::Time(
+            dt.timestamp_micros(),
+            ObjMeta::default_obj_meta(ObjType::Timestamp),
+        )
+    }
+}
+
+impl From<NaiveDateTime> for Value {
+    fn from(f: NaiveDateTime) -> Self {
+        Value::Time(
+            f.timestamp_micros(),
+            ObjMeta::default_obj_meta(ObjType::DateTime),
+        )
+    }
+}
+
+impl From<NaiveDate> for Value {
+    fn from(f: NaiveDate) -> Self {
+        let naive_date_time = f.and_hms_opt(0, 0, 0).unwrap();
+        let seconds_since_epoch = naive_date_time.timestamp();
+        Value::Date(
+            seconds_since_epoch as i32,
+            ObjMeta::default_obj_meta(ObjType::Date),
+        )
+    }
+}
 
 #[cfg(test)]
 mod test {

@@ -253,3 +253,10 @@ CREATE TABLE test_partition_aggregation (
     INDEX i1(`c1`, `c3`) local,
     PRIMARY KEY(`c1`, `c2`)
 ) PARTITION BY KEY(`c1`) PARTITIONS 200;
+
+CREATE TABLE test_time (
+    `c1` int NOT NULL,
+    `c2` datetime(6) DEFAULT NULL,
+    `c3` timestamp DEFAULT NULL,
+    PRIMARY KEY(`c1`)
+);
