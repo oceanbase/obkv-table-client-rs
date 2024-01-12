@@ -17,14 +17,7 @@
 
 // TODO(xikai): it seems a bug of rust procedural macro that the linter cannot
 // see the expanded statements. check the referenced issue: https://github.com/rust-lang/rust/issues/73556
-use std::{
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-        Arc,
-    },
-    thread,
-    time::Duration,
-};
+use std::sync::Arc;
 
 #[allow(unused)]
 use obkv::error::CommonErrCode;
@@ -64,10 +57,13 @@ pub fn build_normal_client() -> ObTableClient {
     build_client(RunningMode::Normal)
 }
 
+// copy to the test file if needed
 pub async fn execute_sql(client: Arc<ObTableClient>, sql: String) -> obkv::error::Result<()> {
     let sql_handle = task::spawn_blocking(move || sync_execute_sql(client, sql));
     sql_handle.await.unwrap()
 }
+
+// copy to the test file if needed
 pub fn sync_execute_sql(client: Arc<ObTableClient>, sql: String) -> obkv::error::Result<()> {
     client.execute_sql(&sql)
 }

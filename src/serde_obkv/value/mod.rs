@@ -25,6 +25,7 @@ pub mod from;
 use std::hash::{Hash, Hasher};
 
 use bytes::{Buf, BufMut, BytesMut};
+use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
 use serde::ser::{Serialize, Serializer};
 
 use super::{
@@ -245,7 +246,7 @@ impl ObjMeta {
     }
 
     pub fn new_numeric_meta(obj_type: ObjType) -> ObjMeta {
-        ObjMeta::new(obj_type, CollationLevel::Numeric, CollationType::Binary, -1)
+        ObjMeta::new(obj_type, CollationLevel::Numeric, CollationType::Binary, 10)
     }
 
     fn default_obj_meta(t: ObjType) -> ObjMeta {
@@ -425,6 +426,21 @@ impl Value {
         self.as_i8() as u8
     }
 
+    pub fn as_datetime(&self) -> NaiveDateTime {
+        match self {
+            Value::Time(i, _) => NaiveDateTime::from_timestamp_millis(*i)
+                .unwrap_or_else(|| panic!("Failed to cast: {:?}", self)),
+            _ => panic!("Fail to cast: {self:?}"),
+        }
+    }
+
+    pub fn as_timestamp(&self) -> DateTime<Utc> {
+        match self {
+            Value::Time(i, _) => Utc.timestamp_nanos(*i * 1000000),
+            _ => panic!("Fail to cast: {self:?}"),
+        }
+    }
+
     fn decode_binary(buf: &mut BytesMut, meta: ObjMeta) -> Result<Value> {
         let v = if meta.cs_type == CollationType::Binary {
             let bs = decode_bytes_string(buf)?;
@@ -480,7 +496,7 @@ impl Value {
                 meta.len() + util::encoded_length_vi64(f.to_bits() as i64)
             }
             Value::Date(d, ref meta) => meta.len() + util::encoded_length_vi32(d),
-            Value::Time(d, ref meta) => meta.len() + util::encoded_length_vi64(d),
+            Value::Time(d, ref meta) => meta.len() + util::encoded_length_vi64(d * 1000),
             Value::Bytes(ref vc, ref meta) => {
                 meta.len() + util::encoded_length_vi32(vc.len() as i32) + vc.len() + 1
             }
@@ -510,8 +526,8 @@ impl Value {
             ObjType::UFloat => Ok(Value::Float(decode_f32(buf)?, meta)),
             ObjType::UDouble => Ok(Value::Double(decode_f64(buf)?, meta)),
             //FIXME date and time
-            ObjType::DateTime => unimplemented!(),
-            ObjType::Timestamp => unimplemented!(),
+            ObjType::DateTime => Ok(Value::Time(decode_vi64(buf)? / 1000, meta)),
+            ObjType::Timestamp => Ok(Value::Time(decode_vi64(buf)? / 1000, meta)),
             ObjType::Date => unimplemented!(),
             ObjType::Time => unimplemented!(),
             ObjType::Year => unimplemented!(),

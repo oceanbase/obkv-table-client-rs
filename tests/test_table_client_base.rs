@@ -16,6 +16,7 @@
  */
 
 use std::time::SystemTime;
+
 #[allow(unused_imports)]
 #[allow(unused)]
 use std::{
@@ -27,8 +28,18 @@ use std::{
     time::Duration,
 };
 
+use chrono::{NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
 use obkv::{error::CommonErrCode, ObTableClient, ResultCodes, Value};
 use tokio::task;
+
+pub async fn execute_sql(client: Arc<ObTableClient>, sql: String) -> obkv::error::Result<()> {
+    let sql_handle = task::spawn_blocking(move || sync_execute_sql(client, sql));
+    sql_handle.await.unwrap()
+}
+
+pub fn sync_execute_sql(client: Arc<ObTableClient>, sql: String) -> obkv::error::Result<()> {
+    client.execute_sql(&sql)
+}
 
 pub struct BaseTest {
     client: Arc<ObTableClient>,
@@ -1300,5 +1311,82 @@ impl BaseTest {
         //     row.unwrap_err().ob_result_code()
         // );
         assert!(row.is_ok());
+    }
+
+    pub async fn test_time(&self, table_name: &str) {
+        // c2 should be datetime(6) DEFAULT NULL
+        // c3 should be timestamp DEFAULT NULL
+        for i in 0..3 {
+            self.client
+                .delete(table_name, vec![Value::from(i)])
+                .await
+                .expect("fail to delete row");
+        }
+
+        // NaiveDateTime-> datetime ( 2024/1/1 12:30:00 )
+        let chrono_naive_datetime = NaiveDateTime::new(
+            NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+            NaiveTime::from_hms_opt(12, 30, 00).unwrap(),
+        );
+        // DateTime -> timestamp ( 2024/1/1 12:30:00 )
+        let chrono_datetime = Utc.with_ymd_and_hms(2024, 1, 1, 12, 30, 00).unwrap();
+
+        // insert data
+        let result = self
+            .client
+            .insert_or_update(
+                table_name,
+                vec![Value::from(0i32)],
+                vec!["c2".to_owned(), "c3".to_owned()],
+                vec![
+                    Value::from(chrono_naive_datetime),
+                    Value::from(chrono_datetime),
+                ],
+            )
+            .await;
+        assert!(result.is_ok());
+
+        // verify by api
+        let result = self
+            .client
+            .get(
+                table_name,
+                vec![Value::from(0i32)],
+                vec!["c2".to_owned(), "c3".to_owned()],
+            )
+            .await;
+        assert!(result.is_ok());
+        let mut res = result.unwrap();
+        assert_eq!(
+            chrono_naive_datetime,
+            res.remove("c2").expect("result is null").as_datetime()
+        );
+        assert_eq!(
+            chrono_datetime,
+            res.remove("c3").expect("result is null").as_timestamp()
+        );
+
+        // sql verify
+        let res = execute_sql(
+            self.client.clone(),
+            format!(
+                "delete from {} where DATE_FORMAT(c2, '%Y-%m-%d %H:%i:%s') = '2024-01-01 12:30:00'",
+                table_name
+            ),
+        )
+        .await;
+        assert!(res.is_ok());
+        let result = self
+            .client
+            .get(
+                table_name,
+                vec![Value::from(0i32)],
+                vec!["c2".to_owned(), "c3".to_owned()],
+            )
+            .await;
+        assert!(result.is_ok());
+        let res = result.unwrap();
+        assert_eq!(None, res.get("c2"));
+        assert_eq!(None, res.get("c3"));
     }
 }
