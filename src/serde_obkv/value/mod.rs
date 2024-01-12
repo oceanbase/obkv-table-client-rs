@@ -191,7 +191,7 @@ pub enum Value {
     Float(f32, ObjMeta),     //f32, uf32
     Double(f64, ObjMeta),    //f64,uf64
     Date(i32, ObjMeta),      //date, in seconds
-    Time(i64, ObjMeta),      //datetime, timestamp, in millseconds
+    Time(i64, ObjMeta),      //datetime, timestamp, in microsecond
     Bytes(Vec<u8>, ObjMeta), //varchar
     String(String, ObjMeta), //text,char
 }
