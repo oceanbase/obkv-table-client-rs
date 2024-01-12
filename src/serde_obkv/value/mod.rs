@@ -246,7 +246,7 @@ impl ObjMeta {
     }
 
     pub fn new_numeric_meta(obj_type: ObjType) -> ObjMeta {
-        ObjMeta::new(obj_type, CollationLevel::Numeric, CollationType::Binary, 10)
+        ObjMeta::new(obj_type, CollationLevel::Numeric, CollationType::Binary, -1)
     }
 
     fn default_obj_meta(t: ObjType) -> ObjMeta {
@@ -428,15 +428,16 @@ impl Value {
 
     pub fn as_datetime(&self) -> NaiveDateTime {
         match self {
-            Value::Time(i, _) => NaiveDateTime::from_timestamp_millis(*i)
-                .unwrap_or_else(|| panic!("Failed to cast: {:?}", self)),
+            Value::Time(i, _) => {
+                NaiveDateTime::from_timestamp_micros(*i).expect("Failed to cast:{self:?}")
+            }
             _ => panic!("Fail to cast: {self:?}"),
         }
     }
 
     pub fn as_timestamp(&self) -> DateTime<Utc> {
         match self {
-            Value::Time(i, _) => Utc.timestamp_nanos(*i * 1000000),
+            Value::Time(i, _) => Utc.timestamp_nanos(*i * 1000),
             _ => panic!("Fail to cast: {self:?}"),
         }
     }
@@ -496,7 +497,7 @@ impl Value {
                 meta.len() + util::encoded_length_vi64(f.to_bits() as i64)
             }
             Value::Date(d, ref meta) => meta.len() + util::encoded_length_vi32(d),
-            Value::Time(d, ref meta) => meta.len() + util::encoded_length_vi64(d * 1000),
+            Value::Time(d, ref meta) => meta.len() + util::encoded_length_vi64(d),
             Value::Bytes(ref vc, ref meta) => {
                 meta.len() + util::encoded_length_vi32(vc.len() as i32) + vc.len() + 1
             }
@@ -526,8 +527,8 @@ impl Value {
             ObjType::UFloat => Ok(Value::Float(decode_f32(buf)?, meta)),
             ObjType::UDouble => Ok(Value::Double(decode_f64(buf)?, meta)),
             //FIXME date and time
-            ObjType::DateTime => Ok(Value::Time(decode_vi64(buf)? / 1000, meta)),
-            ObjType::Timestamp => Ok(Value::Time(decode_vi64(buf)? / 1000, meta)),
+            ObjType::DateTime => Ok(Value::Time(decode_vi64(buf)?, meta)),
+            ObjType::Timestamp => Ok(Value::Time(decode_vi64(buf)?, meta)),
             ObjType::Date => unimplemented!(),
             ObjType::Time => unimplemented!(),
             ObjType::Year => unimplemented!(),
@@ -596,7 +597,7 @@ impl Value {
             }
             Value::Time(d, ref meta) => {
                 meta.encode(buf)?;
-                encode_vi64(d * 1000, buf)
+                encode_vi64(d, buf)
             }
             Value::Bytes(ref vc, ref meta) => {
                 meta.encode(buf)?;

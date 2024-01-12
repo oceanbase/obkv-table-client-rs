@@ -152,7 +152,7 @@ impl<'a> From<&'a [u8]> for Value {
 impl From<DateTime<Utc>> for Value {
     fn from(dt: DateTime<Utc>) -> Self {
         Value::Time(
-            dt.timestamp_millis(),
+            dt.timestamp_micros(),
             ObjMeta::default_obj_meta(ObjType::Timestamp),
         )
     }
@@ -161,7 +161,7 @@ impl From<DateTime<Utc>> for Value {
 impl From<NaiveDateTime> for Value {
     fn from(f: NaiveDateTime) -> Self {
         Value::Time(
-            f.timestamp_millis(),
+            f.timestamp_micros(),
             ObjMeta::default_obj_meta(ObjType::DateTime),
         )
     }
