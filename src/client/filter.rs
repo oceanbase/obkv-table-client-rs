@@ -15,8 +15,6 @@
  * #L%
  */
 
-#![allow(dead_code)]
-#![allow(unused_macros)]
 use std::{any::Any, fmt::Write};
 
 const TABLE_COMPARE_FILTER_PREFIX: &str = "TableCompareFilter";
@@ -75,6 +73,29 @@ macro_rules! filter_list {
     };
 }
 
+impl ObTableFilterList {
+    pub fn new<I>(op: FilterOp, filters: I) -> Self
+    where
+        I: IntoIterator<Item = Box<dyn Filter>>,
+    {
+        ObTableFilterList {
+            op,
+            filters: filters.into_iter().collect(),
+        }
+    }
+
+    pub fn add_filter(&mut self, filter: Box<dyn Filter>) {
+        self.filters.push(filter)
+    }
+
+    pub fn add_filters<I>(&mut self, filters: I)
+    where
+        I: IntoIterator<Item = Box<dyn Filter>>,
+    {
+        self.filters.extend(filters.into_iter())
+    }
+}
+
 impl Filter for ObTableFilterList {
     fn as_any(&self) -> &dyn Any {
         self
@@ -129,15 +150,14 @@ pub struct ObTableValueFilter {
     pub value: String,
 }
 
-#[macro_export]
-macro_rules! value_filter {
-    ($op:expr, $column_name:expr, $value:expr) => {
+impl ObTableValueFilter {
+    pub fn new<U: ToString, V: ToString>(op: ObCompareOperator, column_name: U, value: V) -> Self {
         ObTableValueFilter {
-            op: $op,
-            column_name: $column_name.to_string(),
-            value: $value.to_string(),
+            op,
+            column_name: column_name.to_string(),
+            value: value.to_string(),
         }
-    };
+    }
 }
 
 impl Filter for ObTableValueFilter {
@@ -182,30 +202,20 @@ mod test {
     fn test_value_filter_micro() {
         let op = ObCompareOperator::Equal;
         let column_name = "column";
-        let string_column_name = "string_column".to_string();
+        let string_column_name = "string_column";
 
         // create ObTableValueFilter by micro rules
-        let filter_i16 = value_filter!(op.clone(), column_name, 51i16);
-        let filter_i32 = value_filter!(op.clone(), string_column_name, 51i32);
-        let filter_i64 = value_filter!(op.clone(), column_name, 51i64);
-        let filter_u16 = value_filter!(op.clone(), string_column_name, 51u16);
-        let filter_u32 = value_filter!(op.clone(), column_name, 51u32);
-        let filter_u64 = value_filter!(op.clone(), string_column_name, 51u64);
-        let filter_f32 = value_filter!(op.clone(), column_name, 51.0f32);
-        let filter_f64 = value_filter!(op.clone(), string_column_name, 51.0f64);
-        let filter_string = value_filter!(op.clone(), column_name, "51".to_string());
-        let filter_str = value_filter!(op.clone(), string_column_name, "51");
+        let filter_i16 = ObTableValueFilter::new(op.clone(), column_name, 51i16);
+        let filter_i32 = ObTableValueFilter::new(op.clone(), string_column_name, 51i32);
+        let filter_i64 = ObTableValueFilter::new(op.clone(), column_name, 51i64);
+        let filter_u16 = ObTableValueFilter::new(op.clone(), string_column_name, 51u16);
+        let filter_u32 = ObTableValueFilter::new(op.clone(), column_name, 51u32);
+        let filter_u64 = ObTableValueFilter::new(op.clone(), string_column_name, 51u64);
+        let filter_f32 = ObTableValueFilter::new(op.clone(), column_name, 51.0f32);
+        let filter_f64 = ObTableValueFilter::new(op.clone(), string_column_name, 51.0f64);
+        let filter_string = ObTableValueFilter::new(op.clone(), column_name, "51".to_string());
+        let filter_str = ObTableValueFilter::new(op.clone(), string_column_name, "51");
 
-        println!("{:?}", filter_i16.string());
-        println!("{:?}", filter_i32.string());
-        println!("{:?}", filter_i64.string());
-        println!("{:?}", filter_u16.string());
-        println!("{:?}", filter_u32.string());
-        println!("{:?}", filter_u64.string());
-        println!("{:?}", filter_f32.string());
-        println!("{:?}", filter_f64.string());
-        println!("{:?}", filter_string.string());
-        println!("{:?}", filter_str.string());
         assert_eq!("TableCompareFilter(=,'column:51')", filter_i16.string());
         assert_eq!(
             "TableCompareFilter(=,'string_column:51')",
@@ -236,22 +246,40 @@ mod test {
     #[test]
     fn test_filter_list() {
         let column_name = "column";
-
-        let filter_list_0 = filter_list!(
+        let filter_list_0 = ObTableFilterList::new(
             FilterOp::And,
-            value_filter!(ObCompareOperator::Equal, column_name, "0"),
-            value_filter!(ObCompareOperator::GreaterThan, column_name, "1")
+            vec![
+                Box::new(ObTableValueFilter::new(
+                    ObCompareOperator::Equal,
+                    column_name,
+                    "0",
+                )) as Box<dyn Filter>,
+                Box::new(ObTableValueFilter::new(
+                    ObCompareOperator::GreaterThan,
+                    column_name,
+                    "1",
+                )) as Box<dyn Filter>,
+            ],
         );
-        let filter_list_component = filter_list!(
+        let mut filter_list_component = ObTableFilterList::new(
             FilterOp::And,
-            value_filter!(ObCompareOperator::Equal, column_name, 2),
-            value_filter!(ObCompareOperator::GreaterThan, column_name, "3")
+            vec![Box::new(ObTableValueFilter::new(
+                ObCompareOperator::Equal,
+                column_name,
+                2,
+            )) as Box<dyn Filter>],
         );
-        let filter_list_1 = filter_list!(
-            FilterOp::Or,
-            filter_list_component,
-            value_filter!(ObCompareOperator::GreaterThan, column_name, "4")
-        );
+        filter_list_component.add_filter(Box::new(ObTableValueFilter::new(
+            ObCompareOperator::GreaterThan,
+            column_name,
+            "3",
+        )) as Box<dyn Filter>);
+        let mut filter_list_1 = filter_list!(FilterOp::Or, filter_list_component,);
+        filter_list_1.add_filters(vec![Box::new(ObTableValueFilter::new(
+            ObCompareOperator::GreaterThan,
+            column_name,
+            "4",
+        )) as Box<dyn Filter>]);
 
         println!("{:?}", filter_list_0.string());
         println!("{:?}", filter_list_1.string());
