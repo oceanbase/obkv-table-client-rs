@@ -378,7 +378,11 @@ async fn test_uint_filter() {
     batch_op.check_and_insert_up(
         vec![Value::from(1u8)],
         vec!["c2".to_owned(), "c3".to_owned(), "c4".to_owned()],
-        vec![Value::from(100u16), Value::from(100u32), Value::from(100u64)],
+        vec![
+            Value::from(100u16),
+            Value::from(100u32),
+            Value::from(100u64),
+        ],
         Box::new(filter_0),
         false,
     );
@@ -474,11 +478,7 @@ async fn test_uint_filter() {
 
     // check answer
     let result = client
-        .get(
-            TABLE_NAME,
-            vec![Value::from(3u8)],
-            vec!["c2".to_owned()],
-        )
+        .get(TABLE_NAME, vec![Value::from(3u8)], vec!["c2".to_owned()])
         .await;
     assert!(result.is_ok());
     let result = result.unwrap();
@@ -486,31 +486,17 @@ async fn test_uint_filter() {
 
     // check answer
     let result = client
-        .get(
-            TABLE_NAME,
-            vec![Value::from(2u8)],
-            vec!["c2".to_owned()],
-        )
+        .get(TABLE_NAME, vec![Value::from(2u8)], vec!["c2".to_owned()])
         .await;
     assert!(result.is_ok());
     let mut result = result.unwrap();
-    assert_eq!(
-        1u16,
-        result.remove("c2").unwrap().as_u16(),
-    );
+    assert_eq!(1u16, result.remove("c2").unwrap().as_u16(),);
 
     // check answer
     let result = client
-        .get(
-            TABLE_NAME,
-            vec![Value::from(0u8)],
-            vec!["c2".to_owned()],
-        )
+        .get(TABLE_NAME, vec![Value::from(0u8)], vec!["c2".to_owned()])
         .await;
     assert!(result.is_ok());
     let mut result = result.unwrap();
-    assert_eq!(
-        1u16,
-        result.remove("c2").unwrap().as_u16(),
-    );
+    assert_eq!(1u16, result.remove("c2").unwrap().as_u16(),);
 }
