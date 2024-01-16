@@ -155,11 +155,19 @@ CREATE TABLE `TEST_STREAM_QUERY_TABLE_HASH` (
 partition by hash(c1) partitions 16;
 
 CREATE TABLE `TEST_TABLE_BATCH_HASH` (
-`c1` bigint NOT NULL,
-`c1sk` varchar(20) NOT NULL,
-`c2` varchar(20) DEFAULT NULL,
-`c3` bigint DEFAULT 0,
+    `c1` bigint NOT NULL,
+    `c1sk` varchar(20) NOT NULL,
+    `c2` varchar(20) DEFAULT NULL,
+    `c3` bigint DEFAULT 0,
 PRIMARY KEY (`c1`, `c1sk`)) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'lz4_1.0' REPLICA_NUM = 3 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 10
+partition by hash(`c1`) partitions 16;
+
+CREATE TABLE `TEST_UINT_FILTER` (
+    `c1` tinyint unsigned DEFAULT 0,
+    `c2` smallint unsigned DEFAULT 0,
+    `c3` int unsigned DEFAULT 0,
+    `c4` bigint unsigned DEFAULT 0,
+PRIMARY KEY (`c1`)) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'lz4_1.0' REPLICA_NUM = 3 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 10
 partition by hash(`c1`) partitions 16;
 
 CREATE TABLE `test_varchar_table` (
