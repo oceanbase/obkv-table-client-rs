@@ -29,8 +29,8 @@ use bytes::{Buf, BufMut, BytesMut};
 use super::{
     BasePayLoad, ObPayload, ObTablePacketCode, ProtoDecoder, ProtoEncoder, Result, TraceId,
 };
+use crate::filter::FilterEncoder;
 use crate::{
-    client::filter::Filter,
     location::OB_INVALID_ID,
     query::{ObNewRange, ObTableQuery},
     rpc::protocol::{
@@ -725,12 +725,12 @@ impl ObTableBatchOperation {
     /// whether meet the filter and execute the insertUp
     /// if check_exist is true: check if any data meet the filter
     /// if check_exist is false: check if all data do not meet the filter
-    pub fn check_and_insert_up(
+    pub fn check_and_insert_up<T: FilterEncoder>(
         &mut self,
         row_keys: Vec<Value>,
         columns: Vec<String>,
         properties: Vec<Value>,
-        filter: Box<dyn Filter>,
+        filter: T,
         check_exist: bool,
     ) {
         let mut option = RawObTableOperationFlag::new();
@@ -741,7 +741,7 @@ impl ObTableBatchOperation {
             row_keys,
             Some(columns),
             Some(properties),
-            Some(filter.string()),
+            Some(filter.encode()),
             Some(option),
         ))
     }

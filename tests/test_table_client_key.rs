@@ -24,7 +24,7 @@ use std::sync::Arc;
 
 use obkv::{
     filter::{Filter, FilterOp, ObCompareOperator, ObTableFilterList, ObTableValueFilter},
-    filter_list, ObTableClient, TableOpResult, Value,
+    ObTableClient, TableOpResult, Value,
 };
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use serial_test_derive::serial;
@@ -729,36 +729,36 @@ async fn test_batch_insert_or_update_with_filter() {
 
     // insert some data, will insert 0/1/2, 3 can't insert since exec_if_exist
     let mut batch_op = client.batch_operation(4);
-    let filter_0 = ObTableValueFilter::new(ObCompareOperator::Equal, "c2", "value");
+    let filter_0 = ObTableValueFilter::new(ObCompareOperator::Equal, "c2".to_string(), "value");
     batch_op.check_and_insert_up(
         vec![Value::from("Key_0"), Value::from("subKey_0")],
         vec!["c2".to_owned()],
         vec![Value::from("batchValue_0")],
-        Box::new(filter_0),
+        filter_0,
         false,
     );
-    let filter_0 = ObTableValueFilter::new(ObCompareOperator::Equal, "c2", "value");
+    let filter_0 = ObTableValueFilter::new(ObCompareOperator::Equal, "c2".to_string(), "value");
     batch_op.check_and_insert_up(
         vec![Value::from("Key_1"), Value::from("subKey_1")],
         vec!["c2".to_owned()],
         vec![Value::from("batchValue_1")],
-        Box::new(filter_0),
+        filter_0,
         false,
     );
-    let filter_0 = ObTableValueFilter::new(ObCompareOperator::Equal, "c2", "value");
+    let filter_0 = ObTableValueFilter::new(ObCompareOperator::Equal, "c2".to_string(), "value");
     batch_op.check_and_insert_up(
         vec![Value::from("Key_2"), Value::from("subKey_2")],
         vec!["c2".to_owned()],
         vec![Value::from("batchValue_2")],
-        Box::new(filter_0),
+        filter_0,
         false,
     );
-    let filter_0 = ObTableValueFilter::new(ObCompareOperator::Equal, "c2", "value");
+    let filter_0 = ObTableValueFilter::new(ObCompareOperator::Equal, "c2".to_string(), "value");
     batch_op.check_and_insert_up(
         vec![Value::from("Key_3"), Value::from("subKey_3")],
         vec!["c2".to_owned()],
         vec![Value::from("batchValue_3")],
-        Box::new(filter_0),
+        filter_0,
         true,
     );
     batch_op.set_atomic_op(false);
@@ -767,50 +767,78 @@ async fn test_batch_insert_or_update_with_filter() {
 
     // update some data, only 1 will update
     let mut batch_op = client.batch_operation(4);
-    let filter_1 = filter_list!(
+    let filter_1 = Filter::List(ObTableFilterList::new(
         FilterOp::And,
-        ObTableValueFilter::new(ObCompareOperator::Equal, "c2", "batchValue_1"),
-    );
+        vec![Filter::Value(ObTableValueFilter::new(
+            ObCompareOperator::Equal,
+            "c2".to_string(),
+            "batchValue_1",
+        ))],
+    ));
     batch_op.check_and_insert_up(
         vec![Value::from("Key_0"), Value::from("subKey_0")],
         vec!["c2".to_owned()],
         vec![Value::from("updateValue_0")],
-        Box::new(filter_1),
+        filter_1,
         true,
     );
-    let filter_1 = filter_list!(
+    let filter_1 = Filter::List(ObTableFilterList::new(
         FilterOp::And,
-        ObTableValueFilter::new(ObCompareOperator::Equal, "c2", "batchValue_1"),
-        ObTableValueFilter::new(ObCompareOperator::LessThan, "c3", 1),
-    );
+        vec![
+            Filter::Value(ObTableValueFilter::new(
+                ObCompareOperator::Equal,
+                "c2".to_string(),
+                "batchValue_1",
+            )),
+            Filter::Value(ObTableValueFilter::new(
+                ObCompareOperator::LessThan,
+                "c3".to_string(),
+                1,
+            )),
+        ],
+    ));
     batch_op.check_and_insert_up(
         vec![Value::from("Key_1"), Value::from("subKey_1")],
         vec!["c2".to_owned()],
         vec![Value::from("updateValue_1")],
-        Box::new(filter_1),
+        filter_1,
         true,
     );
-    let filter_1 = filter_list!(
+    let filter_1 = Filter::List(ObTableFilterList::new(
         FilterOp::And,
-        ObTableValueFilter::new(ObCompareOperator::Equal, "c2", "batchValue_1"),
-    );
+        vec![Filter::Value(ObTableValueFilter::new(
+            ObCompareOperator::Equal,
+            "c2".to_string(),
+            "batchValue_1",
+        ))],
+    ));
     batch_op.check_and_insert_up(
         vec![Value::from("Key_2"), Value::from("subKey_2")],
         vec!["c2".to_owned()],
         vec![Value::from("updateValue_2")],
-        Box::new(filter_1),
+        filter_1,
         true,
     );
-    let filter_1 = filter_list!(
+    let filter_1 = Filter::List(ObTableFilterList::new(
         FilterOp::And,
-        ObTableValueFilter::new(ObCompareOperator::Equal, "c2", "batchValue_3"),
-        ObTableValueFilter::new(ObCompareOperator::GreaterOrEqualThan, "c3", 1),
-    );
+        vec![
+            Filter::Value(ObTableValueFilter::new(
+                ObCompareOperator::Equal,
+                "c2".to_string(),
+                "batchValue_3",
+            )),
+            Filter::Value(ObTableValueFilter::new(
+                ObCompareOperator::GreaterOrEqualThan,
+                "c3".to_string(),
+                1,
+            )),
+        ],
+    ));
     batch_op.check_and_insert_up(
         vec![Value::from("Key_3"), Value::from("subKey_3")],
         vec!["c2".to_owned()],
         vec![Value::from("updateValue_3")],
-        Box::new(filter_1),
+        filter_1,
         true,
     );
     batch_op.set_atomic_op(false);
