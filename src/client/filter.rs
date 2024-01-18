@@ -214,7 +214,7 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_value_filter_micro() {
+    fn test_value_filter() {
         let op = ObCompareOperator::Equal;
         let column_name = "column";
         let string_column_name = "string_column";
@@ -299,8 +299,6 @@ mod test {
             "4",
         ))]);
 
-        println!("{:?}", filter_list_0.encode());
-        println!("{:?}", filter_list_1.encode());
         assert_eq!(
             "TableCompareFilter(=,'column:0') && TableCompareFilter(>,'column:1')",
             filter_list_0.encode()

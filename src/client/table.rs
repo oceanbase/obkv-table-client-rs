@@ -79,7 +79,7 @@ impl ObTable {
             if batch_op.ops_len() != batch_op.get_filters().len() {
                 return Err(CommonErr(
                     CommonErrCode::InvalidParam,
-                    "All operation should have filters or not".to_owned(),
+                    "All operation should have filters or not (checkAndDo() can not do with other operation in batch now)".to_owned(),
                 ));
             }
 
