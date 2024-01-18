@@ -107,7 +107,7 @@ fn main() -> Result<()> {
     assert_eq!(
         props.operation_count,
         (actual_client_count * thread_operation_count * props.obkv_client_reuse) as u64,
-        " 'operationcount' should be an exact multiple of the product of 'obkv_client_reuse' and 'threads'"
+        " 'operationcount' should be an exact multiple of the 'threads', and 'threads' should be an exact multiple of the 'obkv_client_reuse'"
     );
 
     for cmd in opt.commands {
