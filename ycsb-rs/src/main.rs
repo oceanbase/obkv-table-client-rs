@@ -64,7 +64,7 @@ async fn load_ob(
 ) {
     for _ in 0..operation_count {
         wl.ob_insert(db.clone()).await;
-        counter.fetch_add(1, Ordering::SeqCst);
+        counter.fetch_add(1, Ordering::Relaxed);
     }
 }
 
@@ -77,7 +77,7 @@ async fn run_ob(
 ) {
     for _ in 0..operation_count {
         wl.ob_transaction(rng.clone(), db.clone()).await;
-        counter.fetch_add(1, Ordering::SeqCst);
+        counter.fetch_add(1, Ordering::Relaxed);
     }
 }
 
@@ -135,7 +135,7 @@ fn main() -> Result<()> {
                     let wl = wl.clone();
                     let cmd = cmd.clone();
                     let runtime = runtimes.default_runtime.clone();
-                    let counter_clone = Arc::clone(&counter);
+                    let counter_clone = counter.clone();
                     tasks.push(runtime.spawn(async move {
                         let rng = Arc::new(Mutex::new(SmallRng::from_entropy()));
                         db.init().unwrap();
@@ -161,7 +161,7 @@ fn main() -> Result<()> {
                     interval.tick().await;
                     let completed_operations: usize = db_counters
                         .iter()
-                        .map(|arc| arc.load(Ordering::SeqCst))
+                        .map(|arc| arc.load(Ordering::Relaxed))
                         .sum();
                     let ops_per_second =
                         (completed_operations - prev_count) as f64 / stat_duration_sec as f64;
