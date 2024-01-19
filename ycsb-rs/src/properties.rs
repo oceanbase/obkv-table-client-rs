@@ -4,6 +4,14 @@ fn zero_u64() -> u64 {
     0
 }
 
+fn show_prometheus_default() -> bool {
+    false
+}
+
+fn show_progress_duration_default() -> u64 {
+    60
+}
+
 fn thread_count_default() -> u64 {
     200
 }
@@ -159,6 +167,13 @@ pub struct Properties {
     pub field_length: u64,
     #[serde(default = "batch_count_default", rename = "batchcount")]
     pub batch_count: u64,
+    #[serde(default = "show_prometheus_default", rename = "showprometheus")]
+    pub show_prometheus: bool,
+    #[serde(
+        default = "show_progress_duration_default",
+        rename = "show_progress_duration_sec"
+    )]
+    pub show_progress_duration: u64,
 
     // read, update, insert, scan, read-modify-write
     #[serde(default = "read_proportion_default", rename = "readproportion")]
