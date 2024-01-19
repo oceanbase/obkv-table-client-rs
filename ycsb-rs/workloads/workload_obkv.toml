@@ -27,6 +27,12 @@ readallfields = true
 # The number of operation in one batch
 batchcount = 100
 
+# Show params from prometheus or not
+showprometheus = false
+
+# Duration of showing progress
+show_progress_duration_sec = 30
+
 insertproportion = 0
 readproportion = 1.0
 scanproportion = 0
