@@ -14,7 +14,7 @@ use obkv::dump_metrics;
 use properties::Properties;
 use rand::{rngs::SmallRng, SeedableRng};
 use structopt::StructOpt;
-use tokio::time as tokioTime;
+use tokio::time as TokioTime;
 use workload::CoreWorkload;
 
 use crate::{
@@ -124,7 +124,7 @@ fn main() -> Result<()> {
         );
         if database.eq_ignore_ascii_case("obkv") {
             let runtimes = runtime::build_ycsb_runtimes(props.clone());
-            for _client_idx in 0..actual_client_count {
+            for _ in 0..actual_client_count {
                 let database = database.clone();
                 let db = db::create_ob(&database, config.clone()).unwrap();
                 // count the ops per client
@@ -139,7 +139,7 @@ fn main() -> Result<()> {
                     tasks.push(runtime.spawn(async move {
                         let rng = Arc::new(Mutex::new(SmallRng::from_entropy()));
                         db.init().unwrap();
-                        match &cmd[..] {
+                        match cmd.as_str() {
                             "load" => {
                                 load_ob(wl.clone(), db, thread_operation_count, counter_clone).await
                             }
@@ -147,7 +147,7 @@ fn main() -> Result<()> {
                                 run_ob(wl.clone(), db, rng, thread_operation_count, counter_clone)
                                     .await
                             }
-                            cmd => panic!("invalid command: {cmd}"),
+                            _ => panic!("invalid command: {cmd}"),
                         };
                     }));
                 }
@@ -155,7 +155,7 @@ fn main() -> Result<()> {
             // show progress
             let stat_duration_sec = props.show_progress_duration;
             tasks.push(runtimes.default_runtime.spawn(async move {
-                let mut interval = tokioTime::interval(Duration::from_secs(stat_duration_sec));
+                let mut interval = TokioTime::interval(Duration::from_secs(stat_duration_sec));
                 let mut prev_count = 0;
                 loop {
                     interval.tick().await;
@@ -207,7 +207,7 @@ fn main() -> Result<()> {
                     match &cmd[..] {
                         "load" => load(wl.clone(), db, thread_operation_count),
                         "run" => run(wl.clone(), db, rng, thread_operation_count),
-                        cmd => panic!("invalid command: {cmd}"),
+                        _ => panic!("invalid command: {cmd}"),
                     };
                 }));
             }
