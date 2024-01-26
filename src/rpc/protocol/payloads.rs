@@ -725,7 +725,7 @@ impl ObTableBatchOperation {
     /// whether meet the filter and execute the insertUp
     /// if check_exist is true: check if any data meet the filter
     /// if check_exist is false: check if all data do not meet the filter
-    pub fn check_and_insert_up<T: FilterEncoder>(
+    pub fn check_and_upsert<T: FilterEncoder>(
         &mut self,
         row_keys: Vec<Value>,
         columns: Vec<String>,
@@ -744,6 +744,32 @@ impl ObTableBatchOperation {
             Some(filter.encode()),
             Some(option),
         ))
+    }
+
+    /// check the data with corresponding row_keys
+    /// if meet the filter: execute the InsertOrUpdate
+    /// if do not meet the filter: do nothing
+    pub fn check_and_upsert_if_exists<T: FilterEncoder>(
+        &mut self,
+        row_keys: Vec<Value>,
+        columns: Vec<String>,
+        properties: Vec<Value>,
+        filter: T,
+    ) {
+        self.check_and_upsert(row_keys, columns, properties, filter, true)
+    }
+
+    /// check the data with corresponding row_keys
+    /// if row doesn't exist or do not meet the filter: execute the InsertOrUpdate
+    /// if row meet the filter: do nothing
+    pub fn check_and_upsert_if_not_exists<T: FilterEncoder>(
+        &mut self,
+        row_keys: Vec<Value>,
+        columns: Vec<String>,
+        properties: Vec<Value>,
+        filter: T,
+    ) {
+        self.check_and_upsert(row_keys, columns, properties, filter, false)
     }
 
     pub fn replace(&mut self, row_keys: Vec<Value>, columns: Vec<String>, properties: Vec<Value>) {

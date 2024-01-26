@@ -216,7 +216,7 @@ async fn test_batch_insert_or_update_with_filter() {
     // insert some data, will insert 0/1/2, 3 can't insert since exec_if_exist
     let mut batch_op = client.batch_operation(4);
     let filter_0 = ObTableValueFilter::new(ObCompareOperator::Equal, "c2".to_string(), "value");
-    batch_op.check_and_insert_up(
+    batch_op.check_and_upsert(
         vec![Value::from(0i64), Value::from("subKey_0")],
         vec!["c2".to_owned()],
         vec![Value::from("batchValue_0")],
@@ -224,7 +224,7 @@ async fn test_batch_insert_or_update_with_filter() {
         false,
     );
     let filter_0 = ObTableValueFilter::new(ObCompareOperator::Equal, "c2".to_string(), "value");
-    batch_op.check_and_insert_up(
+    batch_op.check_and_upsert(
         vec![Value::from(1i64), Value::from("subKey_1")],
         vec!["c2".to_owned()],
         vec![Value::from("batchValue_1")],
@@ -232,7 +232,7 @@ async fn test_batch_insert_or_update_with_filter() {
         false,
     );
     let filter_0 = ObTableValueFilter::new(ObCompareOperator::Equal, "c2".to_string(), "value");
-    batch_op.check_and_insert_up(
+    batch_op.check_and_upsert(
         vec![Value::from(2i64), Value::from("subKey_2")],
         vec!["c2".to_owned()],
         vec![Value::from("batchValue_2")],
@@ -240,7 +240,7 @@ async fn test_batch_insert_or_update_with_filter() {
         false,
     );
     let filter_0 = ObTableValueFilter::new(ObCompareOperator::Equal, "c2".to_string(), "value");
-    batch_op.check_and_insert_up(
+    batch_op.check_and_upsert(
         vec![Value::from(3i64), Value::from("subKey_3")],
         vec!["c2".to_owned()],
         vec![Value::from("batchValue_3")],
@@ -261,7 +261,7 @@ async fn test_batch_insert_or_update_with_filter() {
             "batchValue_1",
         ))],
     ));
-    batch_op.check_and_insert_up(
+    batch_op.check_and_upsert(
         vec![Value::from(0i64), Value::from("subKey_0")],
         vec!["c2".to_owned()],
         vec![Value::from("updateValue_0")],
@@ -283,7 +283,7 @@ async fn test_batch_insert_or_update_with_filter() {
             )),
         ],
     ));
-    batch_op.check_and_insert_up(
+    batch_op.check_and_upsert(
         vec![Value::from(1i64), Value::from("subKey_1")],
         vec!["c2".to_owned()],
         vec![Value::from("updateValue_1")],
@@ -298,7 +298,7 @@ async fn test_batch_insert_or_update_with_filter() {
             "batchValue_1",
         ))],
     ));
-    batch_op.check_and_insert_up(
+    batch_op.check_and_upsert(
         vec![Value::from(2i64), Value::from("subKey_2")],
         vec!["c2".to_owned()],
         vec![Value::from("updateValue_2")],
@@ -320,7 +320,7 @@ async fn test_batch_insert_or_update_with_filter() {
             )),
         ],
     ));
-    batch_op.check_and_insert_up(
+    batch_op.check_and_upsert(
         vec![Value::from(3i64), Value::from("subKey_3")],
         vec!["c2".to_owned()],
         vec![Value::from("updateValue_3")],
@@ -395,7 +395,7 @@ async fn test_uint_filter() {
     // insert some data, will insert 0/1/2, 3 can't insert since exec_if_exist
     let mut batch_op = client.batch_operation(4);
     let filter_0 = ObTableValueFilter::new(ObCompareOperator::Equal, "c2".to_string(), 0u16);
-    batch_op.check_and_insert_up(
+    batch_op.check_and_upsert(
         vec![Value::from(0u8)],
         vec!["c2".to_owned(), "c3".to_owned(), "c4".to_owned()],
         vec![Value::from(0u16), Value::from(0u32), Value::from(0u64)],
@@ -403,7 +403,7 @@ async fn test_uint_filter() {
         false,
     );
     let filter_0 = ObTableValueFilter::new(ObCompareOperator::Equal, "c2".to_string(), 0u16);
-    batch_op.check_and_insert_up(
+    batch_op.check_and_upsert(
         vec![Value::from(1u8)],
         vec!["c2".to_owned(), "c3".to_owned(), "c4".to_owned()],
         vec![
@@ -415,7 +415,7 @@ async fn test_uint_filter() {
         false,
     );
     let filter_0 = ObTableValueFilter::new(ObCompareOperator::Equal, "c2".to_string(), 0u16);
-    batch_op.check_and_insert_up(
+    batch_op.check_and_upsert(
         vec![Value::from(2u8)],
         vec!["c2".to_owned(), "c3".to_owned(), "c4".to_owned()],
         vec![Value::from(0u16), Value::from(0u32), Value::from(u64::MAX)],
@@ -423,7 +423,7 @@ async fn test_uint_filter() {
         false,
     );
     let filter_0 = ObTableValueFilter::new(ObCompareOperator::Equal, "c2".to_string(), 0u16);
-    batch_op.check_and_insert_up(
+    batch_op.check_and_upsert(
         vec![Value::from(3u8)],
         vec!["c2".to_owned(), "c3".to_owned(), "c4".to_owned()],
         vec![Value::from(0u16), Value::from(0u32), Value::from(0u64)],
@@ -453,7 +453,7 @@ async fn test_uint_filter() {
             0u16,
         ))],
     );
-    batch_op.check_and_insert_up(
+    batch_op.check_and_upsert(
         vec![Value::from(0u8)],
         vec!["c2".to_owned()],
         vec![Value::from(1u16)],
@@ -475,7 +475,7 @@ async fn test_uint_filter() {
             )),
         ],
     );
-    batch_op.check_and_insert_up(
+    batch_op.check_and_upsert(
         vec![Value::from(1u8)],
         vec!["c2".to_owned()],
         vec![Value::from(1u16)],
@@ -490,7 +490,7 @@ async fn test_uint_filter() {
             u64::MAX,
         ))],
     );
-    batch_op.check_and_insert_up(
+    batch_op.check_and_upsert(
         vec![Value::from(2u8)],
         vec!["c2".to_owned()],
         vec![Value::from(1u16)],
@@ -512,7 +512,7 @@ async fn test_uint_filter() {
             )),
         ],
     );
-    batch_op.check_and_insert_up(
+    batch_op.check_and_upsert(
         vec![Value::from(3u8)],
         vec!["c2".to_owned()],
         vec![Value::from(1u16)],
