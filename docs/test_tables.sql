@@ -266,7 +266,7 @@ CREATE TABLE test_partition_aggregation (
 
 CREATE TABLE test_time (
     `c1` int NOT NULL,
-    `c2` datetime(6) DEFAULT NULL,
+    `c2` datetime DEFAULT NULL,
     `c3` timestamp DEFAULT NULL,
     PRIMARY KEY(`c1`)
 );

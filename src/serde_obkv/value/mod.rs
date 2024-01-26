@@ -249,6 +249,11 @@ impl ObjMeta {
         ObjMeta::new(obj_type, CollationLevel::Numeric, CollationType::Binary, -1)
     }
 
+    /// [`new_time_meta`] is for datetime and timestamp
+    pub fn new_time_meta(obj_type: ObjType) -> ObjMeta {
+        ObjMeta::new(obj_type, CollationLevel::Numeric, CollationType::Binary, 6)
+    }
+
     fn default_obj_meta(t: ObjType) -> ObjMeta {
         match t {
             ObjType::Null => ObjMeta::new(t, CollationLevel::Ignorable, CollationType::Binary, 10),
@@ -267,8 +272,8 @@ impl ObjMeta {
             ObjType::UDouble => ObjMeta::new_numeric_meta(t),
             ObjType::Number => ObjMeta::new_numeric_meta(t),
             ObjType::UNumber => ObjMeta::new_numeric_meta(t),
-            ObjType::DateTime => ObjMeta::new_numeric_meta(t),
-            ObjType::Timestamp => ObjMeta::new_numeric_meta(t),
+            ObjType::DateTime => ObjMeta::new_time_meta(t),
+            ObjType::Timestamp => ObjMeta::new_time_meta(t),
             ObjType::Date => ObjMeta::new_numeric_meta(t),
             ObjType::Time => ObjMeta::new_numeric_meta(t),
             ObjType::Year => ObjMeta::new_numeric_meta(t),
