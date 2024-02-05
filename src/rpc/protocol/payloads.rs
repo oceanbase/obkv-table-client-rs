@@ -35,7 +35,7 @@ use crate::{
     query::{ObNewRange, ObTableQuery},
     rpc::protocol::{
         codes::ResultCodes,
-        lsop::{ObTableSingleOp, ObTableSingleOpType, ObTableTabletOp, ObTableTabletOpFlag},
+        lsop::{ObTableSingleOp, ObTableTabletOp, ObTableTabletOpFlag},
         query_and_mutate::ObTableQueryAndMutate,
     },
     serde_obkv::{util, value::Value},
@@ -67,6 +67,29 @@ pub enum ObTableOperationType {
     Replace = 5,
     Increment = 6,
     Append = 7,
+    Scan = 8,
+    TTL = 9,
+    CheckAndInsertUp = 10,
+    Invalid = 11,
+}
+
+impl From<i8> for ObTableOperationType {
+    fn from(value: i8) -> Self {
+        match value {
+            0 => ObTableOperationType::Get,
+            1 => ObTableOperationType::Insert,
+            2 => ObTableOperationType::Del,
+            3 => ObTableOperationType::Update,
+            4 => ObTableOperationType::InsertOrUpdate,
+            5 => ObTableOperationType::Replace,
+            6 => ObTableOperationType::Increment,
+            7 => ObTableOperationType::Append,
+            8 => ObTableOperationType::Scan,
+            9 => ObTableOperationType::TTL,
+            10 => ObTableOperationType::CheckAndInsertUp,
+            _ => panic!("Invalid value for ObTableSingleOpType"),
+        }
+    }
 }
 
 impl ObTableOperationType {
@@ -80,6 +103,9 @@ impl ObTableOperationType {
             5 => Ok(ObTableOperationType::Replace),
             6 => Ok(ObTableOperationType::Increment),
             7 => Ok(ObTableOperationType::Append),
+            8 => Ok(ObTableOperationType::Scan),
+            9 => Ok(ObTableOperationType::TTL),
+            10 => Ok(ObTableOperationType::CheckAndInsertUp),
             _ => Err(io::Error::new(
                 std::io::ErrorKind::InvalidData,
                 format!("Invalid operation type: {i}"),
@@ -98,6 +124,27 @@ impl ObTableOperationType {
             ObTableOperationType::Replace => "replace",
             ObTableOperationType::Increment => "increment",
             ObTableOperationType::Append => "append",
+            ObTableOperationType::Scan => "scan",
+            ObTableOperationType::TTL => "TTL",
+            ObTableOperationType::CheckAndInsertUp => "check_and_upsert",
+            ObTableOperationType::Invalid => "invalid_type"
+        }
+    }
+
+    pub fn need_encode_query(&self) -> bool {
+        match self {
+            ObTableOperationType::Get => false,
+            ObTableOperationType::Insert => false,
+            ObTableOperationType::Del => false,
+            ObTableOperationType::Update => false,
+            ObTableOperationType::InsertOrUpdate => false,
+            ObTableOperationType::Replace => false,
+            ObTableOperationType::Increment => false,
+            ObTableOperationType::Append => false,
+            ObTableOperationType::Scan => false,
+            ObTableOperationType::TTL => false,
+            ObTableOperationType::CheckAndInsertUp => true,
+            ObTableOperationType::Invalid => false
         }
     }
 }
@@ -869,7 +916,7 @@ impl ObTableBatchOperation {
 
             // generate singele operation
             let single_op =
-                ObTableSingleOp::new(ObTableSingleOpType::QueryAndMutate, query_and_mutate);
+                ObTableSingleOp::new(ObTableOperationType::CheckAndInsertUp, query_and_mutate);
 
             ops.push(single_op);
         }
