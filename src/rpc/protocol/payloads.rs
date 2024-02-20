@@ -528,7 +528,7 @@ impl ObTableBatchOperation {
             read_only: true,
             same_type: true,
             same_properties_names: true,
-            atomic_op: true,
+            atomic_op: false,
             filters: Vec::new(),
             options: Vec::new(),
         }
