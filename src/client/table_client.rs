@@ -1641,7 +1641,7 @@ impl ObTableClient {
         // we need origin_idx to recover the result
         let mut part_batch_ops = HashMap::with_capacity(1);
         for (idx, op) in batch_op.take_raw_ops().into_iter().enumerate() {
-            let phy_id = self.inner.get_partition(&table_entry, &op.1)?;
+            let phy_id = self.inner.get_partition(&table_entry, &op.2)?;
             let (idx_vec, batch_op) = part_batch_ops
                 .entry(phy_id)
                 .or_insert_with(|| (Vec::new(), ObTableBatchOperation::new()));

@@ -731,6 +731,7 @@ async fn test_batch_insert_or_update_with_filter() {
     let mut batch_op = client.batch_operation(4);
     let filter_0 = ObTableValueFilter::new(ObCompareOperator::Equal, "c2".to_string(), "value");
     batch_op.check_and_upsert(
+        vec!["c1".to_string(), "c1sk".to_string()],
         vec![Value::from("Key_0"), Value::from("subKey_0")],
         vec!["c2".to_owned()],
         vec![Value::from("batchValue_0")],
@@ -739,6 +740,7 @@ async fn test_batch_insert_or_update_with_filter() {
     );
     let filter_0 = ObTableValueFilter::new(ObCompareOperator::Equal, "c2".to_string(), "value");
     batch_op.check_and_upsert(
+        vec!["c1".to_string(), "c1sk".to_string()],
         vec![Value::from("Key_1"), Value::from("subKey_1")],
         vec!["c2".to_owned()],
         vec![Value::from("batchValue_1")],
@@ -747,6 +749,7 @@ async fn test_batch_insert_or_update_with_filter() {
     );
     let filter_0 = ObTableValueFilter::new(ObCompareOperator::Equal, "c2".to_string(), "value");
     batch_op.check_and_upsert(
+        vec!["c1".to_string(), "c1sk".to_string()],
         vec![Value::from("Key_2"), Value::from("subKey_2")],
         vec!["c2".to_owned()],
         vec![Value::from("batchValue_2")],
@@ -755,6 +758,7 @@ async fn test_batch_insert_or_update_with_filter() {
     );
     let filter_0 = ObTableValueFilter::new(ObCompareOperator::Equal, "c2".to_string(), "value");
     batch_op.check_and_upsert(
+        vec!["c1".to_string(), "c1sk".to_string()],
         vec![Value::from("Key_3"), Value::from("subKey_3")],
         vec!["c2".to_owned()],
         vec![Value::from("batchValue_3")],
@@ -776,6 +780,7 @@ async fn test_batch_insert_or_update_with_filter() {
         ))],
     ));
     batch_op.check_and_upsert(
+        vec!["c1".to_string(), "c1sk".to_string()],
         vec![Value::from("Key_0"), Value::from("subKey_0")],
         vec!["c2".to_owned()],
         vec![Value::from("updateValue_0")],
@@ -798,6 +803,7 @@ async fn test_batch_insert_or_update_with_filter() {
         ],
     ));
     batch_op.check_and_upsert(
+        vec!["c1".to_string(), "c1sk".to_string()],
         vec![Value::from("Key_1"), Value::from("subKey_1")],
         vec!["c2".to_owned()],
         vec![Value::from("updateValue_1")],
@@ -813,6 +819,7 @@ async fn test_batch_insert_or_update_with_filter() {
         ))],
     ));
     batch_op.check_and_upsert(
+        vec!["c1".to_string(), "c1sk".to_string()],
         vec![Value::from("Key_2"), Value::from("subKey_2")],
         vec!["c2".to_owned()],
         vec![Value::from("updateValue_2")],
@@ -835,6 +842,7 @@ async fn test_batch_insert_or_update_with_filter() {
         ],
     ));
     batch_op.check_and_upsert(
+        vec!["c1".to_string(), "c1sk".to_string()],
         vec![Value::from("Key_3"), Value::from("subKey_3")],
         vec!["c2".to_owned()],
         vec![Value::from("updateValue_3")],

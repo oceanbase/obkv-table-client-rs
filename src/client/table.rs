@@ -18,10 +18,10 @@
 use std::{fmt::Formatter, time::Duration};
 
 use super::{ClientConfig, TableOpResult};
+use crate::payloads::ObTableOperationType::CheckAndInsertUp;
 use crate::{
     error::{CommonErrCode, Error::Common as CommonErr, Result},
     location::OB_INVALID_ID,
-    payloads::ObTableOperationType::InsertOrUpdate,
     rpc::{
         protocol::{codes::ResultCodes, lsop::*, payloads::*, ObPayload},
         proxy::Proxy,
@@ -70,7 +70,7 @@ impl ObTable {
     /// Execute batch operation
     pub async fn execute_batch(
         &self,
-        _table_name: &str,
+        table_name: &str,
         mut batch_op: ObTableBatchOperation,
     ) -> Result<Vec<TableOpResult>> {
         // check Log Stream Operation
@@ -85,7 +85,7 @@ impl ObTable {
 
             // check operation type
             for op in batch_op.get_ops() {
-                if op.get_type() != InsertOrUpdate {
+                if op.get_type() != CheckAndInsertUp {
                     return Err(CommonErr(
                         CommonErrCode::InvalidParam,
                         "All operations should be InsertOrUpdate if we use filter now".to_owned(),
@@ -95,13 +95,24 @@ impl ObTable {
 
             // generate ObTableTabletOp from batch operation
             let mut tablet_op = batch_op.generate_tablet_ops();
-            tablet_op.set_table_id(batch_op.table_id());
             tablet_op.set_partition_id(batch_op.partition_id());
 
             // construct ObTableLSOperation
             let mut ls_option = ObTableLSOpFlag::default();
             ls_option.set_flag_is_same_type(true);
-            let ls_op = ObTableLSOperation::internal_new(OB_INVALID_ID, ls_option, vec![tablet_op]);
+            let mut ls_op = ObTableLSOperation::internal_new(
+                OB_INVALID_ID,
+                table_name.to_string(),
+                batch_op.table_id(),
+                Vec::new(),
+                Vec::new(),
+                ls_option,
+                Vec::new(),
+            );
+            ls_op.add_op(tablet_op);
+
+            // adjust ObTableLSOperation
+            ls_op.prepare();
 
             let mut payload = ObTableLSOpRequest::new(
                 ls_op,
@@ -229,6 +240,31 @@ fn process_op_results(op_results: Vec<ObTableOperationResult>) -> Result<Vec<Tab
     Ok(results)
 }
 
+fn process_single_op_results(op_results: Vec<ObTableSingleOpResult>) -> Result<Vec<TableOpResult>> {
+    let mut results = Vec::with_capacity(op_results.len());
+    for op_res in op_results {
+        let error_no = op_res.header().errorno();
+        let result_code = ResultCodes::from_i32(error_no);
+
+        if result_code == ResultCodes::OB_SUCCESS {
+            let table_op_result = if op_res.operation_type() == ObTableOperationType::Get {
+                TableOpResult::RetrieveRows(op_res.take_entity().take_properties())
+            } else {
+                TableOpResult::AffectedRows(op_res.affected_rows())
+            };
+            results.push(table_op_result);
+        } else {
+            return Err(CommonErr(
+                CommonErrCode::ObException(result_code),
+                format!(
+                    "OBKV server return exception in log stream operations response: {op_res:?}."
+                ),
+            ));
+        }
+    }
+    Ok(results)
+}
+
 impl From<ObTableBatchOperationResult> for Result<Vec<TableOpResult>> {
     fn from(batch_result: ObTableBatchOperationResult) -> Result<Vec<TableOpResult>> {
         let op_results = batch_result.take_op_results();
@@ -239,6 +275,6 @@ impl From<ObTableBatchOperationResult> for Result<Vec<TableOpResult>> {
 impl From<ObTableLSOpResult> for Result<Vec<TableOpResult>> {
     fn from(ls_result: ObTableLSOpResult) -> Result<Vec<TableOpResult>> {
         let op_results = ls_result.take_op_results();
-        process_op_results(op_results)
+        process_single_op_results(op_results)
     }
 }

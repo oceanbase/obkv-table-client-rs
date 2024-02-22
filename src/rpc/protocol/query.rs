@@ -249,8 +249,16 @@ impl ObNewRange {
         &self.border_flag
     }
 
+    pub fn set_start_key(&mut self, start_key: ObRowKey) {
+        self.start_key = start_key;
+    }
+
     pub fn get_start_key(&self) -> &ObRowKey {
         &self.start_key
+    }
+
+    pub fn set_end_key(&mut self, end_key: ObRowKey) {
+        self.end_key = end_key;
     }
 
     pub fn get_end_key(&self) -> &ObRowKey {

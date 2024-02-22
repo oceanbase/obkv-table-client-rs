@@ -158,9 +158,9 @@ impl FilterEncoder for ObTableFilterList {
     }
 }
 
-#[derive(Debug, Clone)]
 /// Only support [`ObTableValueFilter`] on numeric type and string type
 /// The value will be encoded into string and will be parsed into filter in the server
+#[derive(Debug, Clone)]
 pub struct ObTableValueFilter {
     pub op: ObCompareOperator,
     pub column_name: String,

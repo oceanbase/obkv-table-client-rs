@@ -39,6 +39,8 @@ use super::{
 
 const VALUE_MAX: i64 = -2i64;
 const VALUE_MIN: i64 = -3i64;
+const DEFAULT_TABLE_OBJ_TYPE_SIZE: usize = 1usize;
+const DEFAULT_TABLE_OBJ_META_SIZE: usize = 4usize;
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub enum CollationType {
@@ -173,6 +175,79 @@ impl ObjType {
             _ => Err(Error::Custom(
                 format!("ObjType::from_u8 invalid ob obj type, v={v}").into(),
             )),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Hash, Eq, PartialEq, PartialOrd)]
+pub enum TableObjType {
+    Null = 0,
+    TinyInt = 1,
+    SmallInt = 2,
+    Int32 = 3,
+    Int64 = 4,
+    Varchar = 5,
+    Varbinary = 6,
+    Double = 7,
+    Float = 8,
+    Timestamp = 9,
+    DateTime = 10,
+    Min = 11,
+    Max = 12,
+    UTinyInt = 13,
+    USmallInt = 14,
+    UInt32 = 15,
+    UInt64 = 16,
+    Invalid = 17,
+}
+
+impl TableObjType {
+    pub fn from_u8(v: u8) -> Result<TableObjType> {
+        match v {
+            0 => Ok(TableObjType::Null),
+            1 => Ok(TableObjType::TinyInt),
+            2 => Ok(TableObjType::SmallInt),
+            3 => Ok(TableObjType::Int32),
+            4 => Ok(TableObjType::Int64),
+            5 => Ok(TableObjType::Varchar),
+            6 => Ok(TableObjType::Varbinary),
+            7 => Ok(TableObjType::Double),
+            8 => Ok(TableObjType::Float),
+            9 => Ok(TableObjType::Timestamp),
+            10 => Ok(TableObjType::DateTime),
+            11 => Ok(TableObjType::Min),
+            12 => Ok(TableObjType::Max),
+            13 => Ok(TableObjType::UTinyInt),
+            14 => Ok(TableObjType::USmallInt),
+            15 => Ok(TableObjType::UInt32),
+            16 => Ok(TableObjType::UInt64),
+            17 => Ok(TableObjType::Invalid),
+            _ => Err(Error::Custom(
+                format!("ObjType::from_u8 invalid ob obj type, v={v}").into(),
+            )),
+        }
+    }
+
+    pub fn to_obj_type(&self) -> ObjType {
+        match *self {
+            TableObjType::Null => ObjType::Null,
+            TableObjType::TinyInt => ObjType::TinyInt,
+            TableObjType::SmallInt => ObjType::SmallInt,
+            TableObjType::Int32 => ObjType::Int32,
+            TableObjType::Int64 => ObjType::Int64,
+            TableObjType::Varchar => ObjType::Varchar,
+            TableObjType::Varbinary => ObjType::Varchar,
+            TableObjType::Double => ObjType::Double,
+            TableObjType::Float => ObjType::Float,
+            TableObjType::Timestamp => ObjType::Timestamp,
+            TableObjType::DateTime => ObjType::DateTime,
+            TableObjType::Min => ObjType::Extend,
+            TableObjType::Max => ObjType::Extend,
+            TableObjType::UTinyInt => ObjType::UTinyInt,
+            TableObjType::USmallInt => ObjType::USmallInt,
+            TableObjType::UInt32 => ObjType::UInt32,
+            TableObjType::UInt64 => ObjType::UInt64,
+            _ => ObjType::Null,
         }
     }
 }
@@ -487,6 +562,47 @@ impl Value {
         self.is_max() || self.is_min()
     }
 
+    pub fn table_obj_type(&self) -> TableObjType {
+        match *self {
+            Value::Null(ref meta) => TableObjType::Null,
+            Value::Bool(b, ref meta) => TableObjType::TinyInt,
+            Value::Int8(v, ref meta) => TableObjType::TinyInt,
+            Value::UInt8(v, ref meta) => TableObjType::UTinyInt,
+            Value::Int32(v, ref meta) => TableObjType::Int32,
+            Value::Int64(v, ref meta) => match meta.obj_type {
+                ObjType::Int64 => TableObjType::Int64,
+                ObjType::Extend => {
+                    if self.is_max() {
+                        TableObjType::Max
+                    } else if self.is_min() {
+                        TableObjType::Min
+                    } else {
+                        TableObjType::Invalid
+                    }
+                }
+                _ => TableObjType::Invalid,
+            },
+            Value::UInt32(v, ref meta) => TableObjType::UInt32,
+            Value::UInt64(v, ref meta) => TableObjType::UInt64,
+            Value::Float(f, ref meta) => TableObjType::Float,
+            Value::Double(f, ref meta) => TableObjType::Double,
+            Value::Date(d, ref meta) => TableObjType::Invalid,
+            Value::Time(d, ref meta) => match meta.obj_type {
+                ObjType::DateTime => TableObjType::DateTime,
+                ObjType::Timestamp => TableObjType::Timestamp,
+                _ => TableObjType::Invalid,
+            },
+            Value::Bytes(ref vc, ref meta) => match meta.obj_type {
+                ObjType::Varchar => TableObjType::Varchar,
+                _ => TableObjType::Invalid,
+            },
+            Value::String(ref s, ref meta) => match meta.obj_type {
+                ObjType::Varchar => TableObjType::Varchar,
+                _ => TableObjType::Invalid,
+            },
+        }
+    }
+
     pub fn len(&self) -> usize {
         match *self {
             Value::Null(ref meta) => meta.len(),
@@ -508,6 +624,49 @@ impl Value {
             }
             Value::String(ref s, ref meta) => {
                 meta.len() + util::encoded_length_vi32(s.len() as i32) + s.len() + 1
+            }
+        }
+    }
+
+    pub fn table_obj_len(&self) -> usize {
+        match *self {
+            Value::Null(ref meta) => DEFAULT_TABLE_OBJ_TYPE_SIZE,
+            Value::Bool(_, ref meta) => DEFAULT_TABLE_OBJ_TYPE_SIZE + 1,
+            Value::Int8(_, ref meta) => DEFAULT_TABLE_OBJ_TYPE_SIZE + 1,
+            Value::UInt8(_, ref meta) => DEFAULT_TABLE_OBJ_TYPE_SIZE + 1,
+            Value::Int32(v, ref meta) => DEFAULT_TABLE_OBJ_TYPE_SIZE + util::encoded_length_vi32(v),
+            Value::Int64(v, ref meta) => {
+                if self.is_min() || self.is_max() {
+                    DEFAULT_TABLE_OBJ_TYPE_SIZE
+                } else {
+                    DEFAULT_TABLE_OBJ_TYPE_SIZE + util::encoded_length_vi64(v)
+                }
+            }
+            Value::UInt32(v, ref meta) => {
+                DEFAULT_TABLE_OBJ_TYPE_SIZE + util::encoded_length_vi32(v as i32)
+            }
+            Value::UInt64(v, ref meta) => {
+                DEFAULT_TABLE_OBJ_TYPE_SIZE + util::encoded_length_vi64(v as i64)
+            }
+            Value::Float(f, ref meta) => {
+                DEFAULT_TABLE_OBJ_TYPE_SIZE + util::encoded_length_vi32(f.to_bits() as i32)
+            }
+            Value::Double(f, ref meta) => {
+                DEFAULT_TABLE_OBJ_TYPE_SIZE + util::encoded_length_vi64(f.to_bits() as i64)
+            }
+            Value::Date(d, ref meta) => meta.len() + util::encoded_length_vi32(d),
+            Value::Time(d, ref meta) => meta.len() + util::encoded_length_vi64(d),
+            Value::Bytes(ref vc, ref meta) => {
+                DEFAULT_TABLE_OBJ_TYPE_SIZE
+                    + util::encoded_length_vi32(vc.len() as i32)
+                    + vc.len()
+                    + 1
+            }
+            Value::String(ref s, ref meta) => {
+                DEFAULT_TABLE_OBJ_TYPE_SIZE
+                    + util::encoded_length_vi32(s.len() as i32)
+                    + s.len()
+                    + 1
             }
         }
     }
@@ -538,6 +697,59 @@ impl Value {
             ObjType::Time => unimplemented!(),
             ObjType::Year => unimplemented!(),
             ObjType::Varchar => Self::decode_binary(buf, meta),
+            ObjType::Char => Self::decode_binary(buf, meta),
+            // TODO: ObjType::HexString
+            ObjType::Extend => Ok(Value::Int64(decode_vi64(buf)?, meta)),
+            ObjType::TinyText => Self::decode_binary(buf, meta),
+            ObjType::Text => Self::decode_binary(buf, meta),
+            ObjType::MediumText => Self::decode_binary(buf, meta),
+            ObjType::LongText => Self::decode_binary(buf, meta),
+            ObjType::Bit => Ok(Value::Int64(decode_vi64(buf)?, meta)),
+            _ => Err(Error::Custom("Unsupported obj type.".into())),
+        }
+    }
+
+    pub fn table_obj_decode(buf: &mut BytesMut, table_obj_type: TableObjType) -> Result<Value> {
+        let obj_type = table_obj_type.to_obj_type();
+        let mut meta = ObjMeta::default_obj_meta(obj_type.clone());
+
+        match obj_type {
+            ObjType::Null => Ok(Value::default()),
+            ObjType::TinyInt => Ok(Value::Int8(decode_i8(buf)?, meta)),
+            ObjType::SmallInt => Ok(Value::Int32(decode_vi32(buf)?, meta)),
+            ObjType::Int32 => Ok(Value::Int32(decode_vi32(buf)?, meta)),
+            ObjType::Int64 => match table_obj_type {
+                TableObjType::Min => Ok(Value::Int64(-2, meta)),
+                TableObjType::Max => Ok(Value::Int64(-3, meta)),
+                _ => Ok(Value::Int64(decode_vi64(buf)?, meta)),
+            },
+            ObjType::UTinyInt => Ok(Value::UInt8(decode_u8(buf)?, meta)),
+            ObjType::USmallInt => Ok(Value::UInt32(decode_vi32(buf)? as u32, meta)),
+            ObjType::UMediumInt => Ok(Value::UInt32(decode_vi32(buf)? as u32, meta)),
+            ObjType::UInt32 => Ok(Value::UInt32(decode_vi32(buf)? as u32, meta)),
+            ObjType::UInt64 => Ok(Value::UInt64(decode_vi64(buf)? as u64, meta)),
+            ObjType::Float => Ok(Value::Float(decode_f32(buf)?, meta)),
+            ObjType::Double => Ok(Value::Double(decode_f64(buf)?, meta)),
+            ObjType::UFloat => Ok(Value::Float(decode_f32(buf)?, meta)),
+            ObjType::UDouble => Ok(Value::Double(decode_f64(buf)?, meta)),
+            //FIXME date and time
+            ObjType::DateTime => {
+                meta = ObjMeta::decode(buf)?;
+                Ok(Value::Time(decode_vi64(buf)?, meta))
+            }
+            ObjType::Timestamp => {
+                meta = ObjMeta::decode(buf)?;
+                Ok(Value::Time(decode_vi64(buf)?, meta))
+            }
+            ObjType::Date => unimplemented!(),
+            ObjType::Time => unimplemented!(),
+            ObjType::Year => unimplemented!(),
+            ObjType::Varchar => {
+                if table_obj_type == TableObjType::Varbinary {
+                    meta.cs_type = CollationType::Binary
+                }
+                Self::decode_binary(buf, meta)
+            }
             ObjType::Char => Self::decode_binary(buf, meta),
             // TODO: ObjType::HexString
             ObjType::Extend => Ok(Value::Int64(decode_vi64(buf)?, meta)),
@@ -614,6 +826,83 @@ impl Value {
             }
             Value::String(ref s, ref meta) => {
                 meta.encode(buf)?;
+                encode_vstring(s, buf)
+            }
+        }
+    }
+
+    pub fn table_obj_encode(&self, buf: &mut BytesMut) -> Result<()> {
+        let table_obj_type = self.table_obj_type();
+        match *self {
+            Value::Null(ref meta) => {
+                buf.put_i8(table_obj_type as i8);
+                Ok(())
+            }
+            Value::Bool(b, ref meta) => {
+                buf.put_i8(table_obj_type as i8);
+                if b {
+                    buf.put_u8(1);
+                } else {
+                    buf.put_u8(0);
+                }
+                Ok(())
+            }
+            Value::Int8(v, ref meta) => {
+                buf.put_i8(table_obj_type as i8);
+                buf.put_i8(v);
+                Ok(())
+            }
+            Value::UInt8(v, ref meta) => {
+                buf.put_i8(table_obj_type as i8);
+                Ok(())
+            }
+            Value::Int32(v, ref meta) => {
+                buf.put_i8(table_obj_type as i8);
+                encode_vi32(v, buf)
+            }
+            Value::Int64(v, ref meta) => {
+                buf.put_i8(table_obj_type as i8);
+                if self.is_min() || self.is_max() {
+                    // Min & Max do not need to encode value
+                    return Ok(());
+                }
+                encode_vi64(v, buf)
+            }
+            Value::UInt32(v, ref meta) => {
+                buf.put_i8(table_obj_type as i8);
+                encode_vi32(v as i32, buf)
+            }
+            Value::UInt64(v, ref meta) => {
+                buf.put_i8(table_obj_type as i8);
+                encode_vi64(v as i64, buf)
+            }
+            Value::Float(f, ref meta) => {
+                buf.put_i8(table_obj_type as i8);
+                encode_f32(f, buf)
+            }
+            Value::Double(f, ref meta) => {
+                buf.put_i8(table_obj_type as i8);
+                encode_f64(f, buf)
+            }
+            Value::Date(d, ref meta) => {
+                buf.put_i8(table_obj_type as i8);
+                encode_vi32(d, buf)
+            }
+            Value::Time(d, ref meta) => {
+                // datetime & timestamp use origin meta
+                meta.encode(buf)?;
+                encode_vi64(d, buf)
+            }
+            Value::Bytes(ref vc, ref meta) => {
+                buf.put_i8(table_obj_type as i8);
+                //refactor encode binary
+                encode_vi32(vc.len() as i32, buf)?;
+                buf.put_slice(&vc[..]);
+                buf.put_i8(0);
+                Ok(())
+            }
+            Value::String(ref s, ref meta) => {
+                buf.put_i8(table_obj_type as i8);
                 encode_vstring(s, buf)
             }
         }

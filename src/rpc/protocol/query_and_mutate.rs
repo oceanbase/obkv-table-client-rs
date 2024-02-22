@@ -83,10 +83,7 @@ impl Default for ObTableQueryAndMutate {
 }
 
 impl ObTableQueryAndMutate {
-    pub fn internal_new(
-        query: Option<ObTableQuery>,
-        mutations: Option<ObTableBatchOperation>,
-    ) -> Self {
+    fn internal_new(query: Option<ObTableQuery>, mutations: Option<ObTableBatchOperation>) -> Self {
         Self {
             base: BasePayLoad::dummy(),
             query,
