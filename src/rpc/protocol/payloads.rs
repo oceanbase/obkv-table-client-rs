@@ -149,11 +149,21 @@ impl ObTableOperationType {
     }
 }
 
+/// OB Obj encode type
+/// [`ObjType`] or [`TableObjType`]
+#[derive(Default, Debug, Clone, PartialEq, Copy)]
+pub enum ObjEncodeType {
+    #[default]
+    Obj = 0,
+    TableObj = 1,
+}
+
 /// OB row key list.
 #[derive(Default, Debug, Clone, PartialEq)]
 pub struct ObRowKey {
     column_names: Vec<String>,
     keys: Vec<Value>,
+    obj_type: ObjEncodeType,
 }
 
 impl ObRowKey {
@@ -161,6 +171,15 @@ impl ObRowKey {
         ObRowKey {
             column_names: Vec::with_capacity(0),
             keys,
+            obj_type: ObjEncodeType::Obj,
+        }
+    }
+
+    pub fn new_with_obj_type(keys: Vec<Value>, obj_type: ObjEncodeType) -> ObRowKey {
+        ObRowKey {
+            column_names: Vec::with_capacity(0),
+            keys,
+            obj_type,
         }
     }
 
@@ -184,12 +203,25 @@ impl ObRowKey {
         self.keys
     }
 
+    pub fn set_obj_type(&mut self, obj_type: ObjEncodeType) {
+        self.obj_type = obj_type;
+    }
+
     pub fn content_len(&self) -> Result<usize> {
         let mut len: usize = 0;
         len += util::encoded_length_vi64(self.keys.len() as i64);
 
-        for key in &self.keys {
-            len += key.len();
+        match &self.obj_type {
+            ObjEncodeType::Obj => {
+                for key in &self.keys {
+                    len += key.len();
+                }
+            }
+            ObjEncodeType::TableObj => {
+                for key in &self.keys {
+                    len += key.table_obj_len();
+                }
+            }
         }
 
         Ok(len)
@@ -200,8 +232,17 @@ impl ProtoEncoder for ObRowKey {
     fn encode(&self, buf: &mut BytesMut) -> Result<()> {
         util::encode_vi64(self.keys.len() as i64, buf)?;
 
-        for key in &self.keys {
-            key.encode(buf)?;
+        match &self.obj_type {
+            ObjEncodeType::Obj => {
+                for key in &self.keys {
+                    key.encode(buf)?;
+                }
+            }
+            ObjEncodeType::TableObj => {
+                for key in &self.keys {
+                    key.table_obj_encode(buf)?;
+                }
+            }
         }
 
         Ok(())
@@ -983,8 +1024,9 @@ impl ObTableBatchOperation {
 
             // generate query
             let range = ObNewRange::from_keys(row_key.keys.clone(), row_key.keys.clone());
-            let mut query = ObTableSingleOpQuery::new(Vec::new(), vec![range]);
+            let mut query = ObTableSingleOpQuery::new(row_key.column_names.clone(), vec![range]);
             query.set_filter_string(filter_string);
+            query.set_obj_type(ObjEncodeType::TableObj);
 
             // generate single op
             let mut single_op = ObTableSingleOp::new(ObTableOperationType::CheckAndInsertUp);
@@ -1740,6 +1782,7 @@ mod test {
             row_key: ObRowKey {
                 column_names: vec!["rowKey".to_string()],
                 keys: vec![Value::from("test")],
+                obj_type: ObjEncodeType::Obj,
             },
             properties: HashMap::new(),
         };

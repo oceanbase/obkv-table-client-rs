@@ -568,7 +568,10 @@ impl Value {
             Value::Bool(b, ref meta) => TableObjType::TinyInt,
             Value::Int8(v, ref meta) => TableObjType::TinyInt,
             Value::UInt8(v, ref meta) => TableObjType::UTinyInt,
-            Value::Int32(v, ref meta) => TableObjType::Int32,
+            Value::Int32(v, ref meta) => match meta.obj_type {
+                ObjType::SmallInt => TableObjType::SmallInt,
+                _ => TableObjType::Int32,
+            },
             Value::Int64(v, ref meta) => match meta.obj_type {
                 ObjType::Int64 => TableObjType::Int64,
                 ObjType::Extend => {
@@ -582,7 +585,10 @@ impl Value {
                 }
                 _ => TableObjType::Invalid,
             },
-            Value::UInt32(v, ref meta) => TableObjType::UInt32,
+            Value::UInt32(v, ref meta) => match meta.obj_type {
+                ObjType::USmallInt => TableObjType::USmallInt,
+                _ => TableObjType::UInt32,
+            },
             Value::UInt64(v, ref meta) => TableObjType::UInt64,
             Value::Float(f, ref meta) => TableObjType::Float,
             Value::Double(f, ref meta) => TableObjType::Double,
@@ -854,6 +860,7 @@ impl Value {
             }
             Value::UInt8(v, ref meta) => {
                 buf.put_i8(table_obj_type as i8);
+                buf.put_u8(v);
                 Ok(())
             }
             Value::Int32(v, ref meta) => {

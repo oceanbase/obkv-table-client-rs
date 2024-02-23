@@ -26,11 +26,11 @@ use std::{cmp, time::Duration};
 use bytes::{Buf, BufMut, BytesMut};
 use linked_hash_map::LinkedHashMap;
 
-use crate::payloads::{ObRowKey, ObTableOperationType, ObTableResult};
+use crate::payloads::{ObRowKey, ObTableOperationType, ObTableResult, ObjEncodeType};
 use crate::query::ObNewRange;
 use crate::rpc::protocol::TraceId;
 use crate::serde_obkv::util::decode_u8;
-use crate::util::decode_value;
+use crate::util::decode_table_value;
 use crate::{
     location::OB_INVALID_ID,
     payloads::{ObTableConsistencyLevel, ObTableEntityType},
@@ -274,6 +274,12 @@ impl ObTableSingleOpQuery {
         self.filter_string = filter_string
     }
 
+    pub fn set_obj_type(&mut self, obj_type: ObjEncodeType) {
+        for key_range in &mut self.key_ranges {
+            key_range.set_obj_type(obj_type);
+        }
+    }
+
     pub fn scan_range_columns(&self) -> &Vec<String> {
         &self.scan_range_columns
     }
@@ -316,8 +322,14 @@ impl ObTableSingleOpQuery {
                 .map(|pair| end_key.keys()[pair.origin_idx as usize].clone())
                 .collect();
 
-            range.set_start_key(ObRowKey::new(adjust_start_key));
-            range.set_end_key(ObRowKey::new(adjust_end_key));
+            range.set_start_key(ObRowKey::new_with_obj_type(
+                adjust_start_key,
+                ObjEncodeType::TableObj,
+            ));
+            range.set_end_key(ObRowKey::new_with_obj_type(
+                adjust_end_key,
+                ObjEncodeType::TableObj,
+            ));
         }
 
         self.scan_range_cols_bm = byte_array;
@@ -505,21 +517,20 @@ impl ObTableSingleOpEntity {
 
         // rearrange row key names
         let mut res_row_key = Vec::with_capacity(column_name_idx.len());
-        for pair in pairs {
+        for pair in &pairs {
             res_row_key.push(self.row_key[pair.origin_idx as usize].to_owned());
         }
         self.row_key = res_row_key;
-
         self.row_key_bitmap = byte_array;
     }
 
     pub fn adjust_properties_column_name(&mut self, column_name_idx_map: &HashMap<String, i64>) {
-        if !self.ignore_encode_properties_col_names {
+        if self.ignore_encode_properties_col_names {
             self.properties_bit_len = 0usize;
         } else {
-            return;
+            self.properties_bit_len = column_name_idx_map.len();
         }
-        let size = (self.properties_bit_len as f64 / 8.0).ceil() as usize;
+        let size = (column_name_idx_map.len() as f64 / 8.0).ceil() as usize;
         let mut byte_array = vec![0u8; size];
         let mut column_name_idx = Vec::with_capacity(self.properties.len());
 
@@ -543,12 +554,11 @@ impl ObTableSingleOpEntity {
         pairs.sort();
 
         // rearrange properties names
-        let mut res_properties_names = Vec::with_capacity(column_name_idx.len());
-        for pair in pairs {
-            res_properties_names.push(self.properties_names[pair.origin_idx as usize].to_owned());
+        let mut res_properties = Vec::with_capacity(column_name_idx.len());
+        for pair in &pairs {
+            res_properties.push(self.properties[pair.origin_idx as usize].to_owned());
         }
-        self.properties_names = res_properties_names;
-
+        self.properties = res_properties;
         self.properties_bitmap = byte_array;
     }
 }
@@ -569,7 +579,7 @@ impl ObPayload for ObTableSingleOpEntity {
         len += self.row_key_bitmap.len();
         len += util::encoded_length_vi64(self.row_key.len() as i64);
         for rk in &self.row_key {
-            len += rk.len();
+            len += rk.table_obj_len();
         }
         if self.ignore_encode_properties_col_names {
             len += util::encoded_length_vi64(0i64);
@@ -579,7 +589,7 @@ impl ObPayload for ObTableSingleOpEntity {
         }
         len += util::encoded_length_vi64(self.properties.len() as i64);
         for ppt in &self.properties {
-            len += ppt.len();
+            len += ppt.table_obj_len();
         }
         Ok(len)
     }
@@ -588,13 +598,13 @@ impl ObPayload for ObTableSingleOpEntity {
 impl ProtoEncoder for ObTableSingleOpEntity {
     fn encode(&self, buf: &mut BytesMut) -> Result<()> {
         self.encode_header(buf)?;
-        // 1. encode rowkey bitmap
+        // 1. encode row key bitmap
         util::encode_vi64(self.row_key_bit_len as i64, buf)?;
         buf.put_slice(&self.row_key_bitmap);
-        // 2. encode rowkey
+        // 2. encode row key
         util::encode_vi64(self.row_key.len() as i64, buf)?;
         for key in &self.row_key {
-            key.encode(buf)?;
+            key.table_obj_encode(buf)?;
         }
         // 3. encode properties bitmap
         if self.ignore_encode_properties_col_names {
@@ -606,7 +616,7 @@ impl ProtoEncoder for ObTableSingleOpEntity {
         // 4. encode properties
         util::encode_vi64(self.properties.len() as i64, buf)?;
         for key in &self.properties {
-            key.encode(buf)?;
+            key.table_obj_encode(buf)?;
         }
         Ok(())
     }
@@ -633,7 +643,7 @@ impl ProtoDecoder for ObTableSingleOpEntity {
         self.row_key.clear();
         let row_key_len = util::decode_vi64(src)?;
         for _ in 0..row_key_len {
-            self.row_key.push(decode_value(src)?);
+            self.row_key.push(decode_table_value(src)?);
         }
 
         // 3. properties bitmaps
@@ -653,7 +663,7 @@ impl ProtoDecoder for ObTableSingleOpEntity {
         self.properties_names.clear();
         let properties_len = util::decode_vi64(src)?;
         for _ in 0..properties_len {
-            self.properties.push(decode_value(src)?);
+            self.properties.push(decode_table_value(src)?);
         }
 
         Ok(())
@@ -1173,6 +1183,7 @@ impl ObTableLSOperation {
 
         // adjust is_same_type
         if self.is_same_type()
+            && !self.tablet_ops.is_empty()
             && (!op.is_same_type()
                 || (!op.single_ops().is_empty()
                     && op.single_ops()[0].single_op_type()
