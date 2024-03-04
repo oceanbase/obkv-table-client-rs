@@ -247,7 +247,7 @@ impl TableObjType {
             TableObjType::USmallInt => ObjType::USmallInt,
             TableObjType::UInt32 => ObjType::UInt32,
             TableObjType::UInt64 => ObjType::UInt64,
-            _ => ObjType::Null,
+            TableObjType::Invalid => unreachable!(),
         }
     }
 }

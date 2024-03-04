@@ -59,9 +59,10 @@ impl From<ObTableOperationType> for ObClientOpRecordType {
             ObTableOperationType::Replace => ObClientOpRecordType::Replace,
             ObTableOperationType::Increment => ObClientOpRecordType::Increment,
             ObTableOperationType::Append => ObClientOpRecordType::Append,
+            ObTableOperationType::Scan => unreachable!(),
+            ObTableOperationType::TTL => unreachable!(),
             ObTableOperationType::CheckAndInsertUp => ObClientOpRecordType::CheckAndDo,
             ObTableOperationType::Invalid => ObClientOpRecordType::Invalid,
-            _ => unimplemented!(),
         }
     }
 }

@@ -201,7 +201,7 @@ async fn test_batch_insert_or_update_with_filter() {
     let client_handle = task::spawn_blocking(utils::common::build_normal_client);
     let client = client_handle.await.unwrap();
     const TABLE_NAME: &str = "TEST_TABLE_BATCH_HASH";
-    client.add_row_key_element(TABLE_NAME, vec!["c1".to_string(), "c1sb".to_string()]);
+    client.add_row_key_element(TABLE_NAME, vec!["c1".to_string(), "c1sk".to_string()]);
 
     // delete previous data
     let mut batch_op = client.batch_operation(4);
