@@ -38,6 +38,8 @@ pub enum ObClientOpRecordType {
     Batch = 8,
     Query = 9,
     StreamQuery = 10,
+    CheckAndDo = 11,
+    Invalid = 12,
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelValue)]
@@ -57,6 +59,10 @@ impl From<ObTableOperationType> for ObClientOpRecordType {
             ObTableOperationType::Replace => ObClientOpRecordType::Replace,
             ObTableOperationType::Increment => ObClientOpRecordType::Increment,
             ObTableOperationType::Append => ObClientOpRecordType::Append,
+            ObTableOperationType::Scan => unreachable!(),
+            ObTableOperationType::TTL => unreachable!(),
+            ObTableOperationType::CheckAndInsertUp => ObClientOpRecordType::CheckAndDo,
+            ObTableOperationType::Invalid => ObClientOpRecordType::Invalid,
         }
     }
 }

@@ -226,6 +226,17 @@ pub fn encode_bytes_string(v: &[u8], buf: &mut BytesMut) -> Result<()> {
     Ok(())
 }
 
+pub fn encoded_length_bytes_slice(v: &[u8]) -> usize {
+    encoded_length_vi64(v.len() as i64) + v.len()
+}
+
+pub fn encode_bytes_slice(v: &[u8], buf: &mut BytesMut) -> Result<()> {
+    buf.reserve(encoded_length_bytes_string(v));
+    encode_vi64(v.len() as i64, buf)?;
+    buf.put_slice(v);
+    Ok(())
+}
+
 pub fn decode_bytes(buf: &mut BytesMut) -> Result<Vec<u8>> {
     let len = decode_vi32(buf)? as usize;
     if len == 0 {

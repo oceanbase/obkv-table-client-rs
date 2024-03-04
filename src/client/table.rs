@@ -18,10 +18,12 @@
 use std::{fmt::Formatter, time::Duration};
 
 use super::{ClientConfig, TableOpResult};
+use crate::payloads::ObTableOperationType::CheckAndInsertUp;
 use crate::{
     error::{CommonErrCode, Error::Common as CommonErr, Result},
+    location::OB_INVALID_ID,
     rpc::{
-        protocol::{codes::ResultCodes, payloads::*, ObPayload},
+        protocol::{codes::ResultCodes, lsop::*, payloads::*, ObPayload},
         proxy::Proxy,
     },
 };
@@ -68,19 +70,74 @@ impl ObTable {
     /// Execute batch operation
     pub async fn execute_batch(
         &self,
-        _table_name: &str,
-        batch_op: ObTableBatchOperation,
+        table_name: &str,
+        mut batch_op: ObTableBatchOperation,
     ) -> Result<Vec<TableOpResult>> {
-        let mut payload = ObTableBatchOperationRequest::new(
-            batch_op,
-            self.config.rpc_operation_timeout,
-            self.config.log_level_flag,
-        );
-        let mut result = ObTableBatchOperationResult::new();
+        // check Log Stream Operation
+        if !batch_op.get_filters().is_empty() {
+            // check filters is all exist
+            if batch_op.ops_len() != batch_op.get_filters().len() {
+                return Err(CommonErr(
+                    CommonErrCode::InvalidParam,
+                    "All operation should have filters or not (checkAndDo() can not do with other operation in batch now)".to_owned(),
+                ));
+            }
 
-        self.rpc_proxy.execute(&mut payload, &mut result).await?;
+            // check operation type
+            for op in batch_op.get_ops() {
+                if op.get_type() != CheckAndInsertUp {
+                    return Err(CommonErr(
+                        CommonErrCode::InvalidParam,
+                        "All operations should be InsertOrUpdate if we use filter now".to_owned(),
+                    ));
+                }
+            }
 
-        result.into()
+            // generate ObTableTabletOp from batch operation
+            let mut tablet_op = batch_op.generate_tablet_ops();
+            tablet_op.set_partition_id(batch_op.partition_id());
+
+            // construct ObTableLSOperation
+            let mut ls_option = ObTableLSOpFlag::default();
+            ls_option.set_flag_is_same_type(true);
+            let mut ls_op = ObTableLSOperation::internal_new(
+                OB_INVALID_ID,
+                table_name.to_string(),
+                batch_op.table_id(),
+                Vec::new(),
+                Vec::new(),
+                ls_option,
+                Vec::new(),
+            );
+            ls_op.add_op(tablet_op);
+
+            // adjust ObTableLSOperation
+            ls_op.prepare();
+
+            let mut payload = ObTableLSOpRequest::new(
+                ls_op,
+                self.config.rpc_operation_timeout,
+                self.config.log_level_flag,
+            );
+
+            let mut result = ObTableLSOpResult::new();
+
+            self.rpc_proxy.execute(&mut payload, &mut result).await?;
+
+            // we just return the ans in the order of input
+            result.into()
+        } else {
+            let mut payload = ObTableBatchOperationRequest::new(
+                batch_op,
+                self.config.rpc_operation_timeout,
+                self.config.log_level_flag,
+            );
+            let mut result = ObTableBatchOperationResult::new();
+
+            self.rpc_proxy.execute(&mut payload, &mut result).await?;
+
+            result.into()
+        }
     }
 
     /// return addr
@@ -159,28 +216,65 @@ impl Builder {
     }
 }
 
+fn process_op_results(op_results: Vec<ObTableOperationResult>) -> Result<Vec<TableOpResult>> {
+    let mut results = Vec::with_capacity(op_results.len());
+    for op_res in op_results {
+        let error_no = op_res.header().errorno();
+        let result_code = ResultCodes::from_i32(error_no);
+
+        // op error
+        if result_code == ResultCodes::OB_SUCCESS {
+            let table_op_result = if op_res.operation_type() == ObTableOperationType::Get {
+                TableOpResult::RetrieveRows(op_res.take_entity().take_properties())
+            } else {
+                TableOpResult::AffectedRows(op_res.affected_rows())
+            };
+            results.push(table_op_result);
+        } else {
+            return Err(CommonErr(
+                CommonErrCode::ObException(result_code),
+                format!("OBKV server return exception in batch response: {op_res:?}."),
+            ));
+        }
+    }
+    Ok(results)
+}
+
+fn process_single_op_results(op_results: Vec<ObTableSingleOpResult>) -> Result<Vec<TableOpResult>> {
+    let mut results = Vec::with_capacity(op_results.len());
+    for op_res in op_results {
+        let error_no = op_res.header().errorno();
+        let result_code = ResultCodes::from_i32(error_no);
+
+        if result_code == ResultCodes::OB_SUCCESS {
+            let table_op_result = if op_res.operation_type() == ObTableOperationType::Get {
+                TableOpResult::RetrieveRows(op_res.take_entity().take_properties())
+            } else {
+                TableOpResult::AffectedRows(op_res.affected_rows())
+            };
+            results.push(table_op_result);
+        } else {
+            return Err(CommonErr(
+                CommonErrCode::ObException(result_code),
+                format!(
+                    "OBKV server return exception in log stream operations response: {op_res:?}."
+                ),
+            ));
+        }
+    }
+    Ok(results)
+}
+
 impl From<ObTableBatchOperationResult> for Result<Vec<TableOpResult>> {
     fn from(batch_result: ObTableBatchOperationResult) -> Result<Vec<TableOpResult>> {
         let op_results = batch_result.take_op_results();
-        let mut results = Vec::with_capacity(op_results.len());
-        for op_res in op_results {
-            let error_no = op_res.header().errorno();
-            let result_code = ResultCodes::from_i32(error_no);
+        process_op_results(op_results)
+    }
+}
 
-            if result_code == ResultCodes::OB_SUCCESS {
-                let table_op_result = if op_res.operation_type() == ObTableOperationType::Get {
-                    TableOpResult::RetrieveRows(op_res.take_entity().take_properties())
-                } else {
-                    TableOpResult::AffectedRows(op_res.affected_rows())
-                };
-                results.push(table_op_result);
-            } else {
-                return Err(CommonErr(
-                    CommonErrCode::ObException(result_code),
-                    format!("OBKV server return exception in batch response: {op_res:?}."),
-                ));
-            }
-        }
-        Ok(results)
+impl From<ObTableLSOpResult> for Result<Vec<TableOpResult>> {
+    fn from(ls_result: ObTableLSOpResult) -> Result<Vec<TableOpResult>> {
+        let op_results = ls_result.take_op_results();
+        process_single_op_results(op_results)
     }
 }

@@ -23,7 +23,7 @@ use std::{
 use bytes::BytesMut;
 use chrono::Utc;
 
-use crate::serde_obkv::value::{ObjType, Value};
+use crate::serde_obkv::value::{ObjType, TableObjType, Value};
 
 pub mod obversion;
 pub mod permit;
@@ -84,4 +84,10 @@ pub fn string_from_bytes(bs: &[u8]) -> String {
 pub fn decode_value(src: &mut BytesMut) -> std::result::Result<Value, std::io::Error> {
     let obj_type = ObjType::from_u8(*src.first().unwrap())?;
     Ok(Value::decode(src, obj_type)?)
+}
+
+#[inline]
+pub fn decode_table_value(src: &mut BytesMut) -> std::result::Result<Value, std::io::Error> {
+    let obj_type = TableObjType::from_u8(*src.first().unwrap())?;
+    Ok(Value::table_obj_decode(src, obj_type)?)
 }

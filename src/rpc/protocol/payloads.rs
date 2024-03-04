@@ -29,9 +29,15 @@ use bytes::{Buf, BufMut, BytesMut};
 use super::{
     BasePayLoad, ObPayload, ObTablePacketCode, ProtoDecoder, ProtoEncoder, Result, TraceId,
 };
+use crate::filter::FilterEncoder;
+use crate::rpc::protocol::lsop::{ObTableSingleOpEntity, ObTableSingleOpQuery};
 use crate::{
     location::OB_INVALID_ID,
-    rpc::protocol::codes::ResultCodes,
+    query::ObNewRange,
+    rpc::protocol::{
+        codes::ResultCodes,
+        lsop::{ObTableSingleOp, ObTableTabletOp, ObTableTabletOpFlag},
+    },
     serde_obkv::{util, value::Value},
     util::{
         decode_value, duration_to_millis, obversion::ob_vsn_major, security, string_from_bytes,
@@ -61,6 +67,29 @@ pub enum ObTableOperationType {
     Replace = 5,
     Increment = 6,
     Append = 7,
+    Scan = 8,
+    TTL = 9,
+    CheckAndInsertUp = 10,
+    Invalid = 11,
+}
+
+impl From<i8> for ObTableOperationType {
+    fn from(value: i8) -> Self {
+        match value {
+            0 => ObTableOperationType::Get,
+            1 => ObTableOperationType::Insert,
+            2 => ObTableOperationType::Del,
+            3 => ObTableOperationType::Update,
+            4 => ObTableOperationType::InsertOrUpdate,
+            5 => ObTableOperationType::Replace,
+            6 => ObTableOperationType::Increment,
+            7 => ObTableOperationType::Append,
+            8 => ObTableOperationType::Scan,
+            9 => ObTableOperationType::TTL,
+            10 => ObTableOperationType::CheckAndInsertUp,
+            _ => panic!("Invalid value for ObTableSingleOpType"),
+        }
+    }
 }
 
 impl ObTableOperationType {
@@ -74,6 +103,9 @@ impl ObTableOperationType {
             5 => Ok(ObTableOperationType::Replace),
             6 => Ok(ObTableOperationType::Increment),
             7 => Ok(ObTableOperationType::Append),
+            8 => Ok(ObTableOperationType::Scan),
+            9 => Ok(ObTableOperationType::TTL),
+            10 => Ok(ObTableOperationType::CheckAndInsertUp),
             _ => Err(io::Error::new(
                 std::io::ErrorKind::InvalidData,
                 format!("Invalid operation type: {i}"),
@@ -92,31 +124,104 @@ impl ObTableOperationType {
             ObTableOperationType::Replace => "replace",
             ObTableOperationType::Increment => "increment",
             ObTableOperationType::Append => "append",
+            ObTableOperationType::Scan => "scan",
+            ObTableOperationType::TTL => "TTL",
+            ObTableOperationType::CheckAndInsertUp => "check_and_upsert",
+            ObTableOperationType::Invalid => "invalid_type",
         }
     }
+
+    pub fn need_encode_query(&self) -> bool {
+        match self {
+            ObTableOperationType::Get => false,
+            ObTableOperationType::Insert => false,
+            ObTableOperationType::Del => false,
+            ObTableOperationType::Update => false,
+            ObTableOperationType::InsertOrUpdate => false,
+            ObTableOperationType::Replace => false,
+            ObTableOperationType::Increment => false,
+            ObTableOperationType::Append => false,
+            ObTableOperationType::Scan => false,
+            ObTableOperationType::TTL => false,
+            ObTableOperationType::CheckAndInsertUp => true,
+            ObTableOperationType::Invalid => false,
+        }
+    }
+}
+
+/// OB Obj encode type
+/// [`ObjType`] or [`TableObjType`]
+#[derive(Default, Debug, Clone, PartialEq, Copy)]
+pub enum ObjEncodeType {
+    #[default]
+    Obj = 0,
+    TableObj = 1,
 }
 
 /// OB row key list.
 #[derive(Default, Debug, Clone, PartialEq)]
 pub struct ObRowKey {
+    column_names: Vec<String>,
     keys: Vec<Value>,
+    obj_type: ObjEncodeType,
 }
 
 impl ObRowKey {
     pub fn new(keys: Vec<Value>) -> ObRowKey {
-        ObRowKey { keys }
+        ObRowKey {
+            column_names: Vec::with_capacity(0),
+            keys,
+            obj_type: ObjEncodeType::Obj,
+        }
+    }
+
+    pub fn new_with_obj_type(keys: Vec<Value>, obj_type: ObjEncodeType) -> ObRowKey {
+        ObRowKey {
+            column_names: Vec::with_capacity(0),
+            keys,
+            obj_type,
+        }
+    }
+
+    pub fn set_column_names(&mut self, column_names: Vec<String>) {
+        self.column_names = column_names
+    }
+
+    pub fn column_names(&self) -> &[String] {
+        &self.column_names
+    }
+
+    pub fn take_column_names(self) -> Vec<String> {
+        self.column_names
     }
 
     pub fn keys(&self) -> &[Value] {
         &self.keys
     }
 
+    pub fn take_keys(self) -> Vec<Value> {
+        self.keys
+    }
+
+    pub fn set_obj_type(&mut self, obj_type: ObjEncodeType) {
+        self.obj_type = obj_type;
+    }
+
     pub fn content_len(&self) -> Result<usize> {
         let mut len: usize = 0;
         len += util::encoded_length_vi64(self.keys.len() as i64);
 
-        for key in &self.keys {
-            len += key.len();
+        match &self.obj_type {
+            ObjEncodeType::Obj => {
+                for key in &self.keys {
+                    len += key.len();
+                }
+            }
+            ObjEncodeType::TableObj => {
+                for key in &self.keys {
+                    len += key.table_obj_len();
+                }
+            }
         }
 
         Ok(len)
@@ -127,8 +232,17 @@ impl ProtoEncoder for ObRowKey {
     fn encode(&self, buf: &mut BytesMut) -> Result<()> {
         util::encode_vi64(self.keys.len() as i64, buf)?;
 
-        for key in &self.keys {
-            key.encode(buf)?;
+        match &self.obj_type {
+            ObjEncodeType::Obj => {
+                for key in &self.keys {
+                    key.encode(buf)?;
+                }
+            }
+            ObjEncodeType::TableObj => {
+                for key in &self.keys {
+                    key.table_obj_encode(buf)?;
+                }
+            }
         }
 
         Ok(())
@@ -177,6 +291,18 @@ impl ObTableEntity {
 
     pub fn set_row_key(&mut self, keys: Vec<Value>) {
         self.row_key.keys = keys;
+    }
+
+    pub fn set_row_key_names(&mut self, column_names: Vec<String>) {
+        self.row_key.column_names = column_names
+    }
+
+    pub fn properties_names(&self) -> Vec<String> {
+        self.properties.keys().cloned().collect()
+    }
+
+    pub fn properties_values(&self) -> Vec<Value> {
+        self.properties.values().cloned().collect()
     }
 }
 
@@ -288,12 +414,24 @@ impl ObTableOperation {
         &self.entity
     }
 
+    pub fn take_table_entity(self) -> ObTableEntity {
+        self.entity
+    }
+
     pub fn get_type(&self) -> ObTableOperationType {
         self.op_type.to_owned()
     }
 
     pub fn get_row_key(&self) -> &ObRowKey {
         &self.entity.row_key
+    }
+
+    pub fn take_row_key(self) -> ObRowKey {
+        self.entity.row_key
+    }
+
+    pub fn set_row_key_names(&mut self, row_key_names: Vec<String>) {
+        self.entity.set_row_key_names(row_key_names)
     }
 }
 
@@ -448,11 +586,38 @@ impl ProtoDecoder for ObTableOperationRequest {
     }
 }
 
+/// Option for [`RawObTableOperation`]
+#[derive(Debug, Clone, PartialEq)]
+pub struct RawObTableOperationFlag {
+    /// whether a check_and_execute option
+    pub check_and_execute: bool,
+    /// check whether any data meet the filter in check_and_execute
+    pub check_exists: bool,
+}
+
+impl Default for RawObTableOperationFlag {
+    fn default() -> Self {
+        RawObTableOperationFlag::new()
+    }
+}
+
+impl RawObTableOperationFlag {
+    pub fn new() -> Self {
+        RawObTableOperationFlag {
+            check_and_execute: false,
+            check_exists: true,
+        }
+    }
+}
+
 pub type RawObTableOperation = (
     ObTableOperationType,
-    Vec<Value>,
-    Option<Vec<String>>,
-    Option<Vec<Value>>,
+    Option<Vec<String>>,             // row keys column names
+    Vec<Value>,                      // row keys
+    Option<Vec<String>>,             // properties column names
+    Option<Vec<Value>>,              // properties
+    Option<String>,                  // Filter String
+    Option<RawObTableOperationFlag>, // option for RawObTableOperation
 );
 
 #[derive(Debug, Clone)]
@@ -468,6 +633,8 @@ pub struct ObTableBatchOperation {
     same_type: bool,
     same_properties_names: bool,
     atomic_op: bool,
+    filters: Vec<String>,
+    options: Vec<RawObTableOperationFlag>,
 }
 
 impl Default for ObTableBatchOperation {
@@ -494,7 +661,9 @@ impl ObTableBatchOperation {
             read_only: true,
             same_type: true,
             same_properties_names: true,
-            atomic_op: true,
+            atomic_op: false,
+            filters: Vec::new(),
+            options: Vec::new(),
         }
     }
 
@@ -518,12 +687,28 @@ impl ObTableBatchOperation {
         self.raw
     }
 
+    pub fn ops_len(&self) -> usize {
+        if self.raw_ops.is_empty() {
+            self.ops.len()
+        } else {
+            self.raw_ops.len()
+        }
+    }
+
     pub fn set_table_name(&mut self, table_name: String) {
         self.table_name = table_name;
     }
 
+    pub fn partition_id(&self) -> i64 {
+        self.partition_id
+    }
+
     pub fn set_partition_id(&mut self, part_id: i64) {
         self.partition_id = part_id
+    }
+
+    pub fn table_id(&self) -> i64 {
+        self.table_id
     }
 
     pub fn set_table_id(&mut self, table_id: i64) {
@@ -550,11 +735,23 @@ impl ObTableBatchOperation {
         self.atomic_op
     }
 
+    pub fn add_table_op(&mut self, op: ObTableOperation) {
+        self.ops.push(op)
+    }
+
     pub fn add_op(&mut self, raw_op: RawObTableOperation) {
         if self.raw {
             self.raw_ops.push(raw_op);
         } else {
-            let (op_type, row_keys, columns, properties) = raw_op;
+            let (
+                op_type,
+                row_keys_names,
+                row_keys,
+                columns,
+                properties,
+                filter_string,
+                option_flag,
+            ) = raw_op;
             // update read_only
             if self.read_only && op_type != ObTableOperationType::Get {
                 self.read_only = false;
@@ -595,35 +792,69 @@ impl ObTableBatchOperation {
                     self.same_properties_names = false;
                 }
             }
-            self.ops.push(ObTableOperation::new(
-                op_type, row_keys, columns, properties,
-            ))
+
+            // set filters
+            if let Some(filter) = filter_string {
+                self.filters.push(filter);
+            }
+
+            // set option flags
+            if let Some(option) = option_flag {
+                self.options.push(option);
+            }
+            let mut temp_op = ObTableOperation::new(op_type, row_keys, columns, properties);
+            if let Some(rk_names) = row_keys_names {
+                temp_op.set_row_key_names(rk_names);
+            }
+            self.ops.push(temp_op)
         }
     }
 
     pub fn get(&mut self, row_keys: Vec<Value>, columns: Vec<String>) {
-        self.add_op((ObTableOperationType::Get, row_keys, Some(columns), None));
+        self.add_op((
+            ObTableOperationType::Get,
+            None,
+            row_keys,
+            Some(columns),
+            None,
+            None,
+            None,
+        ));
     }
 
     pub fn insert(&mut self, row_keys: Vec<Value>, columns: Vec<String>, properties: Vec<Value>) {
         self.add_op((
             ObTableOperationType::Insert,
+            None,
             row_keys,
             Some(columns),
             Some(properties),
+            None,
+            None,
         ));
     }
 
     pub fn delete(&mut self, row_keys: Vec<Value>) {
-        self.add_op((ObTableOperationType::Del, row_keys, None, None));
+        self.add_op((
+            ObTableOperationType::Del,
+            None,
+            row_keys,
+            None,
+            None,
+            None,
+            None,
+        ));
     }
 
     pub fn update(&mut self, row_keys: Vec<Value>, columns: Vec<String>, properties: Vec<Value>) {
         self.add_op((
             ObTableOperationType::Update,
+            None,
             row_keys,
             Some(columns),
             Some(properties),
+            None,
+            None,
         ));
     }
 
@@ -635,18 +866,79 @@ impl ObTableBatchOperation {
     ) {
         self.add_op((
             ObTableOperationType::InsertOrUpdate,
+            None,
             row_keys,
             Some(columns),
             Some(properties),
+            None,
+            None,
         ));
+    }
+
+    /// check the data with corresponding row_keys
+    /// whether meet the filter and execute the insertUp
+    /// if check_exist is true: check if any data meet the filter
+    /// if check_exist is false: check if all data do not meet the filter
+    pub fn check_and_upsert(
+        &mut self,
+        row_keys_names: Vec<String>,
+        row_keys: Vec<Value>,
+        columns: Vec<String>,
+        properties: Vec<Value>,
+        filter: impl FilterEncoder,
+        check_exists: bool,
+    ) {
+        let mut option = RawObTableOperationFlag::new();
+        option.check_and_execute = true;
+        option.check_exists = check_exists;
+        self.add_op((
+            ObTableOperationType::CheckAndInsertUp,
+            Some(row_keys_names),
+            row_keys,
+            Some(columns),
+            Some(properties),
+            Some(filter.encode()),
+            Some(option),
+        ))
+    }
+
+    /// check the data with corresponding row_keys
+    /// if meet the filter: execute the InsertOrUpdate
+    /// if do not meet the filter: do nothing
+    pub fn check_and_upsert_if_exists(
+        &mut self,
+        row_keys_names: Vec<String>,
+        row_keys: Vec<Value>,
+        columns: Vec<String>,
+        properties: Vec<Value>,
+        filter: impl FilterEncoder,
+    ) {
+        self.check_and_upsert(row_keys_names, row_keys, columns, properties, filter, true)
+    }
+
+    /// check the data with corresponding row_keys
+    /// if row doesn't exist or do not meet the filter: execute the InsertOrUpdate
+    /// if row meet the filter: do nothing
+    pub fn check_and_upsert_if_not_exists(
+        &mut self,
+        row_keys_names: Vec<String>,
+        row_keys: Vec<Value>,
+        columns: Vec<String>,
+        properties: Vec<Value>,
+        filter: impl FilterEncoder,
+    ) {
+        self.check_and_upsert(row_keys_names, row_keys, columns, properties, filter, false)
     }
 
     pub fn replace(&mut self, row_keys: Vec<Value>, columns: Vec<String>, properties: Vec<Value>) {
         self.add_op((
             ObTableOperationType::Replace,
+            None,
             row_keys,
             Some(columns),
             Some(properties),
+            None,
+            None,
         ));
     }
 
@@ -658,18 +950,24 @@ impl ObTableBatchOperation {
     ) {
         self.add_op((
             ObTableOperationType::Increment,
+            None,
             row_keys,
             Some(columns),
             Some(properties),
+            None,
+            None,
         ));
     }
 
     pub fn append(&mut self, row_keys: Vec<Value>, columns: Vec<String>, properties: Vec<Value>) {
         self.add_op((
             ObTableOperationType::Append,
+            None,
             row_keys,
             Some(columns),
             Some(properties),
+            None,
+            None,
         ));
     }
 
@@ -683,6 +981,66 @@ impl ObTableBatchOperation {
 
     pub fn take_raw_ops(&mut self) -> Vec<RawObTableOperation> {
         mem::take(&mut self.raw_ops)
+    }
+
+    pub fn take_ops(&mut self) -> Vec<ObTableOperation> {
+        mem::take(&mut self.ops)
+    }
+
+    pub fn get_filters(&self) -> &[String] {
+        &self.filters
+    }
+
+    pub fn take_filters(&mut self) -> Vec<String> {
+        mem::take(&mut self.filters)
+    }
+
+    pub fn get_options(&self) -> &[RawObTableOperationFlag] {
+        &self.options
+    }
+
+    pub fn take_options(&mut self) -> Vec<RawObTableOperationFlag> {
+        mem::take(&mut self.options)
+    }
+
+    pub fn generate_tablet_ops(&mut self) -> ObTableTabletOp {
+        // only use this method when all operation is insertUp
+        let mut ops = Vec::with_capacity(self.ops_len());
+        for ((op, filter_string), option) in self
+            .take_ops()
+            .into_iter()
+            .zip(self.take_filters().into_iter())
+            .zip(self.take_options().into_iter())
+        {
+            // generate single op entity
+            let orig_entity = op.take_table_entity();
+            let row_key = orig_entity.row_key();
+            let entity = ObTableSingleOpEntity::new(
+                row_key.column_names.clone(),
+                row_key.keys.clone(),
+                orig_entity.properties_names(),
+                orig_entity.properties_values(),
+            );
+
+            // generate query
+            let range = ObNewRange::from_keys(row_key.keys.clone(), row_key.keys.clone());
+            let mut query = ObTableSingleOpQuery::new(row_key.column_names.clone(), vec![range]);
+            query.set_filter_string(filter_string);
+            query.set_obj_type(ObjEncodeType::TableObj);
+
+            // generate single op
+            let mut single_op = ObTableSingleOp::new(ObTableOperationType::CheckAndInsertUp);
+            single_op.set_is_check_not_exists(!option.check_exists);
+            single_op.set_query(query);
+            single_op.add_entity(entity);
+
+            ops.push(single_op);
+        }
+
+        let mut tablet_option = ObTableTabletOpFlag::default();
+        tablet_option.set_flag_is_same_type(true);
+
+        ObTableTabletOp::internal_new(OB_INVALID_ID, tablet_option, ops)
     }
 }
 
@@ -1422,7 +1780,9 @@ mod test {
         let entity = ObTableEntity {
             base: base.clone(),
             row_key: ObRowKey {
+                column_names: vec!["rowKey".to_string()],
                 keys: vec![Value::from("test")],
+                obj_type: ObjEncodeType::Obj,
             },
             properties: HashMap::new(),
         };

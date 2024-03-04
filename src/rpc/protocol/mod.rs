@@ -31,7 +31,9 @@ pub mod codes;
 pub mod payloads;
 pub mod query;
 
+pub(crate) mod lsop;
 pub mod partition;
+mod query_and_mutate;
 
 pub type Result<T> = std::result::Result<T, std::io::Error>;
 
@@ -76,6 +78,7 @@ pub const PCODE_EXECUTE: u16 = 0x1102;
 pub const PCODE_BATCH_EXECUTE: u16 = 0x1103;
 pub const PCODE_EXECUTE_QUERY: u16 = 0x1104;
 pub const PCODE_QUERY_AND_MUTE: u16 = 0x1105;
+pub const PCODE_LS_EXECUTE: u16 = 0x1125;
 pub const PCODE_ERROR_PACKET: u16 = 0x010;
 
 #[derive(Clone, Copy, Debug)]
@@ -95,6 +98,7 @@ pub enum ObTablePacketCode {
     BatchExecute,
     ExecuteQuery,
     QueryAndMute,
+    LSExecute,
     Error,
 }
 
@@ -106,6 +110,7 @@ impl ObTablePacketCode {
             ObTablePacketCode::BatchExecute => PCODE_BATCH_EXECUTE,
             ObTablePacketCode::ExecuteQuery => PCODE_EXECUTE_QUERY,
             ObTablePacketCode::QueryAndMute => PCODE_QUERY_AND_MUTE,
+            ObTablePacketCode::LSExecute => PCODE_LS_EXECUTE,
             ObTablePacketCode::Error => PCODE_ERROR_PACKET,
         }
     }
@@ -117,6 +122,7 @@ impl ObTablePacketCode {
             PCODE_BATCH_EXECUTE => Ok(ObTablePacketCode::BatchExecute),
             PCODE_EXECUTE_QUERY => Ok(ObTablePacketCode::ExecuteQuery),
             PCODE_QUERY_AND_MUTE => Ok(ObTablePacketCode::QueryAndMute),
+            PCODE_LS_EXECUTE => Ok(ObTablePacketCode::LSExecute),
             PCODE_ERROR_PACKET => Ok(ObTablePacketCode::Error),
             _ => Err(io::Error::new(
                 io::ErrorKind::InvalidData,

@@ -100,40 +100,40 @@ async fn test_aggregation() {
     let single_result = result_set.get("max(c2)");
 
     match single_result {
-        Some(singel_value) => {
-            assert_eq!(70, singel_value.as_u8());
+        Some(single_value) => {
+            assert_eq!(70, single_value.as_u8());
         }
         _ => unreachable!(),
     }
 
     let single_result = result_set.get("min(c2)");
     match single_result {
-        Some(singel_value) => {
-            assert_eq!(50, singel_value.as_u8());
+        Some(single_value) => {
+            assert_eq!(50, single_value.as_u8());
         }
         _ => unreachable!(),
     }
 
     let single_result = result_set.get("count(*)");
     match single_result {
-        Some(singel_value) => {
-            assert_eq!(2, singel_value.as_i64());
+        Some(single_value) => {
+            assert_eq!(2, single_value.as_i64());
         }
         _ => unreachable!(),
     }
 
     let single_result = result_set.get("sum(c2)");
     match single_result {
-        Some(singel_value) => {
-            assert_eq!(120, singel_value.as_i64());
+        Some(single_value) => {
+            assert_eq!(120, single_value.as_i64());
         }
         _ => unreachable!(),
     }
 
     let single_result = result_set.get("avg(c2)");
     match single_result {
-        Some(singel_value) => {
-            assert_eq!(60.0, singel_value.as_f64());
+        Some(single_value) => {
+            assert_eq!(60.0, single_value.as_f64());
         }
         _ => unreachable!(),
     }
@@ -141,32 +141,32 @@ async fn test_aggregation() {
     // test double
     let single_result = result_set.get("max(c3)");
     match single_result {
-        Some(singel_value) => {
-            assert_eq!(150.0, singel_value.as_f64());
+        Some(single_value) => {
+            assert_eq!(150.0, single_value.as_f64());
         }
         _ => unreachable!(),
     }
 
     let single_result = result_set.get("min(c3)");
     match single_result {
-        Some(singel_value) => {
-            assert_eq!(50.0, singel_value.as_f64());
+        Some(single_value) => {
+            assert_eq!(50.0, single_value.as_f64());
         }
         _ => unreachable!(),
     }
 
     let single_result = result_set.get("sum(c3)");
     match single_result {
-        Some(singel_value) => {
-            assert_eq!(200.0, singel_value.as_f64());
+        Some(single_value) => {
+            assert_eq!(200.0, single_value.as_f64());
         }
         _ => unreachable!(),
     }
 
     let single_result = result_set.get("avg(c3)");
     match single_result {
-        Some(singel_value) => {
-            assert_eq!(100.0, singel_value.as_f64());
+        Some(single_value) => {
+            assert_eq!(100.0, single_value.as_f64());
         }
         _ => unreachable!(),
     }
@@ -297,40 +297,40 @@ async fn test_multiple_partition() {
     // test bigint
     let single_result = result_set.get("max(c2)");
     match single_result {
-        Some(singel_value) => {
-            assert_eq!(150, singel_value.as_i64());
+        Some(single_value) => {
+            assert_eq!(150, single_value.as_i64());
         }
         _ => unreachable!(),
     }
 
     let single_result = result_set.get("min(c2)");
     match single_result {
-        Some(singel_value) => {
-            assert_eq!(50, singel_value.as_i64());
+        Some(single_value) => {
+            assert_eq!(50, single_value.as_i64());
         }
         _ => unreachable!(),
     }
 
     let single_result = result_set.get("count(*)");
     match single_result {
-        Some(singel_value) => {
-            assert_eq!(2, singel_value.as_i64());
+        Some(single_value) => {
+            assert_eq!(2, single_value.as_i64());
         }
         _ => unreachable!(),
     }
 
     let single_result = result_set.get("sum(c2)");
     match single_result {
-        Some(singel_value) => {
-            assert_eq!(200, singel_value.as_i64());
+        Some(single_value) => {
+            assert_eq!(200, single_value.as_i64());
         }
         _ => unreachable!(),
     }
 
     let single_result = result_set.get("avg(c2)");
     match single_result {
-        Some(singel_value) => {
-            assert_eq!(100.0, singel_value.as_f64());
+        Some(single_value) => {
+            assert_eq!(100.0, single_value.as_f64());
         }
         _ => unreachable!(),
     }
@@ -338,32 +338,32 @@ async fn test_multiple_partition() {
     // test double
     let single_result = result_set.get("max(c3)");
     match single_result {
-        Some(singel_value) => {
-            assert_eq!(150.0, singel_value.as_f64());
+        Some(single_value) => {
+            assert_eq!(150.0, single_value.as_f64());
         }
         _ => unreachable!(),
     }
 
     let single_result = result_set.get("min(c3)");
     match single_result {
-        Some(singel_value) => {
-            assert_eq!(50.0, singel_value.as_f64());
+        Some(single_value) => {
+            assert_eq!(50.0, single_value.as_f64());
         }
         _ => unreachable!(),
     }
 
     let single_result = result_set.get("sum(c3)");
     match single_result {
-        Some(singel_value) => {
-            assert_eq!(200.0, singel_value.as_f64());
+        Some(single_value) => {
+            assert_eq!(200.0, single_value.as_f64());
         }
         _ => unreachable!(),
     }
 
     let single_result = result_set.get("avg(c3)");
     match single_result {
-        Some(singel_value) => {
-            assert_eq!(100.0, singel_value.as_f64());
+        Some(single_value) => {
+            assert_eq!(100.0, single_value.as_f64());
         }
         _ => unreachable!(),
     }
@@ -495,40 +495,40 @@ async fn test_local_index() {
     // test bigint
     let single_result = result_set.get("max(c2)");
     match single_result {
-        Some(singel_value) => {
-            assert_eq!(150, singel_value.as_i64());
+        Some(single_value) => {
+            assert_eq!(150, single_value.as_i64());
         }
         _ => unreachable!(),
     }
 
     let single_result = result_set.get("min(c2)");
     match single_result {
-        Some(singel_value) => {
-            assert_eq!(50, singel_value.as_i64());
+        Some(single_value) => {
+            assert_eq!(50, single_value.as_i64());
         }
         _ => unreachable!(),
     }
 
     let single_result = result_set.get("count(*)");
     match single_result {
-        Some(singel_value) => {
-            assert_eq!(2, singel_value.as_i64());
+        Some(single_value) => {
+            assert_eq!(2, single_value.as_i64());
         }
         _ => unreachable!(),
     }
 
     let single_result = result_set.get("sum(c2)");
     match single_result {
-        Some(singel_value) => {
-            assert_eq!(200, singel_value.as_i64());
+        Some(single_value) => {
+            assert_eq!(200, single_value.as_i64());
         }
         _ => unreachable!(),
     }
 
     let single_result = result_set.get("avg(c2)");
     match single_result {
-        Some(singel_value) => {
-            assert_eq!(100.0, singel_value.as_f64());
+        Some(single_value) => {
+            assert_eq!(100.0, single_value.as_f64());
         }
         _ => unreachable!(),
     }
@@ -536,32 +536,32 @@ async fn test_local_index() {
     // test double
     let single_result = result_set.get("max(c3)");
     match single_result {
-        Some(singel_value) => {
-            assert_eq!(150.0, singel_value.as_f64());
+        Some(single_value) => {
+            assert_eq!(150.0, single_value.as_f64());
         }
         _ => unreachable!(),
     }
 
     let single_result = result_set.get("min(c3)");
     match single_result {
-        Some(singel_value) => {
-            assert_eq!(50.0, singel_value.as_f64());
+        Some(single_value) => {
+            assert_eq!(50.0, single_value.as_f64());
         }
         _ => unreachable!(),
     }
 
     let single_result = result_set.get("sum(c3)");
     match single_result {
-        Some(singel_value) => {
-            assert_eq!(200.0, singel_value.as_f64());
+        Some(single_value) => {
+            assert_eq!(200.0, single_value.as_f64());
         }
         _ => unreachable!(),
     }
 
     let single_result = result_set.get("avg(c3)");
     match single_result {
-        Some(singel_value) => {
-            assert_eq!(100.0, singel_value.as_f64());
+        Some(single_value) => {
+            assert_eq!(100.0, single_value.as_f64());
         }
         _ => unreachable!(),
     }
@@ -811,8 +811,8 @@ async fn test_aggregation_with_null() {
 
     let single_result = result_set.get("count(*)");
     match single_result {
-        Some(singel_value) => {
-            assert_eq!(2, singel_value.as_i64());
+        Some(single_value) => {
+            assert_eq!(2, single_value.as_i64());
         }
         _ => unreachable!(),
     }
@@ -915,32 +915,32 @@ async fn test_multiple_aggregation_some_null() {
     // test
     let single_result = result_set.get("max(c3)");
     match single_result {
-        Some(singel_value) => {
-            assert_eq!(150.0, singel_value.as_f64());
+        Some(single_value) => {
+            assert_eq!(150.0, single_value.as_f64());
         }
         _ => unreachable!(),
     }
 
     let single_result = result_set.get("min(c3)");
     match single_result {
-        Some(singel_value) => {
-            assert_eq!(50.0, singel_value.as_f64());
+        Some(single_value) => {
+            assert_eq!(50.0, single_value.as_f64());
         }
         _ => unreachable!(),
     }
 
     let single_result = result_set.get("sum(c3)");
     match single_result {
-        Some(singel_value) => {
-            assert_eq!(200.0, singel_value.as_f64());
+        Some(single_value) => {
+            assert_eq!(200.0, single_value.as_f64());
         }
         _ => unreachable!(),
     }
 
     let single_result = result_set.get("avg(c3)");
     match single_result {
-        Some(singel_value) => {
-            assert_eq!(100.0, singel_value.as_f64());
+        Some(single_value) => {
+            assert_eq!(100.0, single_value.as_f64());
         }
         _ => unreachable!(),
     }
@@ -1079,8 +1079,8 @@ async fn test_aggregation_empty_table() {
 
     let single_result = result_set.get("count(*)");
     match single_result {
-        Some(singel_value) => {
-            assert_eq!(0, singel_value.as_i64());
+        Some(single_value) => {
+            assert_eq!(0, single_value.as_i64());
         }
         _ => unreachable!(),
     }

@@ -24,6 +24,7 @@ use super::{
     BasePayLoad, ObPayload, ObRpcPacketHeader, ObTablePacketCode, ProtoDecoder, ProtoEncoder,
     Result, STREAM_FLAG, STREAM_LAST_FLAG,
 };
+use crate::payloads::ObjEncodeType;
 use crate::{
     error::{self as error, CommonErrCode, Error::Common as CommonErr},
     location::OB_INVALID_ID,
@@ -249,12 +250,25 @@ impl ObNewRange {
         &self.border_flag
     }
 
+    pub fn set_start_key(&mut self, start_key: ObRowKey) {
+        self.start_key = start_key;
+    }
+
     pub fn get_start_key(&self) -> &ObRowKey {
         &self.start_key
     }
 
+    pub fn set_end_key(&mut self, end_key: ObRowKey) {
+        self.end_key = end_key;
+    }
+
     pub fn get_end_key(&self) -> &ObRowKey {
         &self.end_key
+    }
+
+    pub fn set_obj_type(&mut self, obj_type: ObjEncodeType) {
+        self.start_key.set_obj_type(obj_type);
+        self.end_key.set_obj_type(obj_type);
     }
 
     pub fn content_len(&self) -> Result<usize> {
