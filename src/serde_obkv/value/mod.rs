@@ -738,7 +738,8 @@ impl Value {
             ObjType::Double => Ok(Value::Double(decode_f64(buf)?, meta)),
             ObjType::UFloat => Ok(Value::Float(decode_f32(buf)?, meta)),
             ObjType::UDouble => Ok(Value::Double(decode_f64(buf)?, meta)),
-            //FIXME date and time
+            ObjType::Number => Err(Error::Custom("Unsupported obj type.".into())),
+            ObjType::UNumber => Err(Error::Custom("Unsupported obj type.".into())),
             ObjType::DateTime => {
                 meta = ObjMeta::decode(buf)?;
                 Ok(Value::Time(decode_vi64(buf)?, meta))
@@ -747,9 +748,9 @@ impl Value {
                 meta = ObjMeta::decode(buf)?;
                 Ok(Value::Time(decode_vi64(buf)?, meta))
             }
-            ObjType::Date => unimplemented!(),
-            ObjType::Time => unimplemented!(),
-            ObjType::Year => unimplemented!(),
+            ObjType::Date => Err(Error::Custom("Unsupported obj type.".into())),
+            ObjType::Time => Err(Error::Custom("Unsupported obj type.".into())),
+            ObjType::Year => Err(Error::Custom("Unsupported obj type.".into())),
             ObjType::Varchar => {
                 if table_obj_type == TableObjType::Varbinary {
                     meta.cs_type = CollationType::Binary
@@ -757,14 +758,13 @@ impl Value {
                 Self::decode_binary(buf, meta)
             }
             ObjType::Char => Self::decode_binary(buf, meta),
-            // TODO: ObjType::HexString
+            ObjType::HexString => Err(Error::Custom("Unsupported obj type.".into())),
             ObjType::Extend => Ok(Value::Int64(decode_vi64(buf)?, meta)),
             ObjType::TinyText => Self::decode_binary(buf, meta),
             ObjType::Text => Self::decode_binary(buf, meta),
             ObjType::MediumText => Self::decode_binary(buf, meta),
             ObjType::LongText => Self::decode_binary(buf, meta),
             ObjType::Bit => Ok(Value::Int64(decode_vi64(buf)?, meta)),
-            _ => Err(Error::Custom("Unsupported obj type.".into())),
         }
     }
 
