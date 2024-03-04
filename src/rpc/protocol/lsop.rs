@@ -92,7 +92,7 @@ impl ObTableSingleOpFlag {
 
     pub fn new() -> Self {
         let mut flag = ObTableSingleOpFlag { flags: 0 };
-        flag.set_flag_is_check_not_exist(false);
+        flag.set_flag_check_not_exist(false);
         flag
     }
 
@@ -104,8 +104,8 @@ impl ObTableSingleOpFlag {
         self.flags = flags;
     }
 
-    pub fn set_flag_is_check_not_exist(&mut self, is_check_not_exist: bool) {
-        if is_check_not_exist {
+    pub fn set_flag_check_not_exist(&mut self, check_not_exist: bool) {
+        if check_not_exist {
             self.flags |= Self::FLAG_IS_CHECK_NOT_EXISTS;
         } else {
             self.flags &= !Self::FLAG_IS_CHECK_NOT_EXISTS;
@@ -710,9 +710,8 @@ impl ObTableSingleOp {
         self.query = Some(query)
     }
 
-    pub fn set_is_check_not_exists(&mut self, is_check_not_exists: bool) {
-        self.op_flag
-            .set_flag_is_check_not_exist(is_check_not_exists)
+    pub fn set_check_not_exists(&mut self, check_not_exists: bool) {
+        self.op_flag.set_flag_check_not_exist(check_not_exists)
     }
 
     pub fn is_check_not_exist(&self) -> bool {

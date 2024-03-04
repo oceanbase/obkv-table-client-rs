@@ -1030,7 +1030,7 @@ impl ObTableBatchOperation {
 
             // generate single op
             let mut single_op = ObTableSingleOp::new(ObTableOperationType::CheckAndInsertUp);
-            single_op.set_is_check_not_exists(!option.check_exists);
+            single_op.set_check_not_exists(!option.check_exists);
             single_op.set_query(query);
             single_op.add_entity(entity);
 
