@@ -661,6 +661,7 @@ impl Value {
                 DEFAULT_TABLE_OBJ_TYPE_SIZE + util::encoded_length_vi64(f.to_bits() as i64)
             }
             Value::Date(d, ref meta) => meta.len() + util::encoded_length_vi32(d),
+            // DateTime and Timestamp's TableObjType length now is equal to ObjType length, so we reuse previous meta length
             Value::Time(d, ref meta) => meta.len() + util::encoded_length_vi64(d),
             Value::Bytes(ref vc, ref meta) => {
                 DEFAULT_TABLE_OBJ_TYPE_SIZE
@@ -717,6 +718,7 @@ impl Value {
 
     pub fn table_obj_decode(buf: &mut BytesMut, table_obj_type: TableObjType) -> Result<Value> {
         let obj_type = table_obj_type.to_obj_type();
+        let _table_obj_type = TableObjType::from_u8(decode_u8(buf)?);
         let mut meta = ObjMeta::default_obj_meta(obj_type.clone());
 
         match obj_type {
@@ -741,11 +743,27 @@ impl Value {
             ObjType::Number => Err(Error::Custom("Unsupported obj type.".into())),
             ObjType::UNumber => Err(Error::Custom("Unsupported obj type.".into())),
             ObjType::DateTime => {
-                meta = ObjMeta::decode(buf)?;
+                // Need to change meta type from tableObjType into objType
+                // Since we have decoded ObTableObjType before, we just need to decode other members
+                let mut meta_buf = split_buf_to(buf, 3)?;
+                let meta = ObjMeta::new(
+                    ObjType::DateTime,
+                    CollationLevel::from_u8(meta_buf.get_u8())?,
+                    CollationType::from_u8(meta_buf.get_u8())?,
+                    meta_buf.get_i8(),
+                );
                 Ok(Value::Time(decode_vi64(buf)?, meta))
             }
             ObjType::Timestamp => {
-                meta = ObjMeta::decode(buf)?;
+                // Need to change meta type from tableObjType into objType
+                // Since we have decoded ObTableObjType before, we just need to decode other members
+                let mut meta_buf = split_buf_to(buf, 3)?;
+                let meta = ObjMeta::new(
+                    ObjType::Timestamp,
+                    CollationLevel::from_u8(meta_buf.get_u8())?,
+                    CollationType::from_u8(meta_buf.get_u8())?,
+                    meta_buf.get_i8(),
+                );
                 Ok(Value::Time(decode_vi64(buf)?, meta))
             }
             ObjType::Date => Err(Error::Custom("Unsupported obj type.".into())),
@@ -896,8 +914,15 @@ impl Value {
                 encode_vi32(d, buf)
             }
             Value::Time(d, ref meta) => {
-                // datetime & timestamp use origin meta
-                meta.encode(buf)?;
+                // datetime & timestamp use origin meta except type
+                // encode meta
+                buf.reserve(4);
+                buf.put_i8(table_obj_type as i8);
+                buf.put_i8(meta.cs_level.to_owned() as i8);
+                buf.put_i8(meta.cs_type.to_owned() as i8);
+                buf.put_i8(meta.scale.to_owned());
+
+                // encode value
                 encode_vi64(d, buf)
             }
             Value::Bytes(ref vc, ref meta) => {
