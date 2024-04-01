@@ -29,6 +29,11 @@ pub mod obversion;
 pub mod permit;
 pub mod security;
 
+pub(crate) enum RefreshTunnelMessage {
+    Data(String),
+    Exit,
+}
+
 #[inline]
 pub fn current_time_millis() -> i64 {
     Utc::now().timestamp_millis()

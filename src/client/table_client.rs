@@ -70,7 +70,7 @@ use crate::{
         assert_not_empty, current_time_millis, duration_to_millis, millis_to_secs,
         obversion::ob_vsn_major,
         permit::{PermitGuard, Permits},
-        HandyRwLock,
+        HandyRwLock, RefreshTunnelMessage,
     },
     ResultCodes,
 };
@@ -230,7 +230,7 @@ struct ObTableClientInner {
     refresh_metadata_mutex: Lock,
     last_refresh_metadata_ts: AtomicUsize,
 
-    refresh_sender: std::sync::mpsc::SyncSender<String>,
+    refresh_sender: std::sync::mpsc::SyncSender<RefreshTunnelMessage>,
 
     // query concurrency control
     query_permits: Option<Permits>,
@@ -248,7 +248,7 @@ impl ObTableClientInner {
         database: String,
         running_mode: RunningMode,
         config: ClientConfig,
-        refresh_sender: std::sync::mpsc::SyncSender<String>,
+        refresh_sender: std::sync::mpsc::SyncSender<RefreshTunnelMessage>,
         runtimes: Arc<ObClientRuntimes>,
     ) -> Result<Self> {
         let ocp_manager =
@@ -317,7 +317,10 @@ impl ObTableClientInner {
                 table_name, error
             );
 
-            match self.refresh_sender.try_send(table_name.to_owned()) {
+            match self
+                .refresh_sender
+                .try_send(RefreshTunnelMessage::Data(table_name.to_owned()))
+            {
                 Ok(_) => {
                     warn!("ObTableClientInner::on_table_op_failure: Need Refresh / try to refresh schema actively succeed, table_name:{table_name}");
                 }
@@ -352,7 +355,10 @@ impl ObTableClientInner {
             warn!("ObTableClientInner::on_table_op_failure refresh table entry {} while execute failed times exceeded {}, err: {}.",
                   table_name, self.config.runtime_continuous_failure_ceiling, error);
 
-            match self.refresh_sender.try_send(table_name.to_owned()) {
+            match self
+                .refresh_sender
+                .try_send(RefreshTunnelMessage::Data(table_name.to_owned()))
+            {
                 Ok(_) => {
                     warn!("ObTableClientInner::on_table_op_failure: Continuous Failure / try to refresh schema actively succeed, table_name:{table_name}");
                 }
@@ -481,7 +487,10 @@ impl ObTableClientInner {
             warn!("ObTableClientInner::get_tables can not get ob table by address {:?} so that will refresh metadata.",
                   replica_location.addr());
 
-            match self.refresh_sender.try_send(table_name.to_owned()) {
+            match self
+                .refresh_sender
+                .try_send(RefreshTunnelMessage::Data(table_name.to_owned()))
+            {
                 Ok(_) => {
                     warn!("ObTableClientInner::get_tables: Need Refresh / try to refresh schema actively succeed, table_name:{table_name}");
                 }
@@ -1187,6 +1196,17 @@ impl ObTableClientInner {
         self.init_metadata()
     }
 
+    fn close_refresh_tunnel(&self) {
+        match self.refresh_sender.send(RefreshTunnelMessage::Exit) {
+            Ok(_) => {
+                info!("ObTableClientInner::close_refresh_tunnel try drop refresh tunnel");
+            }
+            Err(error) => {
+                warn!("ObTableClientInner::close_refresh_tunnel: fail to drop refresh tunnel, error:{error}");
+            }
+        }
+    }
+
     fn close(&mut self) -> Result<()> {
         if self.is_closed() {
             warn!("ObTableClientInner::close already closed.");
@@ -1515,7 +1535,7 @@ pub struct ObClientRuntimes {
 impl ObClientRuntimes {
     pub fn test_default() -> ObClientRuntimes {
         ObClientRuntimes {
-            tcp_recv_runtime: Arc::new(build_runtime("ob-tcp-reviever", 1)),
+            tcp_recv_runtime: Arc::new(build_runtime("ob-tcp-receiver", 1)),
             tcp_send_runtime: Arc::new(build_runtime("ob-tcp-sender", 1)),
             bg_runtime: Arc::new(build_runtime("ob-default", 1)),
         }
@@ -1533,14 +1553,13 @@ fn build_runtime(name: &str, threads_num: usize) -> runtime::Runtime {
 
 fn build_obkv_runtimes(config: &ClientConfig) -> ObClientRuntimes {
     ObClientRuntimes {
-        tcp_recv_runtime: Arc::new(build_runtime("ob-tcp-reviever", config.tcp_recv_thread_num)),
+        tcp_recv_runtime: Arc::new(build_runtime("ob-tcp-receiver", config.tcp_recv_thread_num)),
         tcp_send_runtime: Arc::new(build_runtime("ob-tcp-sender", config.tcp_send_thread_num)),
         bg_runtime: Arc::new(build_runtime("ob-bg", config.bg_thread_num)),
     }
 }
 
 /// OBKV Table client
-#[derive(Clone)]
 #[allow(dead_code)]
 pub struct ObTableClient {
     inner: Arc<ObTableClientInner>,
@@ -1931,6 +1950,21 @@ impl ObTableClient {
                     return Err(e);
                 }
             }
+        }
+    }
+
+    fn close(&mut self) -> Result<()> {
+        // drop active refresh thread
+        self.inner.close_refresh_tunnel();
+        Ok(())
+    }
+}
+
+impl Drop for ObTableClient {
+    fn drop(&mut self) {
+        match self.close() {
+            Ok(()) => (),
+            Err(e) => error!("ObTableClient::drop fail to close, error={:?}", e),
         }
     }
 }
@@ -2454,7 +2488,7 @@ impl Builder {
         assert_not_empty(&self.param_url, "Blank param url");
         assert_not_empty(&self.full_user_name, "Blank full user name");
         let runtimes = Arc::new(build_obkv_runtimes(&self.config));
-        let (sender, receiver) = std::sync::mpsc::sync_channel::<String>(1);
+        let (sender, receiver) = std::sync::mpsc::sync_channel::<RefreshTunnelMessage>(1);
         let inner_client = Arc::new(ObTableClientInner::internal_new(
             self.param_url,
             self.full_user_name,
@@ -2474,23 +2508,20 @@ impl Builder {
         let _handle = thread::Builder::new()
             .name("ActiveRefreshMetaThread".to_string())
             .spawn(move || {
-                loop {
-                    let message = {
-                        match receiver.recv() {
-                            Ok(message) => Some(message),
-                            Err(_) => None,
-                        }
-                    };
-
-                    if let Some(message) = message {
-                        if let Err(e) = inner.get_or_refresh_table_entry_non_blocking(&message, true) {
-                            error!("ActiveRefreshMetaThread fail to refresh table entry for table: {}, err: {}.",
+                while let Ok(command) = receiver.recv() {
+                    match command {
+                        RefreshTunnelMessage::Data(message) => {
+                            if let Err(e) = inner.get_or_refresh_table_entry_non_blocking(&message, true) {
+                                error!("ActiveRefreshMetaThread fail to refresh table entry for table: {}, err: {}.",
                                  message, e);
+                            }
                         }
-                    } else {
-                        break;
+                        RefreshTunnelMessage::Exit => {
+                            break;
+                        }
                     }
                 }
+                info!("ActiveRefreshMetaThread exited");
             });
 
         Ok(ObTableClient {
