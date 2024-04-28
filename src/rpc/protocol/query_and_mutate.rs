@@ -50,8 +50,8 @@ impl ObTableQueryAndMutateFlag {
         }
     }
 
-    pub fn set_is_check_not_exists(&mut self, is_check_not_exists: bool) {
-        if is_check_not_exists {
+    pub fn set_check_not_exists(&mut self, check_not_exists: bool) {
+        if check_not_exists {
             self.flags |= Self::FLAG_IS_CHECK_NOT_EXISTS;
         } else {
             self.flags &= !Self::FLAG_IS_CHECK_NOT_EXISTS;
@@ -130,9 +130,8 @@ impl ObTableQueryAndMutate {
         self.option_flag.is_check_and_execute()
     }
 
-    pub fn set_is_check_not_exists(&mut self, is_check_not_exists: bool) {
-        self.option_flag
-            .set_is_check_not_exists(is_check_not_exists)
+    pub fn set_check_not_exists(&mut self, check_not_exists: bool) {
+        self.option_flag.set_check_not_exists(check_not_exists)
     }
 
     pub fn is_check_not_exists(&self) -> bool {
