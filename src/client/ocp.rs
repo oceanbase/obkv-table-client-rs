@@ -74,6 +74,7 @@ impl OcpModelCacheFile {
         let file = OpenOptions::new()
             .write(true)
             .create(true)
+            .truncate(true)
             .open(&self.path)?;
         let writer = io::BufWriter::new(file);
         serde_json::to_writer_pretty(writer, model)?;
