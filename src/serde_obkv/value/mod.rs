@@ -509,7 +509,9 @@ impl Value {
     pub fn as_datetime(&self) -> NaiveDateTime {
         match self {
             Value::Time(i, _) => {
-                NaiveDateTime::from_timestamp_micros(*i).expect("Failed to cast:{self:?}")
+                let seconds = i / 1_000_000;
+                let nanoseconds = ((i % 1_000_000) * 1_000) as u32;
+                NaiveDateTime::from_timestamp(seconds, nanoseconds)
             }
             _ => panic!("Fail to cast: {self:?}"),
         }
