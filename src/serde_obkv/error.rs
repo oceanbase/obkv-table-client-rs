@@ -76,6 +76,6 @@ use std::io;
 
 impl From<Error> for io::Error {
     fn from(e: Error) -> io::Error {
-        io::Error::other(format!("cause: {e}"))
+        io::Error::new(io::ErrorKind::Other, format!("cause: {e}"))
     }
 }

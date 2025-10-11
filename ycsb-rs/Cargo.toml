@@ -11,7 +11,7 @@ anyhow = { workspace = true }
 log = { workspace = true }
 obkv-table-client-rs = { path = ".." }
 rand = { version = "0.8", features = ["small_rng"] }
-serde = { version = "1.0.130", features = ["derive"] }
+serde = { version = "1.0.81", features = ["derive"] }
 sql-builder = "3.1"
 sqlite = "0.26.0"
 structopt = "0.3.23"

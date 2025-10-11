@@ -27,7 +27,7 @@ use std::{
 };
 
 use mysql as my;
-use mysql::{prelude::Queryable, PoolConstraints, PoolOpts, Row};
+use mysql::{prelude::Queryable, Row};
 use rand::{seq::SliceRandom, thread_rng};
 
 use self::ob_part_desc::{ObHashPartDesc, ObKeyPartDesc, ObPartDesc, ObRangePartDesc};
@@ -686,11 +686,8 @@ impl ObTableLocation {
                 .db_name(Some(db_name))
                 .tcp_connect_timeout(connect_timeout)
                 .read_timeout(sock_timeout);
-            let constraints = PoolConstraints::new(
-                self.config.metadata_mysql_conn_pool_min_size,
-                self.config.metadata_mysql_conn_pool_max_size,
-            );
-            builder = builder.pool_opts(constraints.map(|v| PoolOpts::new().with_constraints(v)));
+            // Note: PoolConstraints and PoolOpts are not available in mysql 23.0.1
+            // The pool will use default settings
 
             info!(
                 "ObTableLocation::get_or_create_mysql_pool create mysql pool \
@@ -749,7 +746,7 @@ impl ObTableLocation {
                 e
             })?;
 
-        let mut conn = pool.try_get_conn(timeout).map_err(|e| {
+        let mut conn = pool.try_get_conn(timeout.as_millis() as u32).map_err(|e| {
             error!(
                 "ObTableLocation::execute_sql fail to get connection, sql:{}, addr:{:?}, err:{}",
                 sql, server_addr, e
@@ -923,7 +920,7 @@ impl ObTableLocation {
             Some(sock_timeout),
         )?;
 
-        let mut conn = pool.try_get_conn(connect_timeout)?;
+        let mut conn = pool.try_get_conn(connect_timeout.as_millis() as u32)?;
 
         let part_entry = LocationUtil::get_table_location_from_remote(&mut conn, key, table_entry)?;
         //Clone a new table entry to return.
@@ -951,7 +948,7 @@ impl ObTableLocation {
             Some(connect_timeout),
             Some(sock_timeout),
         )?;
-        let mut conn = pool.try_get_conn(connect_timeout)?;
+        let mut conn = pool.try_get_conn(connect_timeout.as_millis() as u32)?;
 
         // get ob_version
         match util::LocationUtil::get_ob_version_from_server(&mut conn) {

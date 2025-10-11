@@ -458,7 +458,7 @@ impl ObTableSingleOpEntity {
     ) -> Result<()> {
         bit_map.clear();
         column_names.clear();
-        let bm_len = len.div_ceil(8);
+        let bm_len = (len + 7) / 8;
         for idx in 0..bm_len {
             bit_map.push(decode_u8(src)?);
             for bit_idx in 0usize..8 {
@@ -1277,14 +1277,16 @@ impl ObTableLSOperation {
 
     fn prepare_column_names_bit_map(&mut self) {
         // adjust query & entity
+        let row_key_names_idx_map = &self.row_key_names_idx_map;
+        let properties_names_idx_map = &self.properties_names_idx_map;
         self.tablet_ops.iter_mut().for_each(|tablet_op| {
             tablet_op.single_ops_mut().iter_mut().for_each(|single_op| {
                 if let Some(query) = single_op.query_mut() {
-                    query.adjust_scan_range_columns(&self.row_key_names_idx_map);
+                    query.adjust_scan_range_columns(row_key_names_idx_map);
                 }
                 single_op.entities_mut().iter_mut().for_each(|entity| {
-                    entity.adjust_row_key_column_name(&self.row_key_names_idx_map);
-                    entity.adjust_properties_column_name(&self.properties_names_idx_map);
+                    entity.adjust_row_key_column_name(row_key_names_idx_map);
+                    entity.adjust_properties_column_name(properties_names_idx_map);
                 })
             })
         })

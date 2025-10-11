@@ -1699,17 +1699,19 @@ impl ObTableClient {
             .map(|batch_op| batch_op.1.ops_len())
             .sum();
 
-        for (phy_id, mut batch_op) in part_batch_ops {
+        for (phy_id, batch_op) in part_batch_ops {
             let (part_info, table) =
                 self.inner
                     .get_or_create_table(table_name, &table_entry, phy_id)?;
             let table_name = table_name.to_owned();
-            loc.push(batch_op.0);
+            let batch_location = batch_op.0;
+            let mut batch_operation = batch_op.1;
+            loc.push(batch_location);
+            batch_operation.set_table_id(part_info.table_id);
+            batch_operation.set_table_name(table_name.clone());
+            batch_operation.set_partition_id(part_info.part_id);
             handles.push(self.inner.runtimes.bg_runtime.spawn(async move {
-                batch_op.1.set_table_id(part_info.table_id);
-                batch_op.1.set_table_name(table_name.clone());
-                batch_op.1.set_partition_id(part_info.part_id);
-                table.execute_batch(&table_name, batch_op.1).await
+                table.execute_batch(&table_name, batch_operation).await
             }));
         }
 
@@ -2601,8 +2603,9 @@ impl ObTableAggregation {
     pub async fn execute(mut self) -> Result<HashMap<String, Value>> {
         // In order to get cache size.
         self.table_query = self.table_query.select(self.aggregation_operations);
-        let mut query_set = self.table_query.execute().await.inspect_err(|_e| {
+        let mut query_set = self.table_query.execute().await.map_err(|e| {
             error!("fail to execute aggregate");
+            e
         })?;
         let aggregate_option = query_set.next().await;
         match aggregate_option {
