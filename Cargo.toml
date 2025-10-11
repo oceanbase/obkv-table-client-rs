@@ -4,30 +4,23 @@ version = "0.2.0"
 authors = ["OceanBase OBKV Developers", "CeresDB Authors <ceresdbservice@gmail.com>"]
 edition = "2021"
 
+[workspace]
+members = ["ycsb-rs"]
+
 [workspace.package]
 version = "0.2.0"
 authors = ["OceanBase OBKV Developers", "CeresDB Authors <ceresdbservice@gmail.com>"]
 edition = "2021"
 
-[workspace]
-members = [
-    "ycsb-rs",
-]
-
-[lib]
-name = "obkv"
-
-[[bench]]
-name = "concurrent_insert"
-harness = false
-path = "benches/concurrent_insert/mod.rs"
-
 [workspace.dependencies]
 anyhow = "1.0"
 log = "0.4"
-toml = "0.7.3"
 prometheus-client = "0.21"
 tokio = { version = "1", features = ["full"] }
+toml = "0.7.3"
+
+[lib]
+name = "obkv"
 
 [dependencies]
 anyhow = { workspace = true }
@@ -71,8 +64,13 @@ serial_test = "2.0"
 serial_test_derive = "2.0"
 tempfile = "3.0"
 test-log = "0.2"
-time = "0.3"
+time = "0.3.36"
 tokio-test = "0.4"
+
+[[bench]]
+name = "concurrent_insert"
+harness = false
+path = "benches/concurrent_insert/mod.rs"
 
 [profile.release]
 debug = true

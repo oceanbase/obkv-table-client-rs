@@ -17,9 +17,7 @@
 
 use std::{
     collections::HashMap,
-    i32, i64,
     sync::{atomic::AtomicUsize, Arc},
-    u8,
 };
 
 use chrono::Utc;
@@ -53,8 +51,35 @@ pub struct LocationUtil {}
 impl LocationUtil {
     pub fn get_ob_version_from_server(conn: &mut my::PooledConn) -> Result<()> {
         if ob_vsn_major() == 0 {
-            let sql = "SELECT /*+READ_CONSISTENCY(WEAK)*/ OB_VERSION() AS CLUSTER_VERSION";
-            for row in conn.query::<Row, &str>(sql)? {
+            let sql_4x = "SELECT /*+READ_CONSISTENCY(WEAK)*/ OB_VERSION() AS CLUSTER_VERSION";
+            let sql_2x = "SELECT /*+READ_CONSISTENCY(WEAK)*/ VERSION() AS CLUSTER_VERSION";
+
+            // try sql_4x first
+            let result = conn.query::<Row, &str>(sql_4x);
+            let rows = match result {
+                Ok(rows) => rows,
+                Err(_) => {
+                    // if sql_4x failed, try sql_2x
+                    match conn.query::<Row, &str>(sql_2x) {
+                        Ok(rows) => rows,
+                        Err(e) => {
+                            error!(
+                                "Both OB_VERSION() and VERSION() are not supported, err:{}",
+                                e
+                            );
+                            return Err(CommonErr(
+                                CommonErrCode::ConvertFailed,
+                                format!(
+                                    "Both OB_VERSION() and VERSION() are not supported, err:{e}"
+                                ),
+                            ));
+                        }
+                    }
+                }
+            };
+
+            // process the query results
+            for row in rows {
                 let cluster_version = match my::from_row_opt(row) {
                     Ok(version) => version,
                     Err(e) => {

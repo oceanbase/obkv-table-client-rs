@@ -67,7 +67,6 @@ impl Drop for PermitGuard {
 }
 
 #[cfg(test)]
-
 mod test {
     use std::thread;
 

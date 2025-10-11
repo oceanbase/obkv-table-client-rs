@@ -386,7 +386,7 @@ impl Drop for QueryStreamResult {
 pub enum QueryResultSet {
     #[default]
     None,
-    Some(QueryStreamResult),
+    Some(Box<QueryStreamResult>),
 }
 
 impl QueryResultSet {
@@ -403,7 +403,7 @@ impl QueryResultSet {
     }
 
     pub fn from_stream_result(stream_result: QueryStreamResult) -> Self {
-        QueryResultSet::Some(stream_result)
+        QueryResultSet::Some(Box::new(stream_result))
     }
 
     pub fn cache_size(&self) -> usize {

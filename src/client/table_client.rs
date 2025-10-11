@@ -18,7 +18,6 @@
 use std::{
     borrow::Borrow,
     collections::HashMap,
-    isize,
     sync::{
         atomic::{AtomicBool, AtomicI64, AtomicIsize, AtomicUsize, Ordering},
         Arc, Mutex, RwLock,
@@ -155,7 +154,7 @@ impl ServerRoster {
             return;
         }
 
-        let mut priority: isize = isize::min_value();
+        let mut priority: isize = isize::MIN;
 
         for addr in self.roster.rl().iter() {
             if addr.priority() > priority {
@@ -169,13 +168,7 @@ impl ServerRoster {
     pub fn max_priority(&self) -> isize {
         let p = self.max_priority.load(Ordering::Acquire);
 
-        if p < -MAX_PRIORITY {
-            -MAX_PRIORITY
-        } else if p > MAX_PRIORITY {
-            MAX_PRIORITY
-        } else {
-            p
-        }
+        p.clamp(-MAX_PRIORITY, MAX_PRIORITY)
     }
 }
 
@@ -679,6 +672,7 @@ impl ObTableClientInner {
         result
     }
 
+    #[allow(clippy::mutable_key_type)]
     fn add_ob_table_to_roster(
         &self,
         addr: &ObServerAddr,
@@ -2607,9 +2601,8 @@ impl ObTableAggregation {
     pub async fn execute(mut self) -> Result<HashMap<String, Value>> {
         // In order to get cache size.
         self.table_query = self.table_query.select(self.aggregation_operations);
-        let mut query_set = self.table_query.execute().await.map_err(|e| {
+        let mut query_set = self.table_query.execute().await.inspect_err(|_e| {
             error!("fail to execute aggregate");
-            e
         })?;
         let aggregate_option = query_set.next().await;
         match aggregate_option {

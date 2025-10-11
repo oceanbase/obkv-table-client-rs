@@ -362,9 +362,9 @@ impl<'a> ser::SerializeStruct for SerializeStruct<'a> {
     type Ok = ();
 
     /// encode table entity properties
-    fn serialize_field<V: ?Sized>(&mut self, key: &'static str, value: &V) -> Result<()>
+    fn serialize_field<V>(&mut self, key: &'static str, value: &V) -> Result<()>
     where
-        V: ser::Serialize,
+        V: ?Sized + ser::Serialize,
     {
         if self.first {
             match self.ser {
@@ -393,9 +393,9 @@ impl<'a> ser::SerializeMap for SerializeStruct<'a> {
     type Error = Error;
     type Ok = ();
 
-    fn serialize_key<T: ?Sized>(&mut self, key: &T) -> Result<()>
+    fn serialize_key<T>(&mut self, key: &T) -> Result<()>
     where
-        T: Serialize,
+        T: ?Sized + Serialize,
     {
         match self.ser {
             Serializer::Output(_, ref mut raw_key) => *raw_key = true,
@@ -410,18 +410,18 @@ impl<'a> ser::SerializeMap for SerializeStruct<'a> {
         ret
     }
 
-    fn serialize_value<T: ?Sized>(&mut self, value: &T) -> Result<()>
+    fn serialize_value<T>(&mut self, value: &T) -> Result<()>
     where
-        T: Serialize,
+        T: ?Sized + Serialize,
     {
         value.serialize(&mut *self.ser)
     }
 
     /// encode table entity properties
-    fn serialize_entry<K: ?Sized, V: ?Sized>(&mut self, key: &K, value: &V) -> Result<()>
+    fn serialize_entry<K, V>(&mut self, key: &K, value: &V) -> Result<()>
     where
-        K: Serialize,
-        V: Serialize,
+        K: ?Sized + Serialize,
+        V: ?Sized + Serialize,
     {
         if self.first {
             match self.ser {
@@ -450,9 +450,9 @@ impl<'a> ser::SerializeSeq for SerializeArray<'a> {
     type Error = Error;
     type Ok = ();
 
-    fn serialize_element<T: ?Sized>(&mut self, elem: &T) -> Result<()>
+    fn serialize_element<T>(&mut self, elem: &T) -> Result<()>
     where
-        T: ser::Serialize,
+        T: ?Sized + ser::Serialize,
     {
         elem.serialize(&mut *self.ser)?;
         Ok(())
@@ -467,9 +467,9 @@ impl<'a> ser::SerializeTuple for SerializeArray<'a> {
     type Error = Error;
     type Ok = ();
 
-    fn serialize_element<T: ?Sized>(&mut self, elem: &T) -> Result<()>
+    fn serialize_element<T>(&mut self, elem: &T) -> Result<()>
     where
-        T: ser::Serialize,
+        T: ?Sized + ser::Serialize,
     {
         ser::SerializeSeq::serialize_element(self, elem)
     }
@@ -483,9 +483,9 @@ impl<'a> ser::SerializeTupleStruct for SerializeArray<'a> {
     type Error = Error;
     type Ok = ();
 
-    fn serialize_field<V: ?Sized>(&mut self, value: &V) -> Result<()>
+    fn serialize_field<V>(&mut self, value: &V) -> Result<()>
     where
-        V: ser::Serialize,
+        V: ?Sized + ser::Serialize,
     {
         ser::SerializeSeq::serialize_element(self, value)
     }
