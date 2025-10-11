@@ -58,19 +58,19 @@ pub fn millis_to_secs(t: i64) -> i64 {
 // shortcut wl and rl
 // From: https://github.com/tikv/tikv/blob/master/src/util/mod.rs
 pub trait HandyRwLock<T> {
-    fn wl(&self) -> RwLockWriteGuard<T>;
+    fn wl(&self) -> RwLockWriteGuard<'_, T>;
 
-    fn rl(&self) -> RwLockReadGuard<T>;
+    fn rl(&self) -> RwLockReadGuard<'_, T>;
 }
 
 impl<T> HandyRwLock<T> for RwLock<T> {
     #[inline]
-    fn wl(&self) -> RwLockWriteGuard<T> {
+    fn wl(&self) -> RwLockWriteGuard<'_, T> {
         self.write().unwrap()
     }
 
     #[inline]
-    fn rl(&self) -> RwLockReadGuard<T> {
+    fn rl(&self) -> RwLockReadGuard<'_, T> {
         self.read().unwrap()
     }
 }

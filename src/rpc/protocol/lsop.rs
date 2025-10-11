@@ -458,7 +458,7 @@ impl ObTableSingleOpEntity {
     ) -> Result<()> {
         bit_map.clear();
         column_names.clear();
-        let bm_len = (len + 7) / 8;
+        let bm_len = len.div_ceil(8);
         for idx in 0..bm_len {
             bit_map.push(decode_u8(src)?);
             for bit_idx in 0usize..8 {

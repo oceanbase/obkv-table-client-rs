@@ -632,6 +632,7 @@ impl ObTableLocation {
         }
     }
 
+    #[allow(clippy::mutable_key_type)]
     fn get_pool_from_cache(
         &self,
         pools: &HashMap<ObServerAddr, HashMap<String, Arc<my::Pool>>>,
@@ -645,6 +646,7 @@ impl ObTableLocation {
     }
 
     /// Invalidate expired mysql pools.
+    #[allow(clippy::mutable_key_type)]
     pub fn invalidate_mysql_pools(&self, valid_addrs: &[ObServerAddr]) {
         let valid_addrs: HashSet<ObServerAddr> = valid_addrs.iter().cloned().collect();
         self.mysql_pools

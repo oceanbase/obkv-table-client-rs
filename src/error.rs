@@ -179,7 +179,7 @@ impl Error {
         } else if let Error::Common(CommonErrCode::ConnPool, message) = self {
             // conn_pool will produced this error if all connection to a server is shutdown
             // which means we need refresh
-            return message.ends_with("are all removed");
+            message.ends_with("are all removed")
         } else {
             false
         }

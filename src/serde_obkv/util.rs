@@ -306,8 +306,6 @@ pub fn decode_u8(buf: &mut BytesMut) -> Result<u8> {
 
 #[cfg(test)]
 mod test {
-    use std::{i32, i64};
-
     use super::*;
 
     #[test]

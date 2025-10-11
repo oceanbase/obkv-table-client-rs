@@ -107,7 +107,7 @@ impl ObTableFilterList {
     where
         I: IntoIterator<Item = Filter>,
     {
-        self.filters.extend(filters.into_iter())
+        self.filters.extend(filters)
     }
 }
 

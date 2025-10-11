@@ -19,7 +19,6 @@ use std::{
     cmp,
     sync::{Arc, Condvar, Mutex},
     time::{Duration, Instant},
-    u32,
 };
 
 use tokio::time::sleep;
