@@ -1560,6 +1560,15 @@ pub struct ObTableClient {
     refresh_thread_pool: Arc<ScheduledThreadPool>,
 }
 
+impl Clone for ObTableClient {
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+            refresh_thread_pool: self.refresh_thread_pool.clone(),
+        }
+    }
+}
+
 impl ObTableClient {
     /// Get OB server major version of remote
     pub fn ob_vsn_major(&self) -> i32 {
@@ -1994,6 +2003,11 @@ impl StreamQuerier {
         }
     }
 
+    /// Get runtime for blocking operations (for backward compatibility)
+    pub fn runtime(&self) -> RuntimeRef {
+        self.client.runtimes.bg_runtime.clone()
+    }
+
     pub async fn execute_query(
         &self,
         stream_result: &mut QueryStreamResult,
@@ -2319,6 +2333,82 @@ impl ObTableClientQueryImpl {
     #[inline]
     pub fn clear(&mut self) {
         self.reset();
+    }
+}
+
+// Implement TableQuery trait for backward compatibility
+impl crate::client::query::TableQuery for ObTableClientQueryImpl {
+    fn execute(&self) -> Result<QueryResultSet> {
+        self.client
+            .runtimes
+            .bg_runtime
+            .block_on(self.execute())
+    }
+
+    fn get_table_name(&self) -> String {
+        self.get_table_name()
+    }
+
+    fn set_entity_type(&mut self, entity_type: ObTableEntityType) {
+        self.set_entity_type(entity_type)
+    }
+
+    fn entity_type(&self) -> ObTableEntityType {
+        self.entity_type()
+    }
+
+    fn select(self, columns: Vec<String>) -> Self {
+        self.select(columns)
+    }
+
+    fn limit(self, offset: Option<i32>, limit: i32) -> Self {
+        self.limit(offset, limit)
+    }
+
+    fn add_scan_range(
+        self,
+        start: Vec<Value>,
+        start_equals: bool,
+        end: Vec<Value>,
+        end_equals: bool,
+    ) -> Self {
+        self.add_scan_range(start, start_equals, end, end_equals)
+    }
+
+    fn add_scan_range_starts_with(self, start: Vec<Value>, start_equals: bool) -> Self {
+        self.add_scan_range_starts_with(start, start_equals)
+    }
+
+    fn add_scan_range_ends_with(self, end: Vec<Value>, end_equals: bool) -> Self {
+        self.add_scan_range_ends_with(end, end_equals)
+    }
+
+    fn scan_order(self, forward: bool) -> Self {
+        self.scan_order(forward)
+    }
+
+    fn index_name(self, index_name: &str) -> Self {
+        self.index_name(index_name)
+    }
+
+    fn filter_string(self, filter_string: &str) -> Self {
+        self.filter_string(filter_string)
+    }
+
+    fn htable_filter(self, filter: crate::rpc::protocol::query::ObHTableFilter) -> Self {
+        self.htable_filter(filter)
+    }
+
+    fn batch_size(self, batch_size: i32) -> Self {
+        self.batch_size(batch_size)
+    }
+
+    fn operation_timeout(self, timeout: Duration) -> Self {
+        self.operation_timeout(timeout)
+    }
+
+    fn clear(&mut self) {
+        self.clear()
     }
 }
 
@@ -2697,5 +2787,339 @@ impl ObTableAggregation {
     {
         self.table_query = self.table_query.operation_timeout(timeout);
         self
+    }
+}
+
+/// Synchronous query builder for backward compatibility
+/// This wraps the async query implementation and provides synchronous execute()
+pub struct SyncObTableClientQueryImpl {
+    inner: ObTableClientQueryImpl,
+    runtime: RuntimeRef,
+}
+
+impl SyncObTableClientQueryImpl {
+    /// Create from ObTableClient reference (internal use only)
+    pub(super) fn new_from_client(client: &ObTableClient, table_name: &str) -> Self {
+        Self {
+            inner: ObTableClientQueryImpl::new(table_name, client.inner.clone()),
+            runtime: client.inner.runtimes.bg_runtime.clone(),
+        }
+    }
+
+    /// Set batch size for query
+    pub fn batch_size(mut self, size: i32) -> Self {
+        self.inner = self.inner.batch_size(size);
+        self
+    }
+
+    /// Set query limit
+    pub fn limit(mut self, offset: Option<i32>, limit: i32) -> Self {
+        self.inner = self.inner.limit(offset, limit);
+        self
+    }
+
+    /// Use primary index
+    pub fn primary_index(mut self) -> Self {
+        self.inner = self.inner.primary_index();
+        self
+    }
+
+    /// Set index name
+    pub fn index_name(mut self, index_name: &str) -> Self {
+        self.inner = self.inner.index_name(index_name);
+        self
+    }
+
+    /// Select columns to return
+    pub fn select(mut self, columns: Vec<String>) -> Self {
+        self.inner = self.inner.select(columns);
+        self
+    }
+
+    /// Add scan range
+    pub fn add_scan_range(
+        mut self,
+        start: Vec<Value>,
+        start_inclusive: bool,
+        end: Vec<Value>,
+        end_inclusive: bool,
+    ) -> Self {
+        self.inner = self.inner.add_scan_range(start, start_inclusive, end, end_inclusive);
+        self
+    }
+
+    /// Add scan range with starts_with
+    pub fn add_scan_range_starts_with(mut self, start: Vec<Value>, start_inclusive: bool) -> Self {
+        self.inner = self.inner.add_scan_range_starts_with(start, start_inclusive);
+        self
+    }
+
+    /// Add scan range with ends_with
+    pub fn add_scan_range_ends_with(mut self, end: Vec<Value>, end_inclusive: bool) -> Self {
+        self.inner = self.inner.add_scan_range_ends_with(end, end_inclusive);
+        self
+    }
+
+    /// Set scan order (forward or backward)
+    pub fn scan_order(mut self, forward: bool) -> Self {
+        self.inner = self.inner.scan_order(forward);
+        self
+    }
+
+    /// Set filter string
+    pub fn filter_string(mut self, filter: &str) -> Self {
+        self.inner = self.inner.filter_string(filter);
+        self
+    }
+
+    /// Set operation timeout
+    pub fn operation_timeout(mut self, timeout: Duration) -> Self {
+        self.inner = self.inner.operation_timeout(timeout);
+        self
+    }
+
+    /// Execute query synchronously
+    /// This automatically handles async execution using block_on
+    pub fn execute(self) -> Result<QueryResultSet> {
+        self.runtime.block_on(async { self.inner.execute().await })
+    }
+}
+
+// Implement Table trait for SyncObTableClient
+impl crate::client::Table for crate::client::SyncObTableClient {
+    fn insert(
+        &self,
+        table_name: &str,
+        row_keys: Vec<Value>,
+        columns: Vec<String>,
+        properties: Vec<Value>,
+    ) -> Result<i64> {
+        self.inner
+            .inner
+            .runtimes
+            .bg_runtime
+            .block_on(self.inner.insert(table_name, row_keys, columns, properties))
+    }
+
+    fn update(
+        &self,
+        table_name: &str,
+        row_keys: Vec<Value>,
+        columns: Vec<String>,
+        properties: Vec<Value>,
+    ) -> Result<i64> {
+        self.inner
+            .inner
+            .runtimes
+            .bg_runtime
+            .block_on(self.inner.update(table_name, row_keys, columns, properties))
+    }
+
+    fn insert_or_update(
+        &self,
+        table_name: &str,
+        row_keys: Vec<Value>,
+        columns: Vec<String>,
+        properties: Vec<Value>,
+    ) -> Result<i64> {
+        self.inner
+            .inner
+            .runtimes
+            .bg_runtime
+            .block_on(self.inner.insert_or_update(table_name, row_keys, columns, properties))
+    }
+
+    fn replace(
+        &self,
+        table_name: &str,
+        row_keys: Vec<Value>,
+        columns: Vec<String>,
+        properties: Vec<Value>,
+    ) -> Result<i64> {
+        self.inner
+            .inner
+            .runtimes
+            .bg_runtime
+            .block_on(self.inner.replace(table_name, row_keys, columns, properties))
+    }
+
+    fn append(
+        &self,
+        table_name: &str,
+        row_keys: Vec<Value>,
+        columns: Vec<String>,
+        properties: Vec<Value>,
+    ) -> Result<i64> {
+        self.inner
+            .inner
+            .runtimes
+            .bg_runtime
+            .block_on(self.inner.append(table_name, row_keys, columns, properties))
+    }
+
+    fn increment(
+        &self,
+        table_name: &str,
+        row_keys: Vec<Value>,
+        columns: Vec<String>,
+        properties: Vec<Value>,
+    ) -> Result<i64> {
+        self.inner
+            .inner
+            .runtimes
+            .bg_runtime
+            .block_on(self.inner.increment(table_name, row_keys, columns, properties))
+    }
+
+    fn delete(&self, table_name: &str, row_keys: Vec<Value>) -> Result<i64> {
+        self.inner
+            .inner
+            .runtimes
+            .bg_runtime
+            .block_on(self.inner.delete(table_name, row_keys))
+    }
+
+    fn get(
+        &self,
+        table_name: &str,
+        row_keys: Vec<Value>,
+        columns: Vec<String>,
+    ) -> Result<HashMap<String, Value>> {
+        self.inner
+            .inner
+            .runtimes
+            .bg_runtime
+            .block_on(self.inner.get(table_name, row_keys, columns))
+    }
+
+    fn batch_operation(&self, ops_num_hint: usize) -> ObTableBatchOperation {
+        self.inner.batch_operation(ops_num_hint)
+    }
+
+    fn execute_batch(
+        &self,
+        table_name: &str,
+        batch_op: ObTableBatchOperation,
+    ) -> Result<Vec<TableOpResult>> {
+        self.inner
+            .inner
+            .runtimes
+            .bg_runtime
+            .block_on(self.inner.execute_batch(table_name, batch_op))
+    }
+}
+
+// Implement Table trait for backward compatibility
+impl crate::client::Table for ObTableClient {
+    fn insert(
+        &self,
+        table_name: &str,
+        row_keys: Vec<Value>,
+        columns: Vec<String>,
+        properties: Vec<Value>,
+    ) -> Result<i64> {
+        self.inner
+            .runtimes
+            .bg_runtime
+            .block_on(self.insert(table_name, row_keys, columns, properties))
+    }
+
+    fn update(
+        &self,
+        table_name: &str,
+        row_keys: Vec<Value>,
+        columns: Vec<String>,
+        properties: Vec<Value>,
+    ) -> Result<i64> {
+        self.inner
+            .runtimes
+            .bg_runtime
+            .block_on(self.update(table_name, row_keys, columns, properties))
+    }
+
+    fn insert_or_update(
+        &self,
+        table_name: &str,
+        row_keys: Vec<Value>,
+        columns: Vec<String>,
+        properties: Vec<Value>,
+    ) -> Result<i64> {
+        self.inner
+            .runtimes
+            .bg_runtime
+            .block_on(self.insert_or_update(table_name, row_keys, columns, properties))
+    }
+
+    fn replace(
+        &self,
+        table_name: &str,
+        row_keys: Vec<Value>,
+        columns: Vec<String>,
+        properties: Vec<Value>,
+    ) -> Result<i64> {
+        self.inner
+            .runtimes
+            .bg_runtime
+            .block_on(self.replace(table_name, row_keys, columns, properties))
+    }
+
+    fn append(
+        &self,
+        table_name: &str,
+        row_keys: Vec<Value>,
+        columns: Vec<String>,
+        properties: Vec<Value>,
+    ) -> Result<i64> {
+        self.inner
+            .runtimes
+            .bg_runtime
+            .block_on(self.append(table_name, row_keys, columns, properties))
+    }
+
+    fn increment(
+        &self,
+        table_name: &str,
+        row_keys: Vec<Value>,
+        columns: Vec<String>,
+        properties: Vec<Value>,
+    ) -> Result<i64> {
+        self.inner
+            .runtimes
+            .bg_runtime
+            .block_on(self.increment(table_name, row_keys, columns, properties))
+    }
+
+    fn delete(&self, table_name: &str, row_keys: Vec<Value>) -> Result<i64> {
+        self.inner
+            .runtimes
+            .bg_runtime
+            .block_on(self.delete(table_name, row_keys))
+    }
+
+    fn get(
+        &self,
+        table_name: &str,
+        row_keys: Vec<Value>,
+        columns: Vec<String>,
+    ) -> Result<HashMap<String, Value>> {
+        self.inner
+            .runtimes
+            .bg_runtime
+            .block_on(self.get(table_name, row_keys, columns))
+    }
+
+    fn batch_operation(&self, ops_num_hint: usize) -> ObTableBatchOperation {
+        self.batch_operation(ops_num_hint)
+    }
+
+    fn execute_batch(
+        &self,
+        table_name: &str,
+        batch_op: ObTableBatchOperation,
+    ) -> Result<Vec<TableOpResult>> {
+        self.inner
+            .runtimes
+            .bg_runtime
+            .block_on(self.execute_batch(table_name, batch_op))
     }
 }

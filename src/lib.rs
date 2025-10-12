@@ -56,10 +56,10 @@ mod util;
 pub use self::{
     client::{
         filter,
-        query::QueryResultSet,
+        query::{QueryResultSet, TableQuery},
         table::ObTable,
         table_client::{Builder, ObTableClient, RunningMode},
-        ClientConfig, TableOpResult,
+        ClientConfig, SyncObTableClient, Table, TableOpResult,
     },
     monitors::prometheus::dump_metrics,
     rpc::{

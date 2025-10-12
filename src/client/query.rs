@@ -476,3 +476,76 @@ impl Drop for QueryResultSet {
         }
     }
 }
+
+/// Iterator implementation for backward compatibility
+/// This provides synchronous iteration over query results
+impl Iterator for QueryResultSet {
+    type Item = Result<HashMap<String, Value>>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            QueryResultSet::None => None,
+            QueryResultSet::Some(stream_result) => {
+                // Get the runtime to avoid borrow checker issues
+                let runtime = stream_result.querier.runtime();
+                runtime.block_on(async {
+                    match stream_result.fetch_next_row().await {
+                        // Find a row.
+                        Ok(Some(mut row)) => {
+                            let mut names = stream_result.cache_properties();
+                            assert_eq!(names.len(), row.len());
+                            let mut row_map = HashMap::new();
+
+                            for i in 0..names.len() {
+                                let name = mem::take(&mut names[i]);
+                                let value = mem::take(&mut row[i]);
+
+                                row_map.insert(name, value);
+                            }
+                            Some(Ok(row_map))
+                        }
+                        // Reach end
+                        Ok(None) => None,
+                        // Error happens
+                        Err(e) => Some(Err(e)),
+                    }
+                })
+            }
+        }
+    }
+}
+
+const PRIMARY_INDEX_NAME: &str = "PRIMARY";
+
+/// TableQuery trait for backward compatibility
+/// This trait provides a fluent API for building and executing queries
+pub trait TableQuery {
+    fn execute(&self) -> Result<QueryResultSet>;
+    fn get_table_name(&self) -> String;
+    fn set_entity_type(&mut self, entity_type: ObTableEntityType);
+    fn entity_type(&self) -> ObTableEntityType;
+    fn select(self, columns: Vec<String>) -> Self;
+    fn limit(self, offset: Option<i32>, limit: i32) -> Self;
+    fn add_scan_range(
+        self,
+        start: Vec<Value>,
+        start_equals: bool,
+        end: Vec<Value>,
+        end_equals: bool,
+    ) -> Self;
+    fn add_scan_range_starts_with(self, start: Vec<Value>, start_equals: bool) -> Self;
+    fn add_scan_range_ends_with(self, end: Vec<Value>, end_equals: bool) -> Self;
+    fn scan_order(self, forward: bool) -> Self;
+    fn index_name(self, index_name: &str) -> Self;
+    fn primary_index(self) -> Self
+    where
+        Self: Sized,
+    {
+        self.index_name(PRIMARY_INDEX_NAME)
+    }
+    fn filter_string(self, filter_string: &str) -> Self;
+    fn htable_filter(self, filter: crate::rpc::protocol::query::ObHTableFilter) -> Self;
+    fn batch_size(self, batch_size: i32) -> Self;
+    fn operation_timeout(self, timeout: Duration) -> Self;
+    fn clear(&mut self);
+}
